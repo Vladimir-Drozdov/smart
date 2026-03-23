@@ -177,7 +177,7 @@ class EmelyaCoffeeCard extends LitElement {
       left:0;
       right:0;
 
-      background:#1C1B1F;
+      background: #1C1B1F;
 
       border:2px solid #656565;
       border-radius:16px;
@@ -205,7 +205,7 @@ class EmelyaCoffeeCard extends LitElement {
       width:80px;
       height:56px;
 
-      background:#343239;
+      background: #343239;
       border-radius:16px;
 
       display:flex;

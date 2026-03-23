@@ -32,7 +32,6 @@ class EmelyaRoomsRow extends LitElement {
       overflow-x: scroll;
       overflow-y: hidden;
       cursor: grab;
-      user-select: none;
       scrollbar-width: none;
     }
 
@@ -145,7 +144,17 @@ class EmelyaRoomsRow extends LitElement {
 
     this._dragStartTime = null;
     this.dragStarted = false;
-  };
+  }; 
+  _onRoomClick(room) {
+    if (!room.tap_action || !this.hass) return;
+
+    const tap = room.tap_action;
+
+    if (tap.action === "call-service") {
+      const [domain, service] = tap.service.split(".");
+      this.hass.callService(domain, service, tap.data);
+    }
+  }
 
   render() {
 
@@ -177,6 +186,7 @@ class EmelyaRoomsRow extends LitElement {
                 ),
                 url(${room.background}) center / cover no-repeat
               "
+              @click=${() => this._onRoomClick(room)}
             >
 
               <div class="icon">

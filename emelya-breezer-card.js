@@ -100,7 +100,7 @@ class EmelyaBreezerCard extends LitElement {
       box-sizing:border-box;
       display:flex;
       flex-direction:column;
-      gap:24px;
+      justify-content:space-between;
 
       padding:16px;
       height:132px;
@@ -138,13 +138,14 @@ class EmelyaBreezerCard extends LitElement {
       display:flex;
       align-items:center;
       justify-content:space-between;
+      border:2px solid #656565;
 
       width:201px;
       height:56px;
 
       padding:0 16px;
 
-      background:#1C1B1F;
+      background: #1C1B1F;
       border-radius:16px;
 
       font-weight:600;
@@ -174,7 +175,8 @@ class EmelyaBreezerCard extends LitElement {
       left:0;
       right:0;
 
-      background:#1C1B1F;
+      background: #1C1B1F;
+      border:2px solid #656565;
       border-radius:16px;
       overflow:hidden;
       z-index:10;
@@ -198,7 +200,7 @@ class EmelyaBreezerCard extends LitElement {
       width:80px;
       height:56px;
 
-      background:#1C1B1F;
+      background: #343239;
       border-radius:16px;
 
       display:flex;
@@ -210,7 +212,7 @@ class EmelyaBreezerCard extends LitElement {
     }
 
     .power.active{
-      background:#e65332;
+      background: #e65332;
     }
 
     .power img{
