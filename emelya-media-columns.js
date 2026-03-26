@@ -155,7 +155,7 @@ class EmelyaMediaColumns extends LitElement {
       transition: background 0.2s ease;
     }
     .control.active {
-      background: #ff7a2f;
+      background: #E65332;
     }
 
     .title-wrapper {

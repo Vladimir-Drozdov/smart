@@ -183,7 +183,7 @@ class EmelyaHumidifierCard extends LitElement {
     }
 
     .power.active{
-      background:#ff7a2f;
+      background: #E65332;
     }
 
     .power img{

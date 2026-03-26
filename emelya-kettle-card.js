@@ -76,7 +76,7 @@ class EmelyaKettleCard extends LitElement {
       justify-content:space-between;
       padding:16px;
       height:132px;
-      background:#1C1B1F;
+      background: #1C1B1F;
       border-radius:24px;
       color:white;
     }
@@ -162,7 +162,7 @@ class EmelyaKettleCard extends LitElement {
     }
 
     .power.active{
-      background:#e65332;
+      background:#E65332;
     }
 
     img{

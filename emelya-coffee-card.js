@@ -217,12 +217,14 @@ class EmelyaCoffeeCard extends LitElement {
     }
 
     .power.active{
-      background: #e65332;
+      background: #E65332;
     }
 
   `;
 
-  _toggle(){
+  _toggle(e){
+    e.stopPropagation();
+
     this.power = !this.power;
     const entity = this.config?.entity;
     if(!this.hass?.states?.[entity]) return;
@@ -238,7 +240,21 @@ class EmelyaCoffeeCard extends LitElement {
   }
 
   _toggleSelect(){
+    e.stopPropagation();
     this.open = !this.open;
+  }
+  _fireMoreInfo(entityId){
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  _handleCardClick(){
+    const entity = this.config?.entity;
+    if(!entity) return;
+
+    this._fireMoreInfo(entity);
   }
 
   _selectCoffee(e,type){
@@ -259,7 +275,7 @@ class EmelyaCoffeeCard extends LitElement {
 
     return html`
 
-      <div class="card">
+      <div class="card" @click=${this._handleCardClick}>
 
         <div class="header">
           <div class="title">Кофеварка</div>
@@ -269,7 +285,12 @@ class EmelyaCoffeeCard extends LitElement {
         </div>
 
         <div class="controls">
-          <div class="select" @click=${this._toggleSelect}>
+          <div class="select" @click=${this._toggleSelect}
+            @dblclick=${(e)=>{
+              e.stopPropagation();
+              this._fireMoreInfo(this.config.coffee_entity);
+            }}
+          >
             <div>${this.selectedCoffee}</div>
             <div class="arrow ${this.open ? "open" : ""}"></div>
             ${this.open ? html`

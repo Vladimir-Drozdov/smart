@@ -67,7 +67,7 @@ class EmelyaSwitchCard extends LitElement {
     }
 
     button.active{
-      background: #ff7a2f;
+      background: #E65332;
     }
 
     .square{

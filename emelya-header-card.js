@@ -27,7 +27,6 @@ class EmelyaHeaderCard extends LitElement {
     this._weatherIcon = `${this.base}/images/rain.png`;
   }
   set hass(hass){
-    console.log("setter called")
     this._hass = hass;
 
     // PERSON (онлайн)
@@ -71,7 +70,7 @@ class EmelyaHeaderCard extends LitElement {
       }
     });
 
-    // если нашли по HA → используем и сохраняем
+    // если нашли по HA - используем и сохраняем
     if(newMode){
       this._mode = newMode;
       localStorage.setItem("home_mode", newMode);

@@ -194,7 +194,7 @@ class EmelyaVacuumCleaner extends LitElement {
     }
 
     .start.active{
-      background:#ff7a2f;
+      background:#E65332;
     }
 
   `;

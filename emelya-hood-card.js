@@ -111,7 +111,7 @@ class EmelyaHoodCard extends LitElement {
     }
 
     .btn.power.active{
-      background:#ff7a2f;
+      background: #E65332;
     }
 
     .icon{
@@ -147,7 +147,7 @@ class EmelyaHoodCard extends LitElement {
 
     .btn.active .circle{
       opacity:1;
-      border-color:#ff7a2f;
+      border-color: #E65332;
     }
 
   `;

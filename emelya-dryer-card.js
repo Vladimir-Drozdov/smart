@@ -212,7 +212,7 @@ class EmelyaDryerCard extends LitElement {
     }
 
     .power.active{
-      background:#e65332;
+      background:#E65332;
     }
 
     .power img{

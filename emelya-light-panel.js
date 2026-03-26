@@ -130,7 +130,7 @@ class EmelyaLightPanel extends LitElement {
     }
 
     .icon-box.iconActive{
-      background:#ff7a2f;
+      background:#E65332;
     }
 
     .title-block{
