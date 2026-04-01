@@ -13,19 +13,10 @@ class EmelyaBreezerCard extends LitElement {
 
   constructor(){
     super();
-
     this.open = false;
-
     this.selectedMode = "Комфорт";
     this.power = false;
-
-    this.modes = [
-      "Комфорт",
-      "Эко",
-      "Турбо",
-      "Ночной"
-    ];
-
+    this.modes = [];
     this._expectedPower = null;
     this._expectedMode = null;
   }
@@ -132,65 +123,6 @@ class EmelyaBreezerCard extends LitElement {
       align-items:center;
     }
 
-    .select{
-      position:relative;
-
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      border:2px solid #656565;
-
-      width:201px;
-      height:56px;
-
-      padding:0 16px;
-
-      background: #1C1B1F;
-      border-radius:16px;
-
-      font-weight:600;
-      font-size:16px;
-
-      cursor:pointer;
-    }
-
-    .arrow{
-      width:10px;
-      height:10px;
-
-      border-right:2px solid white;
-      border-bottom:2px solid white;
-
-      transform:rotate(45deg);
-      transition:0.2s;
-    }
-
-    .arrow.open{
-      transform:rotate(-135deg);
-    }
-
-    .dropdown{
-      position:absolute;
-      top:60px;
-      left:0;
-      right:0;
-
-      background: #1C1B1F;
-      border:2px solid #656565;
-      border-radius:16px;
-      overflow:hidden;
-      z-index:10;
-    }
-
-    .option{
-      padding:12px 16px;
-      cursor:pointer;
-    }
-
-    .option:hover{
-      background:#343239;
-    }
-
     .option.selected{
       background:#343239;
       font-weight:600;
@@ -222,7 +154,8 @@ class EmelyaBreezerCard extends LitElement {
 
   `;
 
-  _toggle(){
+  _toggle(e){
+    e.stopPropagation();
     this.power = !this.power;
 
     const entity = this.config?.entity;
@@ -237,31 +170,44 @@ class EmelyaBreezerCard extends LitElement {
       entity_id: entity
     });
   }
-
-  _toggleSelect(){
-    this.open = !this.open;
+  _fireMoreInfo(entityId){
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  _handleCardClick(e){
+    if(e.target.closest("ha-select")) return;
+    const entity = this.config?.entity;
+    if(!entity) return;
+    this._fireMoreInfo(entity);
   }
 
-  _selectMode(e, mode){
+  _handleSelectDblClick(e){
     e.stopPropagation();
+    this._fireMoreInfo(this.config.mode_entity);
+  }
 
-    this.selectedMode = mode;
-    this._expectedMode = mode;
-    this.open = false;
+  _handleSelectChange(e){
+    e.stopPropagation();
+    const value = e.target.value;
+    this.selectedMode = value;
+    this._expectedMode = value;
 
     const modeEntity = this.config?.mode_entity;
     if(!this.hass?.states?.[modeEntity]) return;
-
-    this.hass.callService("select", "select_option", {
+    this.hass.callService("select","select_option",{
       entity_id: modeEntity,
-      option: mode
+      option: value
     });
   }
 
   render(){
+    const modeState = this.hass?.states?.[this.config.mode_entity];
     return html`
 
-      <div class="card">
+      <ha-card class="card" @click=${this._handleCardClick}>
 
         <div class="header">
           <div class="title">Бризер</div>
@@ -272,23 +218,18 @@ class EmelyaBreezerCard extends LitElement {
 
         <div class="controls">
 
-          <div class="select" @click=${this._toggleSelect}>
-            <div>${this.selectedMode}</div>
-            <div class="arrow ${this.open ? "open" : ""}"></div>
-
-            ${this.open ? html`
-              <div class="dropdown">
-                ${this.modes.map(mode => html`
-                  <div
-                    class="option ${this.selectedMode===mode ? "selected":""}"
-                    @click=${(e)=>this._selectMode(e,mode)}
-                  >
-                    ${mode}
-                  </div>
-                `)}
-              </div>
-            ` : ""}
-          </div>
+        ${modeState ? html`
+            <ha-select
+              .label=${modeState.attributes.friendly_name}
+              .value=${modeState.state}
+              @dblclick=${this._handleSelectDblClick}
+              @change=${this._handleSelectChange}
+            >
+              ${(modeState.attributes.options || []).map(opt => html`
+                <mwc-list-item .value=${opt}>${opt}</mwc-list-item>
+              `)}
+            </ha-select>
+          ` : ""}
 
           <div class="power ${this.power ? "active":""}" @click=${this._toggle}>
             <img src="${this.base}/images/container-images/power_button.png">
@@ -296,7 +237,7 @@ class EmelyaBreezerCard extends LitElement {
 
         </div>
 
-      </div>
+      </ha-card>
     `;
   }
 }

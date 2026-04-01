@@ -9,8 +9,9 @@ class DualThermostatCard extends HTMLElement {
     const style = document.createElement("style");
     style.textContent = `
       .card {
-        width: 288px;
+        max-width:320px; width:100%;
         height: 424px;
+        box-sizing:border-box;
         background: #1C1B1F;
         border-radius: 28px;
         overflow: hidden;
@@ -28,7 +29,7 @@ class DualThermostatCard extends HTMLElement {
         display: flex;
         justify-content: center;
         gap: 12px;
-        padding: 12px 16px 16px;
+        padding: 0px 16px 16px;
         background: #1C1B1F;
       }
 

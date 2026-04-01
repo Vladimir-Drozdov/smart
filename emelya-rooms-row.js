@@ -71,8 +71,8 @@ class EmelyaRoomsRow extends LitElement {
     }
 
     .icon img {
-      width: 32px;
-      height: 32px;
+      width: 24px;
+      height: 24px;
       filter: brightness(0) invert(1);
     }
 

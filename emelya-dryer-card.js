@@ -16,19 +16,12 @@ class EmelyaDryerCard extends LitElement {
 
     this.open = false;
 
-    this.selectedMode = "Деликатная сушка";
     this.power = false;
 
     this._expectedPower = null;
     this._expectedMode = null;
 
-    this.modes = [
-      "Деликатная сушка",
-      "Быстрая",
-      "Интенсивная",
-      "Эко",
-      "Шкаф"
-    ];
+    this.modes = [];
   }
 
   setConfig(config) {
@@ -123,79 +116,6 @@ class EmelyaDryerCard extends LitElement {
       height:56px;
     }
 
-    .select{
-      position:relative;
-
-      flex:1;
-
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-
-      padding:0 16px;
-
-      background:#1C1B1F;
-      border-radius:16px;
-
-      font-weight:600;
-      font-size:16px;
-
-      cursor:pointer;
-      user-select:none;
-    }
-
-    .select.disabled{
-      opacity:0.4;
-      cursor:default;
-    }
-
-    .select.active{
-      background:#343239;
-    }
-
-    .arrow{
-      width:10px;
-      height:10px;
-
-      border-right:2px solid white;
-      border-bottom:2px solid white;
-
-      transform:rotate(45deg);
-      transition:0.2s;
-    }
-
-    .arrow.open{
-      transform:rotate(-135deg);
-    }
-
-    .dropdown{
-      position:absolute;
-      top:60px;
-      left:0;
-      right:0;
-
-      background:#1C1B1F;
-      border-radius:16px;
-
-      overflow:hidden;
-      z-index:10;
-    }
-
-    .option{
-      padding:12px 16px;
-      cursor:pointer;
-      font-size:15px;
-    }
-
-    .option:hover{
-      background:#343239;
-    }
-
-    .option.selected{
-      background:#343239;
-      font-weight:600;
-    }
-
     .power{
       width:80px;
 
@@ -222,7 +142,8 @@ class EmelyaDryerCard extends LitElement {
 
   `;
 
-  _togglePower(){
+  _togglePower(e){
+    e.stopPropagation();
     const entity = this.config?.entity;
     const newPower = !this.power;
 
@@ -238,93 +159,85 @@ class EmelyaDryerCard extends LitElement {
     });
   }
 
-  _toggleSelect(){
-    if(!this.power) return;
-    this.open = !this.open;
+  _fireMoreInfo(entityId){
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  _handleCardClick(e){
+    if(e.target.closest("ha-select")) return;
+    const entity = this.config?.entity;
+    if(!entity) return;
+    this._fireMoreInfo(entity);
   }
 
-  _selectMode(e, mode){
+  _handleSelectDblClick(e){
     e.stopPropagation();
+    this._fireMoreInfo(this.config.mode_entity);
+  }
 
-    this.selectedMode = mode;
-    this._expectedMode = mode;
+  _handleSelectChange(e){
+    e.stopPropagation();
+    const value = e.target.value;
+    this.selectedMode = value;
+    this._expectedMode = value;
 
-    this.open = false;
-
-    if(!this.power) return;
-
-    const entity = this.config?.mode_entity;
-    if(!this.hass || !entity) return;
-
+    const modeEntity = this.config?.mode_entity;
+    if(!this.hass?.states?.[modeEntity]) return;
     this.hass.callService("select","select_option",{
-      entity_id: entity,
-      option: mode
+      entity_id: modeEntity,
+      option: value
     });
   }
 
   render(){
     const bg = `${this.base}/images/container-images/dryer.png`;
-    const modes = this.modes || [];
+    const modeState = this.hass?.states?.[this.config.mode_entity];
 
     return html`
+      <ha-card>
+        <div
+          class="card" @click=${this._handleCardClick}
+          style="
+            background:
+              linear-gradient(180deg, rgba(28,27,31,0) 67.56%, #1C1B1F 100%),
+              url('${bg}') center/cover no-repeat,
+              #1C1B1F;
+          "
+        >
 
-      <div
-        class="card"
-        style="
-          background:
-            linear-gradient(180deg, rgba(28,27,31,0) 67.56%, #1C1B1F 100%),
-            url('${bg}') center/cover no-repeat,
-            #1C1B1F;
-        "
-      >
-
-        <div class="header">
-          <div class="title">Сушильная машина</div>
-          <div class="state">
-            ${this.power ? "Включено" : "Выключено"}
+          <div class="header">
+            <div class="title">Сушильная машина</div>
+            <div class="state">
+              ${this.power ? "Включено" : "Выключено"}
+            </div>
           </div>
-        </div>
 
-        <div class="controls">
+          <div class="controls">
 
-          <div
-            class="select ${this.power ? "active" : "disabled"}"
-            @click=${this._toggleSelect}
-          >
-            <div>${this.selectedMode}</div>
-
-            <div class="arrow ${this.open ? "open" : ""}"></div>
-
-            ${this.open ? html`
-              <div class="dropdown">
-
-                ${modes.length === 0
-                  ? html`<div class="option disabled">Нет режимов</div>`
-                  : modes.map(mode => html`
-                      <div
-                        class="option ${this.selectedMode === mode ? "selected" : ""}"
-                        @click=${(e)=>this._selectMode(e,mode)}
-                      >
-                        ${mode}
-                      </div>
-                    `)
-                }
-
-              </div>
+            ${modeState ? html`
+              <ha-select
+                .label=${modeState.attributes.friendly_name}
+                .value=${modeState.state}
+                @dblclick=${this._handleSelectDblClick}
+                @change=${this._handleSelectChange}
+              >
+                ${(modeState.attributes.options || []).map(opt => html`
+                  <mwc-list-item .value=${opt}>${opt}</mwc-list-item>
+                `)}
+              </ha-select>
             ` : ""}
 
-          </div>
+            <div class="power ${this.power ? "active" : ""}" @click=${this._togglePower}>
+              <img src="${this.base}/images/container-images/power_button.png">
+            </div>
 
-          <div
-            class="power ${this.power ? "active" : ""}"
-            @click=${this._togglePower}
-          >
-            <img src="${this.base}/images/container-images/power_button.png">
           </div>
 
         </div>
-
-      </div>
+      </ha-card>
 
     `;
   }

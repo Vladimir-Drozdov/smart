@@ -152,7 +152,8 @@ class EmelyaHoodCard extends LitElement {
 
   `;
 
-  _togglePower(){
+  _togglePower(e){
+    e.stopPropagation();
     const entity = this.config?.entity;
     const newPower = !this.power;
 
@@ -170,6 +171,20 @@ class EmelyaHoodCard extends LitElement {
       entity_id: entity
     });
   }
+  _fireMoreInfo(entityId){
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId },
+      bubbles: true,
+      composed: true
+    }));
+  }
+  _handleCardClick(e){
+    if(e.target.closest("div.btn")) return;
+    const entity = this.config?.entity;
+    if(!entity) return;
+    this._fireMoreInfo(entity);
+  }
+
 
   _setLevel(level){
     this.level = level;
@@ -189,7 +204,7 @@ class EmelyaHoodCard extends LitElement {
     return html`
 
       <div
-        class="frame"
+        class="frame" @click=${this._handleCardClick}
         style="
           background:
             url('${bg}'),

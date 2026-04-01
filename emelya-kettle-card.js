@@ -11,13 +11,9 @@ class EmelyaKettleCard extends LitElement {
 
   constructor(){
     super();
-    this._stopHold = this._stopHold.bind(this);
     this.power = false;
     this.temperature = 0;
-    this._editingTemp = false;
     this._expectedPower = null;
-    this._holdInterval = null;
-    this._holdTimeout = null;
   }
 
   setConfig(config){
@@ -26,33 +22,43 @@ class EmelyaKettleCard extends LitElement {
   }
 
   set hass(hass){
-
     this._hass = hass;
 
-    const entity = this.config?.entity;
-    const stateObj = hass.states?.[entity];
+    //  POWER 
+    const powerEntity = this.config.power_entity || this.config.entity;
+    const powerStateObj = hass.states?.[powerEntity];
+    if(powerStateObj){
+      let newPower = false;
+      const domain = powerEntity.split(".")[0];
 
-    if(stateObj){
-      const newPower = stateObj.state === "on";
+      if(domain === "climate") {
+        newPower = powerStateObj.state !== "off"; // climate: off / heat / etc
+      } else if(domain === "switch" || domain === "input_boolean") {
+        newPower = powerStateObj.state === "on";
+      } else {
+        // универсально: все остальные домены
+        newPower = powerStateObj.state !== "off" && powerStateObj.state !== "unavailable";
+      }
 
       if(this._expectedPower !== null){
-        if(newPower === this._expectedPower){
-          this._expectedPower = null;
-          this.power = newPower;
-        }
-      } else {
-        this.power = newPower;
+        if(newPower === this._expectedPower) this._expectedPower = null;
       }
+      this.power = newPower;
     }
+    //  TEMP 
+    const tempEntity = this.config.temp_entity || this.config.entity;
+    const tempStateObj = hass.states?.[tempEntity];
+    if(tempStateObj){
+      let newTemp = 0;
+      const domain = tempEntity.split(".")[0];
 
-    const tempEntity = this.config?.temp_entity;
-    const tempState = hass.states?.[tempEntity];
-
-    if(tempState && !this._editingTemp){
-      const val = Number(tempState.state);
-      if(!isNaN(val)){
-        this.temperature = val;
+      if(domain === "climate") {
+        newTemp = tempStateObj.attributes?.temperature ?? 0;
+      } else {
+        newTemp = Number(tempStateObj.state) || 0;
       }
+
+      this.temperature = newTemp;
     }
 
   }
@@ -120,29 +126,6 @@ class EmelyaKettleCard extends LitElement {
       flex-direction:row;
     }
 
-    .arrow{
-      width:16px;
-      height:16px;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      cursor:pointer;
-    }
-
-    .arrow::before{
-      content:"";
-      border-left:6px solid transparent;
-      border-right:6px solid transparent;
-    }
-
-    .arrow.up::before{
-      border-bottom:8px solid white;
-    }
-
-    .arrow.down::before{
-      border-top:8px solid white;
-    }
-
     .value{
       min-width:40px;
       text-align:center;
@@ -172,87 +155,67 @@ class EmelyaKettleCard extends LitElement {
 
   `;
 
-  _toggle(){
+  _toggle(e){
+    e.stopPropagation();
     const newPower = !this.power;
     this.power = newPower;
     this._expectedPower = newPower;
-    const entity = this.config?.entity;
+
+    const entity = this.config.power_entity || this.config.entity;
     if(!this.hass?.states?.[entity]) return;
 
     const domain = entity.split(".")[0];
-    const service = newPower ? "turn_on" : "turn_off";
 
-    this.hass.callService(domain, service, {
-      entity_id: entity
-    });
-  }
-
-  _startHold(delta){
-    window.addEventListener("mouseup", this._stopHold);
-    this._editingTemp = true;
-
-    this._holdTimeout = setTimeout(()=>{
-      this._holdInterval = setInterval(()=>{
-        this._changeTemp(delta);
-      },40);
-    },300);
-
-  }
-
-  _stopHold(){
-    window.addEventListener("mouseup", this._stopHold);
-    clearTimeout(this._holdTimeout);
-    clearInterval(this._holdInterval);
-
-    this._holdTimeout = null;
-    this._holdInterval = null;
-
-    this._commitTemp();
-
-    this._editingTemp = false;
-  }
-  _changeTemp(delta){
-    if(!this.power) return;
-    const tempEntity = this.config?.temp_entity;
-    const tempState = this.hass?.states?.[tempEntity];
-    const step = tempState?.attributes?.step ?? 1;
-    const max = tempState?.attributes?.max ?? 100;
-    const min = tempState?.attributes?.min ?? 0;
-    let newTemp = this.temperature + delta * step;
-    if(newTemp > max) newTemp = max;
-    if(newTemp < min) newTemp = min;
-    this.temperature = newTemp;
-  }
-  _commitTemp(){
-    clearTimeout(this._commitTimer);
-
-    this._commitTimer = setTimeout(()=>{
-      const tempEntity = this.config?.temp_entity;
-      if(!this.hass || !tempEntity) return;
-
-      const stateObj = this.hass.states?.[tempEntity];
-      if(!stateObj) return;
-
-      if(stateObj.state === "unavailable" || stateObj.state === "unknown"){
-        return;
-      }
-
-      this.hass.callService("number","set_value",{
-        entity_id: tempEntity,
-        value: this.temperature
+    if(domain === "climate") {
+      // включаем/выключаем через set_hvac_mode
+      this.hass.callService("climate","set_hvac_mode",{
+        entity_id: entity,
+        hvac_mode: newPower ? "heat" : "off"
       });
-    }, 150);
+    } else if(domain === "switch" || domain === "input_boolean") {
+      // стандартные сущности
+      this.hass.callService("homeassistant", newPower ? "turn_on":"turn_off",{
+        entity_id: entity
+      });
+    } else {
+      // универсально для других доменов
+      this.hass.callService(domain, newPower ? "turn_on":"turn_off",{
+        entity_id: entity
+      });
+    }
   }
-
   _click(action){
     action();
+  }
+  _fireMoreInfo(entityId){
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  _handleCardClick(e){
+    if(e.target.closest("div.box.temp")) return;
+    const entity = this.config?.entity;
+    if(!entity) return;
+    this._fireMoreInfo(entity);
+  }
+
+  _handleSelectClick(e){
+    e.stopPropagation();
+    if(this.config.temp_entity){
+      this._fireMoreInfo(this.config.temp_entity);
+    } else if(this.config.entity){ 
+      this._fireMoreInfo(this.config.entity);
+    }
   }
 
   render(){
 
     return html`
 
-      <div class="card">
+      <div class="card" @click=${this._handleCardClick}>
 
         <div class="header">
           <div class="title">Чайник</div>
@@ -262,35 +225,10 @@ class EmelyaKettleCard extends LitElement {
         </div>
 
         <div class="controls">
-
-          <div class="box temp">
-
-            <div
-              class="arrow up"
-              @click=${()=>{
-                this._changeTemp(1);
-                this._commitTemp();
-              }}
-              @mousedown=${()=>this._startHold(1)}
-              @mouseup=${this._stopHold}
-              @mouseleave=${this._stopHold}
-            ></div>
-
+          <div class="box temp" @click=${this._handleSelectClick}>
             <div class="value">
               ${this.temperature} °C
             </div>
-
-            <div
-              class="arrow down"
-              @click=${()=>{
-                this._changeTemp(-1);
-                this._commitTemp();
-              }}
-              @mousedown=${()=>this._startHold(-1)}
-              @mouseup=${this._stopHold}
-              @mouseleave=${this._stopHold}
-            ></div>
-
           </div>
 
           <div class="power ${this.power ? "active" : ""}" @click=${this._toggle}>
@@ -307,3 +245,10 @@ class EmelyaKettleCard extends LitElement {
 }
 
 customElements.define("emelya-kettle-card", EmelyaKettleCard);
+/*
+type: custom:emelya-kettle-card
+base_path: /local
+entity: climate.kettle   # или switch.kettle
+power_entity: switch.kettle     # необязательный
+temp_entity: number.kettle_temp # необязательный
+*/

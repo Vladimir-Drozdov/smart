@@ -14,8 +14,7 @@ class EmelyaHumidifierCard extends LitElement {
   constructor(){
     super();
     this.opened = false;
-    this.mode = "";
-    this.modes = ["auto", "manual", "sleep"];
+    this.modes = [];
     this.power = false;
     this._expectedPower = null;
     this._expectedMode = null;
@@ -110,67 +109,6 @@ class EmelyaHumidifierCard extends LitElement {
       gap:8px;
       height:56px;
     }
-
-    .select{
-      position:relative;
-      flex:1;
-    }
-
-    .select-trigger{
-      height:56px;
-      border-radius:16px;
-      padding:0 20px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      background:rgba(255,255,255,0.1);
-      cursor:pointer;
-      font-size:15px;
-    }
-
-    .arrow{
-      width:8px;
-      height:8px;
-      border-right:2px solid white;
-      border-bottom:2px solid white;
-      transform:rotate(45deg);
-      transition:transform .25s;
-    }
-
-    .select.open .arrow{
-      transform:rotate(-135deg);
-    }
-
-    .dropdown{
-      position:absolute;
-      top:calc(100% + 6px);
-      left:0;
-      right:0;
-      background:#2B2A2F;
-      border-radius:16px;
-      overflow:hidden;
-      opacity:0;
-      transform:translateY(-6px);
-      pointer-events:none;
-      transition:all .2s ease;
-    }
-
-    .select.open .dropdown{
-      opacity:1;
-      transform:translateY(0);
-      pointer-events:auto;
-    }
-
-    .option{
-      padding:14px 20px;
-      cursor:pointer;
-      transition:background .2s;
-    }
-
-    .option:hover{
-      background:rgba(255,255,255,0.08);
-    }
-
     .power{
       width:80px;
       display:flex;
@@ -193,12 +131,14 @@ class EmelyaHumidifierCard extends LitElement {
 
   `;
 
-  _togglePower(){
+  _togglePower(e){
+    e.stopPropagation();
     const entity = this.config?.entity;
 
     const newPower = !this.power;
     this.power = newPower;
     this._expectedPower = newPower;
+    console.log(this.power)
 
     if(this.hass && entity){
       const domain = entity.split(".")[0];
@@ -209,43 +149,48 @@ class EmelyaHumidifierCard extends LitElement {
       });
     }
   }
-
-  _toggleDropdown(){
-    this.opened = !this.opened;
+  _fireMoreInfo(entityId){
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId },
+      bubbles: true,
+      composed: true
+    }));
   }
 
-  _selectMode(value){
-    this.mode = value;
+  _handleCardClick(e){
+    if(e.target.closest("ha-select")) return;
+    const entity = this.config?.entity;
+    if(!entity) return;
+    this._fireMoreInfo(entity);
+  }
+
+  _handleSelectDblClick(e){
+    e.stopPropagation();
+    this._fireMoreInfo(this.config.mode_entity);
+  }
+
+  _handleSelectChange(e){
+    e.stopPropagation();
+    const value = e.target.value;
+    this.selectedMode = value;
     this._expectedMode = value;
 
-    this.opened = false;
-
     const modeEntity = this.config?.mode_entity;
-
-    if(this.hass && modeEntity){
-      this.hass.callService("select","select_option",{
-        entity_id: modeEntity,
-        option: value
-      });
-    }
+    if(!this.hass?.states?.[modeEntity]) return;
+    this.hass.callService("select","select_option",{
+      entity_id: modeEntity,
+      option: value
+    });
   }
-  _modeLabel(value){
 
-    const map = {
-      auto: "Автоматически",
-      manual: "Вручную",
-      sleep: "Ночной"
-    };
-
-    return map[value] || value;
-  }
 
   render(){
     const bg = `${this.base}/images/container-images/humidifier.png`;
+    const modeState = this.hass?.states?.[this.config.mode_entity];
     return html`
-
+    <ha-card>
       <div
-        class="card"
+        class="card" @click=${this._handleCardClick}
         style="
           background:
             linear-gradient(180deg, rgba(28,27,31,0) 75%, #1C1B1F 100%),
@@ -259,44 +204,30 @@ class EmelyaHumidifierCard extends LitElement {
 
           <div class="state">
             ${this.power
-              ? (this.mode ? this._modeLabel(this.mode) : "Включено")
+              ? (this.mode ? this.mode : "Включено")
               : "Выключено"}
           </div>
         </div>
 
         <div class="controls">
-
-          <div class="select ${this.opened ? "open" : ""}">
-
-            <div
-              class="select-trigger"
-              @click=${this._toggleDropdown}
+          ${modeState ? html`
+            <ha-select
+              .label=${modeState.attributes.friendly_name}
+              .value=${modeState.state}
+              @dblclick=${this._handleSelectDblClick}
+              @change=${this._handleSelectChange}
             >
-              <span>${this._modeLabel(this.mode)}</span>
-              <div class="arrow"></div>
-            </div>
-
-            <div class="dropdown">
-              ${this.modes.map(option => html`
-                <div
-                  class="option"
-                  @click=${() => this._selectMode(option)}
-                >
-                  ${this._modeLabel(option)}
-                </div>
+              ${(modeState.attributes.options || []).map(opt => html`
+                <mwc-list-item .value=${opt}>${opt}</mwc-list-item>
               `)}
-            </div>
-          </div>
-
-          <div
-            class="power ${this.power ? "active" : ""}"
-            @click=${this._togglePower}
-          >
+            </ha-select>
+          ` : ""}
+          <div class="power ${this.power ? "active" : ""}" @click=${this._togglePower}>
             <img src="${this.base}/images/container-images/power_button.png">
           </div>
         </div>
       </div>
-
+    </ha-card>
     `;
   }
 

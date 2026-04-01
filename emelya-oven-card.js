@@ -1,5 +1,4 @@
 import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
-
 class EmelyaOvenCard extends LitElement {
 
   static properties = {
@@ -12,24 +11,12 @@ class EmelyaOvenCard extends LitElement {
 
   constructor(){
     super();
-
     this.power = false;
-    this.temp = 180;
-    this.timer = 45;
-
-    this._holdInterval = null;
-    this._holdTimeout = null;
+    this.temp = 0;
+    this.timer = 0;
     this._expectedPower = null;
     this._expectedTemp = null;
     this._expectedTimer = null;
-
-    this._lastUserChange = 0;
-    this._dragging = false;
-    this._lastServiceCallTemp = 0;
-    this._lastServiceCallTimer = 0;
-
-    this._pendingTemp = null;
-    this._pendingTimer = null;
   }
 
   setConfig(config){
@@ -40,69 +27,39 @@ class EmelyaOvenCard extends LitElement {
   set hass(hass){
     this._hass = hass;
 
-    const entity = this.config?.entity;
-    const stateObj = hass.states?.[entity];
-
-    const now = Date.now();
-    const ignore = (now - this._lastUserChange) < 800;
-
-    // POWER 
-    if(stateObj){
-      const newPower = stateObj.state !== "off";
-
+    // === POWER ===
+    const powerEntity = this.config.power_entity || this.config.entity;
+    const powerStateObj = hass.states?.[powerEntity];
+    if(powerStateObj){
+      const newPower = powerStateObj.state !== "off";
       if(this._expectedPower !== null){
         if(newPower !== this._expectedPower) return;
         this._expectedPower = null;
       }
-
       this.power = newPower;
-
-      // TEMP
-      const newTemp = stateObj.attributes?.temperature;
-
-      if(newTemp !== undefined){
-
-        if(this._expectedTemp !== null){
-
-          if(Math.abs(newTemp - this._expectedTemp) > 1) return;
-
-          this._expectedTemp = null;
-
-        } else if(!ignore && !this._dragging){
-
-          this.temp = newTemp;
-
-        }
-      }
     }
 
-    // TIMER 
-    const timerEntity = this.config?.timer_entity;
-    const timerState = hass.states?.[timerEntity];
+    // === TEMP ===
+    const tempEntity = this.config.temp_entity || this.config.entity;
+    const tempStateObj = hass.states?.[tempEntity];
+    if(tempStateObj){
+      let newTemp = 0;
+      const domain = tempEntity.split(".")[0];
+      if(domain === "climate") newTemp = tempStateObj.attributes?.temperature ?? 0;
+      else newTemp = Number(tempStateObj.state) || 0;
+      this.temp = newTemp;
+    }
 
-    if(timerState?.state !== undefined){
-
-      const newTimer = Number(timerState.state);
-
-      if(this._expectedTimer !== null){
-
-        if(Math.abs(newTimer - this._expectedTimer) > 1) return;
-
-        this._expectedTimer = null;
-
-      } else if(!ignore && !this._dragging){
-
-        this.timer = newTimer;
-
-      }
+    // === TIMER ===
+    const timerEntity = this.config.timer_entity;
+    if(timerEntity){
+      const timerStateObj = hass.states?.[timerEntity];
+      if(timerStateObj) this.timer = Number(timerStateObj.state) || 0;
     }
   }
 
-  get hass(){
-    return this._hass;
-  }
-
-  static styles = css`
+  get hass(){ return this._hass; }
+    static styles = css`
 
     :host{
       display:block;
@@ -162,28 +119,6 @@ class EmelyaOvenCard extends LitElement {
       text-align:center;
     }
 
-    .arrow{
-      width:16px;
-      height:16px;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      cursor:pointer;
-    }
-
-    .arrow.up::before{
-      content:"";
-      border-left:6px solid transparent;
-      border-right:6px solid transparent;
-      border-bottom:8px solid white;
-    }
-
-    .arrow.down::before{
-      content:"";
-      border-left:6px solid transparent;
-      border-right:6px solid transparent;
-      border-top:8px solid white;
-    }
 
     .power{
       width:80px;
@@ -207,213 +142,84 @@ class EmelyaOvenCard extends LitElement {
 
   `;
 
-  _startHold(action){
-    this._holdTimeout = setTimeout(()=>{
-      this._holdInterval = setInterval(action,40);
-    },300);
-  }
-
-  _stopHold(){
-    clearTimeout(this._holdTimeout);
-    clearInterval(this._holdInterval);
-
-    this._holdTimeout = null;
-    this._holdInterval = null;
-
-    const entity = this.config?.entity;
-    const timerEntity = this.config?.timer_entity;
-
-    if(this._pendingTemp !== null && this.hass?.states?.[entity]){
-      this._expectedTemp = this._pendingTemp;
-
-      this.hass.callService("climate","set_temperature",{
-        entity_id: entity,
-        temperature: this._pendingTemp
-      });
-    }
-
-    if(this._pendingTimer !== null && this.hass?.states?.[timerEntity]){
-      this._expectedTimer = this._pendingTimer;
-
-      this.hass.callService("number","set_value",{
-        entity_id: timerEntity,
-        value: this._pendingTimer
-      });
-    }
-
-    this._pendingTemp = null;
-    this._pendingTimer = null;
-
-    this._dragging = false;
-    this._lastUserChange = Date.now();
-  }
-
-  _click(action){
-      action();
-  }
-
-  _callService(service,data){
-
-    const entity = this.config?.entity;
-
-    if(!this.hass || !entity) return;
-
-    this.hass.callService("oven",service,{
-      entity_id:entity,
-      ...data
-    });
-
-  }
-
-  _togglePower(){
+  // Универсальный toggle
+  _togglePower(e){
+    e.stopPropagation();
     const newPower = !this.power;
     this.power = newPower;
 
-    const entity = this.config?.entity;
+    const entity = this.config.power_entity || this.config.entity;
+    if(!this.hass?.states?.[entity]) return;
+    this._expectedPower = newPower;
 
-    if(this.hass?.states?.[entity]){
-      this._expectedPower = newPower;
+    const domain = entity.split(".")[0];
 
+    // Попробуем универсально
+    if(domain === "climate"){
       this.hass.callService("climate","set_hvac_mode",{
         entity_id: entity,
         hvac_mode: newPower ? "heat" : "off"
       });
+    } else if(domain === "switch" || domain === "input_boolean"){
+      this.hass.callService("homeassistant", newPower ? "turn_on":"turn_off", {
+        entity_id: entity
+      });
+    } else {
+      console.warn("Неизвестный домен для power:", domain);
     }
   }
 
-  _changeTemp(delta){
+  _fireMoreInfo(entityId){
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId },
+      bubbles: true,
+      composed: true
+    }));
+  }
 
-    this.temp += delta;
-    if(this.temp < 0) this.temp = 0;
+  _handleCardClick(e){
+    if(e.target.closest("div.box")) return;
+    const entity = this.config.entity || this.config.power_entity;
+    if(entity) this._fireMoreInfo(entity);
+  }
 
-    this._dragging = true;
-    this._lastUserChange = Date.now();
-
-    const entity = this.config?.entity;
-    const now = Date.now();
-
-    this._pendingTemp = this.temp;
-
-    if (now - this._lastServiceCallTemp > 250) {
-
-      this._lastServiceCallTemp = now;
-
-      if(this.hass?.states?.[entity]){
-        this._expectedTemp = this.temp;
-
-        this.hass.callService("climate","set_temperature",{
-          entity_id: entity,
-          temperature: this.temp
-        });
-      }
+  _handleTempClick(e){
+    e.stopPropagation();
+    if(this.config.temp_entity){
+      this._fireMoreInfo(this.config.temp_entity);
+    } else if(this.config.entity){ 
+      this._fireMoreInfo(this.config.entity);
     }
   }
 
-  _changeTimer(delta){
-
-    this.timer += delta;
-    if(this.timer < 0) this.timer = 0;
-
-    this._dragging = true;
-    this._lastUserChange = Date.now();
-
-    const entity = this.config?.timer_entity;
-    const now = Date.now();
-
-    this._pendingTimer = this.timer;
-
-    if (now - this._lastServiceCallTimer > 250) {
-
-      this._lastServiceCallTimer = now;
-
-      if(this.hass?.states?.[entity]){
-        this._expectedTimer = this.timer;
-
-        this.hass.callService("number","set_value",{
-          entity_id: entity,
-          value: this.timer
-        });
-      }
-    }
+  _handleTimerClick(e){
+    e.stopPropagation();
+    if(this.config.timer_entity) this._fireMoreInfo(this.config.timer_entity);
   }
 
   render(){
     const bg = `${this.base}/images/container-images/oven.png`;
-
     return html`
-      <div class="card" style="background:
+      <div class="card" @click=${this._handleCardClick} style="background:
         linear-gradient(180deg, rgba(28,27,31,0) 62.6%, #1C1B1F 100%),
         url('${bg}') center/cover no-repeat,
         #1C1B1F;">
-
         <div class="header">
           <div class="title">Духовой шкаф</div>
-          <div class="state">
-            ${this.power ? "Включено" : "Выключено"}
-          </div>
+          <div class="state">${this.power ? "Включено":"Выключено"}</div>
         </div>
-
         <div class="controls">
-
-          <div class="box">
-
-            <div
-              class="arrow down"
-              @click=${()=>this._click(()=>this._changeTemp(-1))}
-              @mousedown=${()=>this._startHold(()=>this._changeTemp(-1))}
-              @mouseup=${this._stopHold}
-              @mouseleave=${this._stopHold}
-            ></div>
-
-            <div class="value">
-              ${this.temp} °C
-            </div>
-
-            <div
-              class="arrow up"
-              @click=${()=>this._click(()=>this._changeTemp(1))}
-              @mousedown=${()=>this._startHold(()=>this._changeTemp(1))}
-              @mouseup=${this._stopHold}
-              @mouseleave=${this._stopHold}
-            ></div>
-
+          <div class="box" @click=${this._handleTempClick}>
+            <div class="value">${this.temp} °C</div>
           </div>
-
-          <div class="box">
-
-            <div
-              class="arrow down"
-              @click=${()=>this._click(()=>this._changeTimer(-1))}
-              @mousedown=${()=>this._startHold(()=>this._changeTimer(-1))}
-              @mouseup=${this._stopHold}
-              @mouseleave=${this._stopHold}
-            ></div>
-
-            <div class="value">
-              ${this.timer} мин
-            </div>
-
-            <div
-              class="arrow up"
-              @click=${()=>this._click(()=>this._changeTimer(1))}
-              @mousedown=${()=>this._startHold(()=>this._changeTimer(1))}
-              @mouseup=${this._stopHold}
-              @mouseleave=${this._stopHold}
-            ></div>
-
+          <div class="box" @click=${this._handleTimerClick}>
+            <div class="value">${this.timer} мин</div>
           </div>
-
-          <div
-            class="power ${this.power ? "active":""}"
-            @click=${this._togglePower}
-          >
+          <div class="power ${this.power?"active":""}" @click=${this._togglePower}>
             <img src="${this.base}/images/container-images/power_button.png">
           </div>
-
         </div>
-
       </div>
-
     `;
   }
 
@@ -422,7 +228,19 @@ class EmelyaOvenCard extends LitElement {
 customElements.define("emelya-oven-card", EmelyaOvenCard);
 
 /* 
+# вариант 1: классическая climate духовка
 type: custom:emelya-oven-card
 entity: climate.oven
 timer_entity: number.oven_timer
+
+# вариант 2: кастомная ESPHome духовка
+type: custom:emelya-oven-card
+power_entity: switch.oven
+temp_entity: number.oven_temp
+timer_entity: number.oven_timer
 */
+
+
+
+
+

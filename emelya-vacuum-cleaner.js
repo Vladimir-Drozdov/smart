@@ -19,7 +19,6 @@ class EmelyaVacuumCleaner extends LitElement {
     this.battery=0;
     this._expectedCleaning = null;
     this._expectedFan = null;
-    this._lastUserChange = 0;
     this.initialFanList=["standard", "turbo", "quiet"]
   }
 
@@ -36,9 +35,6 @@ class EmelyaVacuumCleaner extends LitElement {
 
     if(!stateObj) return;
 
-    const now = Date.now();
-    const ignore = (now - this._lastUserChange) < 800;
-
     // CLEANING 
     const newCleaning = stateObj.state === "cleaning";
 
@@ -51,9 +47,7 @@ class EmelyaVacuumCleaner extends LitElement {
 
     // BATTERY 
     const battery = stateObj.attributes?.battery_level;
-    if(battery !== undefined){
-      this.battery = battery;
-    }
+    this.battery = battery !== undefined ? battery : null;
 
     // FAN MODE 
     const fan = stateObj.attributes?.fan_speed;
@@ -72,10 +66,8 @@ class EmelyaVacuumCleaner extends LitElement {
         if(newMode !== this._expectedFan) return;
         this._expectedFan = null;
       }
+      this.selectedMode = newMode;
 
-      if(!ignore){
-        this.selectedMode = newMode;
-      }
     }
   }
 
@@ -129,54 +121,8 @@ class EmelyaVacuumCleaner extends LitElement {
       flex-direction:column;
       gap:8px;
     }
-
-    .select{
-      position:relative;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding:8px 14px;
-      height:36px;
-      border:1px solid white;
-      border-radius:12px;
-      cursor:pointer;
-      user-select:none;
-      font-size:14px;
-    }
-
-    .arrow{
-      width:12px;
-      height:12px;
-      border-right:2px solid white;
-      border-bottom:2px solid white;
-      transform:rotate(45deg);
-      transition:0.2s;
-    }
-
-    .arrow.open{
-      transform:rotate(-135deg);
-    }
-
-    .dropdown{
-      position:absolute;
-      top:42px;
-      left:0;
-      right:0;
-      background:#1C1B1F;
-      border:1px solid white;
-      border-radius:12px;
-      overflow:hidden;
-      z-index:10;
-    }
-
-    .option{
-      padding:8px 14px;
-      cursor:pointer;
-      font-size:14px;
-    }
-
-    .option:hover{
-      background: #343239;
+    ha-select {
+      width: 100%;
     }
 
     .start{
@@ -199,51 +145,34 @@ class EmelyaVacuumCleaner extends LitElement {
 
   `;
 
-  _toggleSelect(){
-    this.open = !this.open;
-  }
-
-  _selectMode(mode){
-    this.selectedMode = mode;
-    this.open = false;
-
+  _toggleCleaning(e){
+    e.stopPropagation();
     const entity = this.config?.entity;
 
-    const modeMap = {
-      "Ежедневная уборка": "standard",
-      "Тщательная уборка": "turbo",
-      "Быстрая уборка": "quiet"
-    };
+    if(!this.hass?.states?.[entity]) return;
 
-    const fan = modeMap[mode];
+    const service = this.cleaning ? "stop" : "start";
+    this._expectedCleaning = service === "start" ? true : false;
 
-    if(this.hass?.states?.[entity]){
-      this._expectedFan = mode;
-
-      this.hass.callService("vacuum","set_fan_speed",{
-        entity_id: entity,
-        fan_speed: fan
-      });
-    }
+    this.hass.callService("vacuum", service, {
+      entity_id: entity
+    });
+  }
+  _fireMoreInfo(entityId){
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId },
+      bubbles: true,
+      composed: true
+    }));
   }
 
-  _toggleCleaning(){
+  _handleCardClick(e){
+    if(e.target.closest("ha-select")) return;
 
     const entity = this.config?.entity;
+    if(!entity) return;
 
-    const newState = !this.cleaning;
-    this.cleaning = newState;
-
-    if(this.hass?.states?.[entity]){
-
-      this._expectedCleaning = newState;
-
-      const service = newState ? "start" : "stop";
-
-      this.hass.callService("vacuum",service,{
-        entity_id: entity
-      });
-    }
+    this._fireMoreInfo(entity);
   }
 
   render(){
@@ -251,72 +180,78 @@ class EmelyaVacuumCleaner extends LitElement {
     const stateObj = this.hass?.states?.[this.config?.entity];
     const fanList = stateObj?.attributes?.fan_speed_list || this.initialFanList;
 
-    const modeNames = {
-      standard: "Ежедневная уборка",
-      turbo: "Тщательная уборка",
-      quiet: "Быстрая уборка"
-    };
-
-    const modes = fanList.map(f => modeNames[f] || f);
     return html`
+      <ha-card>
+        <div class="frame" @click=${this._handleCardClick} style="
+          background:
+            url('${bg}') center/cover no-repeat,
+            #1C1B1F;
+        ">
 
-      <div class="frame" style="
-        background:
-          url('${bg}') center/cover no-repeat,
-          #1C1B1F;
-      ">
+          <div class="type">
+            <div class="title">Робот пылесос</div>
+            <div class="subtitle">
+              ${this.battery !== null ? `${this.battery}% заряда` : ""}
+            </div>
+          </div>
 
-        <div class="type">
-          <div class="title">Робот пылесос</div>
-          <div class="subtitle">${this.battery}% заряда</div>
-        </div>
+          <div class="controls">
 
-        <div class="controls">
+            ${stateObj ? html`
+              <ha-select
+                .label=${"Режим уборки"}
+                .value=${this.selectedMode}
+                @change=${(e)=>{
+                  e.stopPropagation();
+                  const mode = e.target.value;
+                  this.selectedMode = mode;
+                  this._expectedFan = mode;
 
-          <div class="select" @click=${this._toggleSelect}>
-
-            <div>${this.selectedMode}</div>
-
-            <div class="arrow ${this.open ? "open" : ""}"></div>
-
-            ${this.open ? html`
-
-              <div class="dropdown">
-
-                ${modes.map(mode => html`
-
-                  <div
-                    class="option"
-                    @click=${(e)=>{
-                      e.stopPropagation();
-                      this._selectMode(mode);
-                    }}
-                  >
-                    ${mode}
-                  </div>
-
-                `)}
-
-              </div>
-
+                  const entity = this.config?.entity;
+                  const modeMap = {
+                    "Ежедневная уборка": "standard",
+                    "Тщательная уборка": "turbo",
+                    "Быстрая уборка": "quiet"
+                  };
+                  const fan = modeMap[mode] || mode;;
+                  if(this.hass?.states?.[entity]){
+                    this.hass.callService("vacuum","set_fan_speed",{
+                      entity_id: entity,
+                      fan_speed: fan
+                    });
+                  }
+                }}
+              >
+                ${fanList.map(f => {
+                  const modeName = {
+                    standard: "Ежедневная уборка",
+                    turbo: "Тщательная уборка",
+                    quiet: "Быстрая уборка"
+                  }[f] || f;
+                  return html`<mwc-list-item .value=${modeName}>${modeName}</mwc-list-item>`;
+                })}
+              </ha-select>
             ` : ""}
 
-          </div>
-
-          <div
-            class="start ${this.cleaning ? "active" : ""}"
-            @click=${this._toggleCleaning}
-          >
-            ${this.cleaning
-              ? "Остановить уборку"
-              : "Начать уборку в гостиной"}
+            <div
+              class="start ${this.cleaning ? "active" : ""}"
+              @click=${this._toggleCleaning}
+            >
+              ${this.cleaning
+                ? "Остановить уборку"
+                : "Начать уборку в гостиной"}
+            </div>
           </div>
         </div>
-      </div>
-
+      </ha-card>
     `;
   }
 
 }
 
 customElements.define("emelya-vacuum-cleaner", EmelyaVacuumCleaner);
+/*
+- type: custom:emelya-vacuum-cleaner
+  base_path: /local
+  entity: vacuum.robot
+*/

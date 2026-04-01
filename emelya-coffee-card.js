@@ -5,7 +5,6 @@ class EmelyaCoffeeCard extends LitElement {
   static properties = {
     hass: {},
     config: {},
-    open: { state:true },
     selectedCoffee: {},
     power: { type:Boolean },
     coffeeTypes: { state:true }
@@ -14,17 +13,8 @@ class EmelyaCoffeeCard extends LitElement {
   constructor(){
     super();
 
-    this.open = false;
-
-    this.selectedCoffee = "Капучино";
     this.power = false;
-
-    this.coffeeTypes = [
-      "Капучино",
-      "Латте",
-      "Эспрессо",
-      "Американо"
-    ];
+    this.coffeeTypes = [];
 
     this._expectedPower = null;
     this._expectedCoffee = null;
@@ -82,14 +72,9 @@ class EmelyaCoffeeCard extends LitElement {
   setConfig(config){
     this.config = config || {};
     this.base = config.base_path || "/local";
-
-    if(!config.entity){
-      console.warn("emelya-coffee-card: entity not specified");
-    }
   }
 
   static styles = css`
-
     :host{
       display:block;
       max-width:320px;
@@ -132,75 +117,6 @@ class EmelyaCoffeeCard extends LitElement {
       align-items:center;
     }
 
-    .select{
-      position:relative;
-
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-
-      width:200px;
-      height:56px;
-
-      padding:0 16px;
-
-      background:#1C1B1F;
-
-      border:2px solid #656565;
-      border-radius:16px;
-
-      font-weight:600;
-      font-size:16px;
-
-      cursor:pointer;
-      user-select:none;
-    }
-
-    .arrow{
-      width:10px;
-      height:10px;
-
-      border-right:2px solid white;
-      border-bottom:2px solid white;
-
-      transform:rotate(45deg);
-      transition:0.2s;
-    }
-
-    .arrow.open{
-      transform:rotate(-135deg);
-    }
-
-    .dropdown{
-      position:absolute;
-      top:60px;
-      left:0;
-      right:0;
-
-      background: #1C1B1F;
-
-      border:2px solid #656565;
-      border-radius:16px;
-
-      overflow:hidden;
-      z-index:10;
-    }
-
-    .option{
-      padding:12px 16px;
-      font-size:16px;
-      cursor:pointer;
-    }
-
-    .option:hover{
-      background:#343239;
-    }
-
-    .option.selected{
-      background:#343239;
-      font-weight:600;
-    }
-
     .power{
       width:80px;
       height:56px;
@@ -220,7 +136,47 @@ class EmelyaCoffeeCard extends LitElement {
       background: #E65332;
     }
 
+    ha-select {
+      width:200px;
+    }
   `;
+
+  _fireMoreInfo(entityId){
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  _handleCardClick(e){
+    if(e.target.closest("ha-select")) return;
+
+    const entity = this.config?.entity;
+    if(!entity) return;
+
+    this._fireMoreInfo(entity);
+  }
+  _handleSelectDblClick(e){
+    e.stopPropagation();
+    this._fireMoreInfo(this.config.coffee_entity);
+  }
+
+  _handleSelectChange(e){
+    e.stopPropagation();
+
+    const value = e.target.value;
+    this.selectedCoffee = value;
+    this._expectedCoffee = value;
+
+    const coffeeEntity = this.config?.coffee_entity;
+    if(!this.hass?.states?.[coffeeEntity]) return;
+
+    this.hass.callService("select","select_option",{
+      entity_id: coffeeEntity,
+      option: value
+    });
+  }
 
   _toggle(e){
     e.stopPropagation();
@@ -239,42 +195,12 @@ class EmelyaCoffeeCard extends LitElement {
     });
   }
 
-  _toggleSelect(){
-    e.stopPropagation();
-    this.open = !this.open;
-  }
-  _fireMoreInfo(entityId){
-    this.dispatchEvent(new CustomEvent("hass-more-info", {
-      detail: { entityId },
-      bubbles: true,
-      composed: true
-    }));
-  }
-  _handleCardClick(){
-    const entity = this.config?.entity;
-    if(!entity) return;
-
-    this._fireMoreInfo(entity);
-  }
-
-  _selectCoffee(e,type){
-    e.stopPropagation();
-    this.selectedCoffee = type;
-    this._expectedCoffee = type;
-    this.open = false;
-    const coffeeEntity = this.config?.coffee_entity;
-    if(!this.hass?.states?.[coffeeEntity]) return;
-
-    this.hass.callService("select","select_option",{
-      entity_id: coffeeEntity,
-      option: type
-    });
-  }
-
   render(){
 
-    return html`
+    const coffeeState = this.hass?.states?.[this.config.coffee_entity];
 
+    return html`
+    <ha-card>
       <div class="card" @click=${this._handleCardClick}>
 
         <div class="header">
@@ -285,27 +211,21 @@ class EmelyaCoffeeCard extends LitElement {
         </div>
 
         <div class="controls">
-          <div class="select" @click=${this._toggleSelect}
-            @dblclick=${(e)=>{
-              e.stopPropagation();
-              this._fireMoreInfo(this.config.coffee_entity);
-            }}
-          >
-            <div>${this.selectedCoffee}</div>
-            <div class="arrow ${this.open ? "open" : ""}"></div>
-            ${this.open ? html`
-              <div class="dropdown">
-                ${this.coffeeTypes.map(type => html`
-                  <div
-                    class="option ${this.selectedCoffee===type ? "selected":""}"
-                    @click=${(e)=>this._selectCoffee(e,type)}
-                  >
-                    ${type}
-                  </div>
-                `)}
-              </div>
-            ` : ""}
-          </div>
+
+          ${coffeeState ? html`
+            <ha-select
+              .label=${coffeeState.attributes.friendly_name}
+              .value=${coffeeState.state}
+              @dblclick=${this._handleSelectDblClick}
+              @change=${this._handleSelectChange}
+            >
+              ${(coffeeState.attributes.options || []).map((opt) => html`
+                <mwc-list-item .value=${opt}>
+                  ${opt}
+                </mwc-list-item>
+              `)}
+            </ha-select>
+          ` : ""}
 
           <div class="power ${this.power ? "active":""}" @click=${this._toggle}>
             <img src="${this.base}/images/container-images/power_button.png">
@@ -314,18 +234,10 @@ class EmelyaCoffeeCard extends LitElement {
         </div>
 
       </div>
-
+    </ha-card>
     `;
   }
 
 }
 
 customElements.define("emelya-coffee-card", EmelyaCoffeeCard);
-
-/*
-Примерный конфиг
-type: custom:emelya-coffee-card
-base_path: /local/emelya-cards-test
-entity: switch.coffee_machine
-coffee_entity: select.coffee_type
-*/
