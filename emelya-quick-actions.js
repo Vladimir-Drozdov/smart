@@ -72,7 +72,6 @@ class EmelyaQuickActions extends LitElement {
       width: 100%;
       height: 100%;
     }
-
     .quick-actions {
       display: flex;
       flex-direction:row;
@@ -115,7 +114,7 @@ class EmelyaQuickActions extends LitElement {
       flex-basis:auto;
       flex-shrink:1;
       flex-grow:1;
-      min-width:105px;
+      min-width:74.71px;
       max-width:160px;
       pointer-events: auto;
     }

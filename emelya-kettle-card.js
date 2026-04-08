@@ -1,4 +1,9 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
+import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
+
+import {
+  handleAction,
+  hasAction
+} from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
 
 class EmelyaKettleCard extends LitElement {
 
@@ -14,40 +19,43 @@ class EmelyaKettleCard extends LitElement {
     this.power = false;
     this.temperature = 0;
     this._expectedPower = null;
-  }
-
-  setConfig(config){
-    this.config = config || {};
-    this.base = config.base_path || "/local";
+    this._holdTimer = null;
+    this._lastTap = 0;
   }
 
   set hass(hass){
     this._hass = hass;
 
-    //  POWER 
+    // POWER
     const powerEntity = this.config.power_entity || this.config.entity;
     const powerStateObj = hass.states?.[powerEntity];
+
     if(powerStateObj){
       let newPower = false;
       const domain = powerEntity.split(".")[0];
 
       if(domain === "climate") {
-        newPower = powerStateObj.state !== "off"; // climate: off / heat / etc
+        newPower = powerStateObj.state !== "off";
       } else if(domain === "switch" || domain === "input_boolean") {
         newPower = powerStateObj.state === "on";
       } else {
-        // универсально: все остальные домены
         newPower = powerStateObj.state !== "off" && powerStateObj.state !== "unavailable";
       }
 
       if(this._expectedPower !== null){
-        if(newPower === this._expectedPower) this._expectedPower = null;
+        if(newPower === this._expectedPower){
+          this._expectedPower = null;
+          this.power = newPower;
+        }
+      } else {
+        this.power = newPower;
       }
-      this.power = newPower;
     }
-    //  TEMP 
+
+    // TEMPERATURE
     const tempEntity = this.config.temp_entity || this.config.entity;
     const tempStateObj = hass.states?.[tempEntity];
+
     if(tempStateObj){
       let newTemp = 0;
       const domain = tempEntity.split(".")[0];
@@ -60,22 +68,33 @@ class EmelyaKettleCard extends LitElement {
 
       this.temperature = newTemp;
     }
-
   }
 
   get hass(){
     return this._hass;
   }
 
-  static styles = css`
+  setConfig(config){
+    this.config = {
+      tap_action: { action: "more-info" },
+      hold_action: { action: "none" },
+      double_tap_action: { action: "none" },
+      ...config,
+    };
+    this.base = this.config.base_path || "/local";
+  }
 
-    :host{
-      display:block;
-      max-width:320px;
-      width:100%;
+  static styles = css`
+    :host { 
+      display: block; 
+      max-width: 320px; 
+      width: 100%; 
+      font-family: Roboto; 
+      color: white; 
     }
 
     .card{
+      width:100%;
       box-sizing:border-box;
       display:flex;
       flex-direction:column;
@@ -85,6 +104,8 @@ class EmelyaKettleCard extends LitElement {
       background: #1C1B1F;
       border-radius:24px;
       color:white;
+      cursor: pointer;
+      user-select: none;
     }
 
     .header{
@@ -120,6 +141,7 @@ class EmelyaKettleCard extends LitElement {
       align-items:center;
       border:1px solid #656565;
       font-weight:600;
+      cursor: pointer;
     }
 
     .temp{
@@ -152,8 +174,74 @@ class EmelyaKettleCard extends LitElement {
       width:24px;
       height:24px;
     }
-
   `;
+
+  _stopPropagation(e){
+    e.stopPropagation();
+  }
+
+  firstUpdated() {
+    const card = this.shadowRoot?.querySelector(".card");
+    if (!card) return;
+
+    card.addEventListener("pointerdown", this._onPointerDown.bind(this));
+    card.addEventListener("pointerup", this._onPointerUp.bind(this));
+    card.addEventListener("click", this._onClick.bind(this));
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._holdTimer) {
+      clearTimeout(this._holdTimer);
+      this._holdTimer = null;
+    }
+  }
+
+  _onPointerDown(e) {
+    if (e.target.closest('.box.temp') || e.target.closest('.power')) return;
+
+    if (hasAction(this.config, 'hold_action')) {
+      this._holdTimer = setTimeout(() => {
+        this._performAction('hold');
+      }, 500);
+    }
+  }
+
+  _onPointerUp(e) {
+    if (this._holdTimer) {
+      clearTimeout(this._holdTimer);
+      this._holdTimer = null;
+    }
+  }
+
+  _onClick(e) {
+    if (e.target.closest('.box.temp') || e.target.closest('.power')) return;
+
+    const now = Date.now();
+
+    if (this._lastTap && now - this._lastTap < 300) {
+      if (hasAction(this.config, 'double_tap_action')) {
+        e.stopImmediatePropagation();
+        this._performAction('double_tap');
+        this._lastTap = 0;
+        return;
+      }
+    }
+
+    this._lastTap = now;
+
+    setTimeout(() => {
+      if (this._lastTap === now) {
+        this._performAction('tap');
+      }
+    }, 320);
+  }
+
+  _performAction(actionType) {
+    console.log(`Action performed: ${actionType}`);
+    if (!this.hass || !this.config) return;
+    handleAction(this, this.hass, this.config, actionType);
+  }
 
   _toggle(e){
     e.stopPropagation();
@@ -167,55 +255,36 @@ class EmelyaKettleCard extends LitElement {
     const domain = entity.split(".")[0];
 
     if(domain === "climate") {
-      // включаем/выключаем через set_hvac_mode
-      this.hass.callService("climate","set_hvac_mode",{
+      this.hass.callService("climate", "set_hvac_mode", {
         entity_id: entity,
         hvac_mode: newPower ? "heat" : "off"
       });
     } else if(domain === "switch" || domain === "input_boolean") {
-      // стандартные сущности
-      this.hass.callService("homeassistant", newPower ? "turn_on":"turn_off",{
+      this.hass.callService("homeassistant", newPower ? "turn_on" : "turn_off", {
         entity_id: entity
       });
     } else {
-      // универсально для других доменов
-      this.hass.callService(domain, newPower ? "turn_on":"turn_off",{
+      this.hass.callService(domain, newPower ? "turn_on" : "turn_off", {
         entity_id: entity
       });
     }
   }
-  _click(action){
-    action();
-  }
-  _fireMoreInfo(entityId){
-    this.dispatchEvent(new CustomEvent("hass-more-info", {
-      detail: { entityId },
-      bubbles: true,
-      composed: true
-    }));
-  }
 
-  _handleCardClick(e){
-    if(e.target.closest("div.box.temp")) return;
-    const entity = this.config?.entity;
-    if(!entity) return;
-    this._fireMoreInfo(entity);
-  }
-
-  _handleSelectClick(e){
+  _handleTempClick(e){
     e.stopPropagation();
-    if(this.config.temp_entity){
-      this._fireMoreInfo(this.config.temp_entity);
-    } else if(this.config.entity){ 
-      this._fireMoreInfo(this.config.entity);
+    const entity = this.config.temp_entity || this.config.entity;
+    if(entity) {
+      this.dispatchEvent(new CustomEvent("hass-more-info", {
+        detail: { entityId: entity },
+        bubbles: true,
+        composed: true
+      }));
     }
   }
 
   render(){
-
     return html`
-
-      <div class="card" @click=${this._handleCardClick}>
+      <div class="card">
 
         <div class="header">
           <div class="title">Чайник</div>
@@ -225,30 +294,173 @@ class EmelyaKettleCard extends LitElement {
         </div>
 
         <div class="controls">
-          <div class="box temp" @click=${this._handleSelectClick}>
+          <div class="box temp" @click=${this._handleTempClick}>
             <div class="value">
               ${this.temperature} °C
             </div>
           </div>
 
-          <div class="power ${this.power ? "active" : ""}" @click=${this._toggle}>
+          <div class="power ${this.power ? "active" : ""}" 
+              @pointerdown=${this._stopPropagation}
+              @click=${this._toggle}>
             <img src="${this.base}/images/container-images/power_button.png">
           </div>
-
         </div>
 
       </div>
+    `;
+  }
+}
 
+/*  EDITOR  */
+
+class EmelyaKettleCardEditor extends LitElement {
+  static properties = {
+    hass: {},
+    _config: {},
+    _tab: { state: true }
+  };
+
+  static styles = css`
+    :host {
+      display: block;
+      box-sizing: border-box;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--divider-color);
+      background: var(--secondary-background-color);
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+    }
+  `;
+
+  constructor() {
+    super();
+    this._tab = 0;
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+  }
+
+  render() {
+    if (!this._config) return html``;
+
+    return html`
+      <div class="tabs">
+        ${["Объект", "Взаимодействия"].map((t, i) => html`
+          <div
+            class="tab ${this._tab === i ? "active" : ""}"
+            @click=${() => this._tab = i}
+          >
+            ${t}
+          </div>
+        `)}
+      </div>
+
+      ${this._tab === 0 ? this._objectTab() : ""}
+      ${this._tab === 1 ? this._actionsTab() : ""}
     `;
   }
 
+  _objectTab() {
+    return this._form([
+      { 
+        name: "entity", 
+        required: true, 
+        selector: { entity: { domain: ["switch", "climate", "input_boolean"] } } 
+      },
+      { 
+        name: "power_entity", 
+        selector: { entity: { domain: ["switch", "climate", "input_boolean"] } } 
+      },
+      { 
+        name: "temp_entity", 
+        selector: { entity: { domain: ["number", "climate", "sensor"] } } 
+      },
+      { 
+        name: "base_path", 
+        selector: { text: {} } 
+      }
+    ]);
+  }
+
+  _actionsTab() {
+    return this._form([
+      {
+        name: "tap_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
+        selector: { ui_action: {} }
+      },
+      {
+        name: "hold_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
+        selector: { ui_action: {} }
+      },
+      {
+        name: "double_tap_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
+        selector: { ui_action: {} }
+      }
+    ]);
+  }
+
+  _form(schema) {
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${this._config}
+        .schema=${schema}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
+    `;
+  }
+
+  _valueChanged = (e) => {
+    this._config = e.detail.value;
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config: this._config },
+      bubbles: true,
+      composed: true
+    }));
+  };
 }
 
+/* Регистрация */
+EmelyaKettleCard.getConfigElement = function () {
+  return document.createElement("emelya-kettle-card-editor");
+};
+
+EmelyaKettleCard.getStubConfig = function () {
+  return {
+    entity: "",
+    power_entity: "",
+    temp_entity: "",
+    base_path: this.config.base_path,
+  };
+};
+
+customElements.define("emelya-kettle-card-editor", EmelyaKettleCardEditor);
 customElements.define("emelya-kettle-card", EmelyaKettleCard);
-/*
-type: custom:emelya-kettle-card
-base_path: /local
-entity: climate.kettle   # или switch.kettle
-power_entity: switch.kettle     # необязательный
-temp_entity: number.kettle_temp # необязательный
-*/
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "custom:emelya-kettle-card",
+  name: "Emelya Kettle Card",
+  description: "Управление чайником",
+  preview: false
+});

@@ -1,57 +1,56 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
+import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
+
+import {
+  handleAction,
+  hasAction
+} from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
 
 class EmelyaVacuumCleaner extends LitElement {
 
   static properties = {
-    hass: {},
+    hass: {}, 
     config: {},
-    selectedMode: { state:true },
-    open: { state:true },
-    cleaning: { state:true },
-    battery: { state:true }
+    selectedMode: { state: true },
+    cleaning: { state: true },
+    battery: { state: true }
   };
 
   constructor(){
     super();
     this.selectedMode = "Ежедневная уборка";
-    this.open = false;
     this.cleaning = false;
-    this.battery=0;
+    this.battery = 0;
     this._expectedCleaning = null;
     this._expectedFan = null;
-    this.initialFanList=["standard", "turbo", "quiet"]
-  }
-
-  setConfig(config){
-    this.config = config || {};
-    this.base = config.base_path || "/local";
+    this.initialFanList = ["standard", "turbo", "quiet"];
+    this._holdTimer = null;
+    this._lastTap = 0;
   }
 
   set hass(hass){
     this._hass = hass;
-
     const entity = this.config?.entity;
     const stateObj = hass.states?.[entity];
-
     if(!stateObj) return;
 
-    // CLEANING 
+    // CLEANING
     const newCleaning = stateObj.state === "cleaning";
 
     if(this._expectedCleaning !== null){
-      if(newCleaning !== this._expectedCleaning) return;
-      this._expectedCleaning = null;
+      if(newCleaning === this._expectedCleaning){
+        this._expectedCleaning = null;
+        this.cleaning = newCleaning;
+      }
+    } else {
+      this.cleaning = newCleaning;
     }
 
-    this.cleaning = newCleaning;
-
-    // BATTERY 
+    // BATTERY
     const battery = stateObj.attributes?.battery_level;
-    this.battery = battery !== undefined ? battery : null;
+    this.battery = battery !== undefined ? battery : 0;
 
-    // FAN MODE 
+    // FAN MODE
     const fan = stateObj.attributes?.fan_speed;
-
     const reverseModeMap = {
       standard: "Ежедневная уборка",
       turbo: "Тщательная уборка",
@@ -59,33 +58,40 @@ class EmelyaVacuumCleaner extends LitElement {
     };
 
     if(fan){
-
       const newMode = reverseModeMap[fan] || fan;
 
       if(this._expectedFan !== null){
-        if(newMode !== this._expectedFan) return;
-        this._expectedFan = null;
+        if(newMode === this._expectedFan){
+          this._expectedFan = null;
+          this.selectedMode = newMode;
+        }
+      } else {
+        this.selectedMode = newMode;
       }
-      this.selectedMode = newMode;
-
     }
   }
 
-  get hass(){
-    return this._hass;
+  get hass(){ return this._hass; }
+
+  setConfig(config){
+    this.config = {
+      tap_action: { action: "more-info" },
+      hold_action: { action: "none" },
+      double_tap_action: { action: "none" },
+      ...config,
+    };
+    this.base = this.config.base_path || "/local";
   }
 
   static styles = css`
-
-    :host{
-      display:block;
-      width:100%;
-      max-width:320px;
-      font-family:Roboto;
+    :host { 
+      display:block; 
+      max-width:320px; 
+      width:100%; 
+      font-family:Roboto; 
+      color:white; 
     }
-
     .frame{
-      box-sizing:border-box;
       display:flex;
       flex-direction:column;
       justify-content:space-between;
@@ -95,9 +101,10 @@ class EmelyaVacuumCleaner extends LitElement {
       background-size:cover;
       background-position:center;
       background-blend-mode:luminosity, normal;
-
       border-radius:24px;
       color:white;
+      cursor: pointer;
+      user-select: none;
     }
 
     .type{
@@ -142,13 +149,11 @@ class EmelyaVacuumCleaner extends LitElement {
     .start.active{
       background:#E65332;
     }
-
   `;
 
   _toggleCleaning(e){
     e.stopPropagation();
     const entity = this.config?.entity;
-
     if(!this.hass?.states?.[entity]) return;
 
     const service = this.cleaning ? "stop" : "start";
@@ -158,21 +163,72 @@ class EmelyaVacuumCleaner extends LitElement {
       entity_id: entity
     });
   }
-  _fireMoreInfo(entityId){
-    this.dispatchEvent(new CustomEvent("hass-more-info", {
-      detail: { entityId },
-      bubbles: true,
-      composed: true
-    }));
+
+  _stopPropagation(e){
+    e.stopPropagation();
   }
 
-  _handleCardClick(e){
-    if(e.target.closest("ha-select")) return;
+  firstUpdated() {
+    const frame = this.shadowRoot?.querySelector(".frame");
+    if (!frame) return;
 
-    const entity = this.config?.entity;
-    if(!entity) return;
+    frame.addEventListener("pointerdown", this._onPointerDown.bind(this));
+    frame.addEventListener("pointerup", this._onPointerUp.bind(this));
+    frame.addEventListener("click", this._onClick.bind(this));
+  }
 
-    this._fireMoreInfo(entity);
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._holdTimer) {
+      clearTimeout(this._holdTimer);
+      this._holdTimer = null;
+    }
+  }
+
+  _onPointerDown(e) {
+    if (e.target.closest('ha-select') || e.target.closest('.start')) return;
+
+    if (hasAction(this.config, 'hold_action')) {
+      this._holdTimer = setTimeout(() => {
+        this._performAction('hold');
+      }, 500);
+    }
+  }
+
+  _onPointerUp(e) {
+    if (this._holdTimer) {
+      clearTimeout(this._holdTimer);
+      this._holdTimer = null;
+    }
+  }
+
+  _onClick(e) {
+    if (e.target.closest('ha-select') || e.target.closest('.start')) return;
+
+    const now = Date.now();
+
+    if (this._lastTap && now - this._lastTap < 300) {
+      if (hasAction(this.config, 'double_tap_action')) {
+        e.stopImmediatePropagation();
+        this._performAction('double_tap');
+        this._lastTap = 0;
+        return;
+      }
+    }
+
+    this._lastTap = now;
+
+    setTimeout(() => {
+      if (this._lastTap === now) {
+        this._performAction('tap');
+      }
+    }, 320);
+  }
+
+  _performAction(actionType) {
+    console.log(`Action performed: ${actionType}`);
+    if (!this.hass || !this.config) return;
+    handleAction(this, this.hass, this.config, actionType);
   }
 
   render(){
@@ -181,77 +237,212 @@ class EmelyaVacuumCleaner extends LitElement {
     const fanList = stateObj?.attributes?.fan_speed_list || this.initialFanList;
 
     return html`
-      <ha-card>
-        <div class="frame" @click=${this._handleCardClick} style="
-          background:
-            url('${bg}') center/cover no-repeat,
-            #1C1B1F;
-        ">
-
-          <div class="type">
-            <div class="title">Робот пылесос</div>
-            <div class="subtitle">
-              ${this.battery !== null ? `${this.battery}% заряда` : ""}
-            </div>
-          </div>
-
-          <div class="controls">
-
-            ${stateObj ? html`
-              <ha-select
-                .label=${"Режим уборки"}
-                .value=${this.selectedMode}
-                @change=${(e)=>{
-                  e.stopPropagation();
-                  const mode = e.target.value;
-                  this.selectedMode = mode;
-                  this._expectedFan = mode;
-
-                  const entity = this.config?.entity;
-                  const modeMap = {
-                    "Ежедневная уборка": "standard",
-                    "Тщательная уборка": "turbo",
-                    "Быстрая уборка": "quiet"
-                  };
-                  const fan = modeMap[mode] || mode;;
-                  if(this.hass?.states?.[entity]){
-                    this.hass.callService("vacuum","set_fan_speed",{
-                      entity_id: entity,
-                      fan_speed: fan
-                    });
-                  }
-                }}
-              >
-                ${fanList.map(f => {
-                  const modeName = {
-                    standard: "Ежедневная уборка",
-                    turbo: "Тщательная уборка",
-                    quiet: "Быстрая уборка"
-                  }[f] || f;
-                  return html`<mwc-list-item .value=${modeName}>${modeName}</mwc-list-item>`;
-                })}
-              </ha-select>
-            ` : ""}
-
-            <div
-              class="start ${this.cleaning ? "active" : ""}"
-              @click=${this._toggleCleaning}
-            >
-              ${this.cleaning
-                ? "Остановить уборку"
-                : "Начать уборку в гостиной"}
-            </div>
+    <ha-card>
+      <div
+        class="frame"
+        style="background:
+          url('${bg}') center/cover no-repeat,
+          #1C1B1F;"
+        tabindex="0"
+      >
+        <div class="type">
+          <div class="title">Робот пылесос</div>
+          <div class="subtitle">
+            ${this.battery !== null && this.battery !== 0 ? `${this.battery}% заряда` : ""}
           </div>
         </div>
-      </ha-card>
+
+        <div class="controls">
+          ${stateObj ? html`
+            <ha-select
+              .label=${"Режим уборки"}
+              .value=${this.selectedMode}
+              @pointerdown=${this._stopPropagation}
+              @change=${(e) => {
+                e.stopPropagation();
+                const mode = e.target.value;
+                this.selectedMode = mode;
+                this._expectedFan = mode;
+
+                const entity = this.config?.entity;
+                const modeMap = {
+                  "Ежедневная уборка": "standard",
+                  "Тщательная уборка": "turbo",
+                  "Быстрая уборка": "quiet"
+                };
+                const fan = modeMap[mode] || mode;
+                if(this.hass?.states?.[entity]){
+                  this.hass.callService("vacuum","set_fan_speed",{
+                    entity_id: entity,
+                    fan_speed: fan
+                  });
+                }
+              }}
+            >
+              ${fanList.map(f => {
+                const modeName = {
+                  standard: "Ежедневная уборка",
+                  turbo: "Тщательная уборка",
+                  quiet: "Быстрая уборка"
+                }[f] || f;
+                return html`<mwc-list-item .value=${modeName}>${modeName}</mwc-list-item>`;
+              })}
+            </ha-select>
+          ` : ""}
+
+          <div
+            class="start ${this.cleaning ? "active" : ""}"
+            @pointerdown=${this._stopPropagation}
+            @click=${this._toggleCleaning}
+          >
+            ${this.cleaning ? "Остановить уборку" : "Начать уборку в гостиной"}
+          </div>
+        </div>
+      </div>
+    </ha-card>
+    `;
+  }
+}
+
+/* EDITOR */
+
+class EmelyaVacuumCleanerEditor extends LitElement {
+  static properties = {
+    hass: {},
+    _config: {},
+    _tab: { state: true }
+  };
+
+  static styles = css`
+    :host {
+      display: block;
+      box-sizing: border-box;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--divider-color);
+      background: var(--secondary-background-color);
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+    }
+  `;
+
+  constructor() {
+    super();
+    this._tab = 0;
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+  }
+
+  render() {
+    if (!this._config) return html``;
+
+    return html`
+      <div class="tabs">
+        ${["Объект", "Взаимодействия"].map((t, i) => html`
+          <div
+            class="tab ${this._tab === i ? "active" : ""}"
+            @click=${() => this._tab = i}
+          >
+            ${t}
+          </div>
+        `)}
+      </div>
+
+      ${this._tab === 0 ? this._objectTab() : ""}
+      ${this._tab === 1 ? this._actionsTab() : ""}
     `;
   }
 
+  _objectTab() {
+    return this._form([
+      { 
+        name: "entity", 
+        required: true, 
+        selector: { entity: { domain: "vacuum" } } 
+      },
+      { 
+        name: "base_path", 
+        selector: { text: {} } 
+      }
+    ]);
+  }
+
+  _actionsTab() {
+    return this._form([
+      {
+        name: "tap_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
+        selector: { ui_action: {} }
+      },
+      {
+        name: "hold_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
+        selector: { ui_action: {} }
+      },
+      {
+        name: "double_tap_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
+        selector: { ui_action: {} }
+      }
+    ]);
+  }
+
+  _form(schema) {
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${this._config}
+        .schema=${schema}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
+    `;
+  }
+
+  _valueChanged = (e) => {
+    this._config = e.detail.value;
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config: this._config },
+      bubbles: true,
+      composed: true
+    }));
+  };
 }
 
+/* Регистрация */
+EmelyaVacuumCleaner.getConfigElement = function () {
+  return document.createElement("emelya-vacuum-cleaner-editor");
+};
+
+EmelyaVacuumCleaner.getStubConfig = function () {
+  return {
+    entity: "",
+    base_path: this.config.base_path,
+  };
+};
+
+customElements.define("emelya-vacuum-cleaner-editor", EmelyaVacuumCleanerEditor);
 customElements.define("emelya-vacuum-cleaner", EmelyaVacuumCleaner);
-/*
-- type: custom:emelya-vacuum-cleaner
-  base_path: /local
-  entity: vacuum.robot
-*/
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "custom:emelya-vacuum-cleaner",
+  name: "Emelya Vacuum Cleaner",
+  description: "Управление роботом-пылесосом",
+  preview: false
+});

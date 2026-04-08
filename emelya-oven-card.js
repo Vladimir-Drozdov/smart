@@ -27,7 +27,7 @@ class EmelyaOvenCard extends LitElement {
   set hass(hass){
     this._hass = hass;
 
-    // === POWER ===
+    // POWER
     const powerEntity = this.config.power_entity || this.config.entity;
     const powerStateObj = hass.states?.[powerEntity];
     if(powerStateObj){
@@ -39,7 +39,7 @@ class EmelyaOvenCard extends LitElement {
       this.power = newPower;
     }
 
-    // === TEMP ===
+    // TEMP
     const tempEntity = this.config.temp_entity || this.config.entity;
     const tempStateObj = hass.states?.[tempEntity];
     if(tempStateObj){
@@ -50,7 +50,7 @@ class EmelyaOvenCard extends LitElement {
       this.temp = newTemp;
     }
 
-    // === TIMER ===
+    // TIMER
     const timerEntity = this.config.timer_entity;
     if(timerEntity){
       const timerStateObj = hass.states?.[timerEntity];
@@ -60,14 +60,8 @@ class EmelyaOvenCard extends LitElement {
 
   get hass(){ return this._hass; }
     static styles = css`
-
-    :host{
-      display:block;
-      max-width:320px;
-      width:100%;
-    }
-
     .card{
+      width:320px;
       box-sizing:border-box;
       display:flex;
       flex-direction:column;
@@ -142,7 +136,6 @@ class EmelyaOvenCard extends LitElement {
 
   `;
 
-  // Универсальный toggle
   _togglePower(e){
     e.stopPropagation();
     const newPower = !this.power;
@@ -154,7 +147,6 @@ class EmelyaOvenCard extends LitElement {
 
     const domain = entity.split(".")[0];
 
-    // Попробуем универсально
     if(domain === "climate"){
       this.hass.callService("climate","set_hvac_mode",{
         entity_id: entity,

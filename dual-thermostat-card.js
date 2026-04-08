@@ -1,241 +1,392 @@
-class DualThermostatCard extends HTMLElement {
+import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
+
+import {
+  handleAction,
+  hasAction
+} from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
+
+class DualThermostatCard extends LitElement {
+
+  static properties = {
+    hass: {},
+    config: {},
+    active: { type: Number },
+    powerOn: { type: Boolean }
+  };
+
   constructor() {
     super();
-
-    this.attachShadow({ mode: "open" });
-
     this.active = 0;
-
-    const style = document.createElement("style");
-    style.textContent = `
-      .card {
-        max-width:320px; width:100%;
-        height: 424px;
-        box-sizing:border-box;
-        background: #1C1B1F;
-        border-radius: 28px;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .content {
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-      }
-
-      .buttons {
-        display: flex;
-        justify-content: center;
-        gap: 12px;
-        padding: 0px 16px 16px;
-        background: #1C1B1F;
-      }
-
-      .btn {
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        background: #343239;
-        border: 1px solid rgba(101, 101, 101, 1);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-      }
-
-      .btn img {
-        width: 24px;
-        height: 24px;
-      }
-
-      /* TOGGLE контейнер */
-      .toggle {
-        position: relative;
-        display: flex;
-        align-items: center;
-
-        padding: 4px;
-        width: 120px;
-        height: 64px;
-
-        background: #1C1B1F;
-        border: 1px solid rgba(101, 101, 101, 1);
-        border-radius: 96px;
-
-        box-sizing: border-box;
-      }
-
-      /* ПЛАВНЫЙ СЛАЙДЕР */
-      .slider {
-        position: absolute;
-        top: 3px;
-        left: 3px;
-
-        width: 56px;
-        height: 56px;
-
-        border-radius: 96px;
-        background: #343239;
-
-        transition: transform 0.25s ease;
-      }
-
-      /* положение (режим cool) */
-      .slider.cool {
-        transform: translateX(56px);
-      }
-
-      /* кнопки (иконки) */
-      .toggle-btn {
-        width: 56px;
-        height: 56px;
-
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        border-radius: 50%;
-        cursor: pointer;
-        z-index: 1;
-      }
-
-      /* активная кнопка */
-      .toggle-btn.active {}
-
-      /* иконка */
-      .toggle-btn img {
-        width: 24px;
-        height: 24px;
-      }
-    `;
-
-    //  STATIC DOM
-    this.card = document.createElement("div");
-    this.card.className = "card";
-
-    this.content = document.createElement("div");
-    this.content.className = "content";
-
-    this.thermoContainer = document.createElement("div");
-
-    this.buttons = document.createElement("div");
-    this.buttons.className = "buttons";
-
-    this.content.append(this.thermoContainer, this.buttons);
-    this.card.appendChild(this.content);
-
-    this.shadowRoot.append(style, this.card);
+    this.powerOn = false;
+    this._holdTimer = null;
+    this._lastTap = 0;
+    this.card1 = null;
+    this.card2 = null;
   }
 
   setConfig(config) {
-    this.config = config;
-
-    this.card1 = document.createElement("hui-thermostat-card");
-    this.card1.setConfig({
-      entity: config.entity1,
-      name: config.name1,
-      card_mod: config.card_mod
-    });
-
-    this.card2 = document.createElement("hui-thermostat-card");
-    this.card2.setConfig({
-      entity: config.entity2,
-      name: config.name2,
-      card_mod: config.card_mod
-    });
-
-    this.buildButtons();
+    this.config = {
+      tap_action: { action: "more-info" },
+      hold_action: { action: "none" },
+      double_tap_action: { action: "none" },
+      ...config,
+    };
+    this.base = this.config.base_path || "/local";
   }
 
   set hass(hass) {
     this._hass = hass;
-
     if (this.card1) this.card1.hass = hass;
     if (this.card2) this.card2.hass = hass;
-
-    this.updateUI();
+    this.updatePowerState();
+    this.requestUpdate();
   }
 
-  // UI сборка (один раз) 
-  buildButtons() {
-    this.buttons.innerHTML = "";
+  get hass() { return this._hass; }
 
-    // POWER
-    this.powerBtn = document.createElement("div");
-    this.powerBtn.className = "btn";
-    this.powerBtn.innerHTML = `<img src="${this.config.power_icon}" />`;
-    this.powerBtn.onclick = () => this.togglePower();
+  static styles = css`
+    :host { display: block; max-width: 320px; width: 100%; }
+    
+    .card {
+      width: 100%;
+      height: 424px;
+      box-sizing: border-box;
+      background: #1C1B1F;
+      border-radius: 28px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+      user-select: none;
+    }
 
-    // TOGGLE
-    this.toggle = document.createElement("div");
-    this.toggle.className = "toggle";
+    .content { 
+      display: flex; 
+      flex-direction: column; 
+      flex: 1; 
+      position: relative;
+    }
 
-    this.slider = document.createElement("div");
-    this.slider.className = "slider";
+    .buttons {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      padding: 0 16px 16px;
+      background: #1C1B1F;
+    }
 
-    this.heatBtn = document.createElement("div");
-    this.heatBtn.className = "toggle-btn";
-    this.heatBtn.innerHTML = `<img src="${this.config.heat_icon}" />`;
-    this.heatBtn.onclick = () => this.setMode(0);
+    .btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #343239;
+      border: 1px solid rgba(101, 101, 101, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
 
-    this.coolBtn = document.createElement("div");
-    this.coolBtn.className = "toggle-btn";
-    this.coolBtn.innerHTML = `<img src="${this.config.cool_icon}" />`;
-    this.coolBtn.onclick = () => this.setMode(1);
+    .btn.power.active {
+      background: #E65332;
+    }
 
-    this.toggle.append(this.slider, this.heatBtn, this.coolBtn);
-    this.buttons.append(this.powerBtn, this.toggle);
-  }
+    .btn img { width: 24px; height: 24px; }
 
-  // только обновления
-  updateUI() {
-    this.updateThermostat();
-    this.updatePower();
-    this.updateToggle();
-  }
+    .toggle {
+      position: relative;
+      display: flex;
+      align-items: center;
+      padding: 4px;
+      width: 120px;
+      height: 64px;
+      background: #1C1B1F;
+      border: 1px solid rgba(101, 101, 101, 1);
+      border-radius: 96px;
+      box-sizing: border-box;
+    }
 
-  updateThermostat() {
-    const thermo = this.active === 0 ? this.card1 : this.card2;
+    .slider {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 56px;
+      height: 56px;
+      border-radius: 96px;
+      background: #343239;
+      transition: transform 0.25s ease;
+    }
+    .slider.cool { transform: translateX(56px); }
 
-    if (!this.thermoContainer.contains(thermo)) {
-      this.thermoContainer.innerHTML = "";
-      this.thermoContainer.appendChild(thermo);
+    .toggle-btn {
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      cursor: pointer;
+      z-index: 1;
+    }
+    .toggle-btn img { width: 24px; height: 24px; }
+  `;
+
+  firstUpdated() {
+    this.card1 = document.createElement("hui-thermostat-card");
+    this.card1.setConfig({
+      entity: this.config.entity1,
+      name: this.config.name1 || "Термостат 1",
+      card_mod: this.config.card_mod
+    });
+
+    this.card2 = document.createElement("hui-thermostat-card");
+    this.card2.setConfig({
+      entity: this.config.entity2,
+      name: this.config.name2 || "Термостат 2",
+      card_mod: this.config.card_mod
+    });
+
+    this.updatePowerState();
+    this.requestUpdate();
+
+    const frame = this.shadowRoot.querySelector(".card");
+    if (frame) {
+      frame.addEventListener("pointerdown", this._onPointerDown.bind(this));
+      frame.addEventListener("pointerup", this._onPointerUp.bind(this));
+      frame.addEventListener("click", this._onClick.bind(this));
     }
   }
 
-  updatePower() {
-    if (!this._hass) return;
-
-    const isOn =
-      this._hass.states[this.config.entity1].state !== "off";
-
-    this.powerBtn.style.background = isOn ? "#E65332" : "#343239";
+  updatePowerState() {
+    if (!this._hass || !this.config?.entity1) return;
+    const state = this._hass.states[this.config.entity1];
+    this.powerOn = state ? state.state !== "off" : false;
   }
 
-  updateToggle() {
-    this.slider.classList.toggle("cool", this.active === 1);
-    this.heatBtn.classList.toggle("active", this.active === 0);
-    this.coolBtn.classList.toggle("active", this.active === 1);
+  // Tap / Hold / Double-tap
+  _onPointerDown(e) {
+    if (e.target.closest('.btn') || e.target.closest('.toggle')) return;
+    if (hasAction(this.config, 'hold_action')) {
+      this._holdTimer = setTimeout(() => this._performAction('hold'), 500);
+    }
   }
 
-  // --- actions ---
+  _onPointerUp() {
+    if (this._holdTimer) {
+      clearTimeout(this._holdTimer);
+      this._holdTimer = null;
+    }
+  }
+
+  _onClick(e) {
+    if (e.target.closest('.btn') || e.target.closest('.toggle')) return;
+    const now = Date.now();
+    if (this._lastTap && now - this._lastTap < 300) {
+      if (hasAction(this.config, 'double_tap_action')) {
+        e.stopImmediatePropagation();
+        this._performAction('double_tap');
+        this._lastTap = 0;
+        return;
+      }
+    }
+    this._lastTap = now;
+    setTimeout(() => {
+      if (this._lastTap === now) this._performAction('tap');
+    }, 320);
+  }
+
+  _performAction(actionType) {
+    if (!this.hass || !this.config) return;
+    handleAction(this, this.hass, this.config, actionType);
+  }
+
   setMode(index) {
     if (this.active === index) return;
-
     this.active = index;
-    this.updateUI();
+    this.requestUpdate();
   }
 
-  togglePower() {
-    const isOff =
-      this._hass.states[this.config.entity1].state === "off";
+  togglePower(e) {
+    e.stopPropagation();
+    if (!this._hass || !this.config?.entity1) return;
+
+    const isOff = this._hass.states[this.config.entity1]?.state === "off";
+    const newPowerOn = !isOff;
+
+    // Оптимистическое обновление
+    this.powerOn = newPowerOn;
 
     this._hass.callService("climate", isOff ? "turn_on" : "turn_off", {
       entity_id: [this.config.entity1, this.config.entity2]
     });
   }
+
+  render() {
+    const thermo = this.active === 0 ? this.card1 : this.card2;
+
+    return html`
+      <div class="card">
+        <div class="content">
+          <div class="thermo-container">
+            ${thermo}
+          </div>
+        </div>
+
+        <div class="buttons">
+          <!-- POWER BUTTON -->
+          <div
+            class="btn power ${this.powerOn ? 'active' : ''}"
+            @click=${this.togglePower}>
+            <img src="${this.config.power_icon || 'mdi:power'}">
+          </div>
+
+          <!-- TOGGLE -->
+          <div class="toggle">
+            <div class="slider ${this.active === 1 ? 'cool' : ''}"></div>
+
+            <div class="toggle-btn heat-btn" 
+                @click=${(e) => { e.stopPropagation(); this.setMode(0); }}>
+              <img src="${this.config.heat_icon}">
+            </div>
+
+            <div class="toggle-btn cool-btn" 
+                @click=${(e) => { e.stopPropagation(); this.setMode(1); }}>
+              <img src="${this.config.cool_icon}">
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+}
+/* EDITOR */
+
+class DualThermostatCardEditor extends LitElement {
+  static properties = {
+    hass: {},
+    _config: {},
+    _tab: { state: true }
+  };
+
+  static styles = css`
+    :host { display: block; box-sizing: border-box; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab {
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--divider-color);
+      background: var(--secondary-background-color);
+      cursor: pointer;
+    }
+    .tab.active {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+    }
+  `;
+
+  constructor() {
+    super();
+    this._tab = 0;
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+  }
+
+  render() {
+    if (!this._config) return html``;
+
+    return html`
+      <div class="tabs">
+        ${["Объект", "Взаимодействия"].map((t, i) => html`
+          <div class="tab ${this._tab === i ? "active" : ""}" @click=${() => this._tab = i}>
+            ${t}
+          </div>
+        `)}
+      </div>
+
+      ${this._tab === 0 ? this._objectTab() : ""}
+      ${this._tab === 1 ? this._actionsTab() : ""}
+    `;
+  }
+
+  _objectTab() {
+    return this._form([
+      { name: "entity1", required: true, selector: { entity: { domain: "climate" } } },
+      { name: "name1", selector: { text: {} } },
+      { name: "entity2", required: true, selector: { entity: { domain: "climate" } } },
+      { name: "name2", selector: { text: {} } },
+      { name: "power_icon", selector: { icon: {} } },
+      { name: "heat_icon", selector: { icon: {} } },
+      { name: "cool_icon", selector: { icon: {} } },
+      { name: "base_path", selector: { text: {} } }
+    ]);
+  }
+
+  _actionsTab() {
+    return this._form([
+      {
+        name: "tap_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
+        selector: { ui_action: {} }
+      },
+      {
+        name: "hold_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
+        selector: { ui_action: {} }
+      },
+      {
+        name: "double_tap_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
+        selector: { ui_action: {} }
+      }
+    ]);
+  }
+
+  _form(schema) {
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${this._config}
+        .schema=${schema}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
+    `;
+  }
+
+  _valueChanged = (e) => {
+    this._config = e.detail.value;
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config: this._config },
+      bubbles: true,
+      composed: true
+    }));
+  };
 }
 
+/* Регистрация */
+DualThermostatCard.getConfigElement = () => document.createElement("dual-thermostat-card-editor");
+
+DualThermostatCard.getStubConfig = () => ({
+  entity1: "",
+  name1: "Тёплый пол",
+  entity2: "",
+  name2: "Кондиционер",
+  power_icon: "mdi:power",
+  heat_icon: "mdi:fire",
+  cool_icon: "mdi:snowflake",
+  base_path: this.config.base_path,
+});
+
+customElements.define("dual-thermostat-card-editor", DualThermostatCardEditor);
 customElements.define("dual-thermostat-card", DualThermostatCard);
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "custom:dual-thermostat-card",
+  name: "Dual Thermostat Card",
+  description: "Два термостата с переключателем режимов",
+  preview: false
+});

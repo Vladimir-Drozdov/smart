@@ -87,6 +87,9 @@ class EmelyaHeaderCard extends LitElement {
     :host {
       display: block; 
     }
+    .outer{
+      container-type:inline-size;
+    }
 
     .wrapper {
       height:120px;
@@ -104,7 +107,7 @@ class EmelyaHeaderCard extends LitElement {
           rgba(28,27,31,0) 50%,
           #1C1B1F 100%
         ),
-        var(--bg-image);  
+        var(--bg-image);
       background-size: cover;
       background-position:center 75%;
     }
@@ -119,33 +122,26 @@ class EmelyaHeaderCard extends LitElement {
     .left {
       display: flex;
       align-items: center;
-      gap: 32px;
+      gap: 16px;
     }
-    
 
     .avatar-wrapper {
       position: relative;
+      flex-shrink: 0;
       width: 64px;
       height: 64px;
-    }
-
-    .avatar {
-      text-align:start;
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      object-fit: cover;
+      border-radius: 96px;
+      border: 1px solid rgba(101, 101, 101, 0.50);
     }
 
     .online {
       position: absolute;
-      bottom: 4px;
-      right: 4px;
-      width: 14px;
-      height: 14px;
+      bottom: 3px;
+      right: 3px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
       background: #7FB800;
-      border: 2px solid #1C1B1F;
     }
 
     .text-block {
@@ -153,12 +149,16 @@ class EmelyaHeaderCard extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 4px;
+      min-width: 0
     }
 
     .title {
       font-size: 32px;
       font-weight: 600;
       color: #FFFFFF;
+      line-height: 40px;
+      font-family: Roboto;
+      font-style: normal;
     }
 
     .subtitle {
@@ -190,49 +190,50 @@ class EmelyaHeaderCard extends LitElement {
       font-size: 16px;
       font-weight: 600;
     }
-      @media(max-width:480px){
-        .left{
-            flex-direction:column-reverse;
-            align-items: flex-start;
-        }
-        .wrapper {
-          height:210px;
-        }
-        .weather{
-          gap:8px;
-          margin-top: 0; 
-          width: 100%;
-        }
-        .weather * {
-          margin: 0;
-        }
-        .logo{
-          width:80px;
-          height:33px;
-        }
-        .logo img {
-          width: 100%; 
-          height: 100%;
-          object-fit: contain;
-        }
-        .right {
-          justify-content: space-between;
-          align-items: flex-end;
-          height: 100%;
-          margin: 0; 
-          padding: 0; 
-        }
-        .temp, .rain {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          width: 64px;
-          height: 64px;
-          background: #000000;
-          border-radius: 50%;
-          margin: 0; 
-          padding: 0;
-        }
+    @container(max-width:480px){
+      .left{
+        margin-top: -2px;
+        flex-direction:column-reverse;
+        align-items: flex-start;
+      }
+      .wrapper {
+        height:210px;
+      }
+      .weather{
+        gap:8px;
+        margin-top: 0; 
+        width: 100%;
+      }
+      .weather * {
+        margin: 0;
+      }
+      .logo{
+        width:80px;
+        height:33px;
+      }
+      .logo img {
+        width: 100%; 
+        height: 100%;
+        object-fit: contain;
+      }
+      .right {
+        justify-content: space-between;
+        align-items: flex-end;
+        height: 100%;
+        margin: 0; 
+        padding: 0; 
+      }
+      .temp, .rain {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 64px;
+        height: 64px;
+        background: #000000;
+        border-radius: 50%;
+        margin: 0;
+        padding: 0;
+      }
     }
   `;
   _mapWeather(condition){
@@ -260,34 +261,37 @@ class EmelyaHeaderCard extends LitElement {
 
   render() {
     return html`
-      <div class="wrapper" style="--bg-image: url('${this.base}/images/header-bg.png')">
-        <div class="row">
-          <div class="left">
-            <div class="avatar-wrapper">
-              <img class="avatar" src="${this.base}/images/person.png">
-              ${this._isOnline ? html`<div class="online"></div>` : ""}
+      <div class="outer">
+        <div class="wrapper" style="--bg-image: url('${this.base}/images/header-bg.png')">
+          <div class="row">
+            <div class="left">
+              <div class="avatar-wrapper" style="
+                background:
+                  url('${this.base}/images/person.png') 5.158px 12.108px / 84.375% 84.375% no-repeat,
+                  rgba(0, 0, 0, 0.20)">
+                ${this._isOnline ? html`<div class="online"></div>` : ""}
+              </div>
+              <div class="text-block">
+                <div class="title">Дома</div>
+                <div class="subtitle">
+                  ${this._getModeText()}
+                </div>
+              </div>
             </div>
-            <div class="text-block">
-              <div class="title">Дома</div>
-              <div class="subtitle">
-                ${this._getModeText()}
+            <div class=right>
+              <div class="logo">
+                <img src="${this.base}/images/emelya-title.png">
+              </div>
+              <div class="weather">
+                <div class="temp">
+                  ${this._temp}°
+                </div>
+                <div class="rain">
+                  <img src="${this._weatherIcon}">
+                </div>
               </div>
             </div>
           </div>
-          <div class=right>
-            <div class="logo">
-              <img src="${this.base}/images/emelya-title.png">
-            </div>
-            <div class="weather">
-              <div class="temp">
-                ${this._temp}°
-              </div>
-              <div class="rain">
-                <img src="${this._weatherIcon}">
-              </div>
-            </div>
-          <div>
-
         </div>
       </div>
     `;

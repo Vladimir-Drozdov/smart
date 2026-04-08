@@ -49,13 +49,8 @@ class EmelyaCurtainsCard extends LitElement {
 
   static styles = css`
 
-    :host{
-      display:block;
-      max-width:320px;
-      width:100%;
-    }
-
     .card{
+      width:320px;
       box-sizing:border-box;
       display:flex;
       flex-direction:column;
