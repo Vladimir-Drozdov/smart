@@ -114,9 +114,17 @@ class EmelyaQuickActions extends LitElement {
       flex-basis:auto;
       flex-shrink:1;
       flex-grow:1;
-      min-width:74.71px;
+      min-width:106px;
       max-width:160px;
       pointer-events: auto;
+      background-image:
+        linear-gradient(#1C1B1F, #1C1B1F),
+        linear-gradient(135deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
+      border: 1px solid transparent;
+      border-width: 1px;
+      border-style: solid;
+      background-origin: border-box, border-box;
+      background-clip: padding-box, border-box;
     }
 
     .quick-actions.dragging .action-btn {
@@ -131,12 +139,21 @@ class EmelyaQuickActions extends LitElement {
     .icon-bg {
       position: absolute;
       height: 64px;
-      border:1px solid #656565;
       left: 8px;
       right: 7.57px;
       top: 8px;
-      background: #1C1B1F;
+      border: 1px solid;
+
+      border: 1px solid transparent;
       border-radius: 20px;
+      background-image: 
+        linear-gradient(#1C1B1F, #1C1B1F),
+        linear-gradient(135deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
+      border-width: 1px;
+      border-style: solid;
+      background-origin: border-box, border-box;
+      background-clip: padding-box, border-box;
+
       display: flex;
       align-items: center;
       justify-content: center;

@@ -77,16 +77,51 @@ class EmelyaHoodCard extends LitElement {
     :host { display:block; max-width:320px; width:100%; font-family:Roboto; color:white; }
     .frame { display:flex; flex-direction:column; justify-content:space-between; padding:16px; height:264px; border-radius:24px; }
     .title { font-weight:600; font-size:16px; }
-    .controls { display:flex; gap:8px; height:56px; }
+    .controls {
+      position:relative;
+      display: flex;
+      height: 56px;
+      padding-right: 4px;
+      padding-left: 4px;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      align-self: stretch;
+      border-radius: 16px;
+    }
+    .controls::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+    }
     .btn { flex:1; display:flex; justify-content:center; align-items:center; height:48px; border-radius:12px; cursor:pointer; }
     .btn:hover { background:#343239; }
     .btn.active { background:#343239; }
+    .btn.power{
+      background-image:
+        linear-gradient(#343239,#343239),
+        linear-gradient(135deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
+      border: 1px solid transparent;
+      border-width: 1px;
+      border-style: solid;
+      background-origin: border-box, border-box;
+      background-clip: padding-box, border-box;
+    }
     .btn.power.active { background:#E65332; }
     .circle { border:2px solid white; border-radius:50%; opacity:0.25; }
     .circle.small{ width:10px; height:10px; }
     .circle.medium{ width:14px; height:14px; }
     .circle.big{ width:18px; height:18px; }
-    .enabled .circle { opacity:0.8; }
+    .btn .circle { opacity:1; border-color: white; }
     .btn.active .circle { opacity:1; border-color:#E65332; }
   `;
 
@@ -205,8 +240,20 @@ class EmelyaHoodCard extends LitElement {
     return html`
       <div
         class="frame"
-        style="background:url('${bg}'), #1C1B1F; background-size:cover; cursor: pointer; user-select: none;"
         tabindex="0"
+        style='
+          background-image:
+            url("${bg}"),
+            linear-gradient( #1C1B1F, #1C1B1F),
+            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
+          background-size: cover, auto, auto;
+          background-position: center;
+          background-repeat: no-repeat;
+          border: 1px solid transparent;
+          background-origin: border-box;
+          background-clip: padding-box, padding-box, border-box;
+          cursor: pointer; user-select: none;
+        '
       >
         <div class="title">Вытяжка</div>
 

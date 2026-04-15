@@ -84,6 +84,12 @@ class EmelyaDishwasherCard extends LitElement {
       width: 100%; 
       font-family: Roboto; 
       color: white; 
+      border-radius: 24px !important;
+      border: none !important;
+    }
+    ha-card{
+      border-radius: 24px !important;
+      border: none !important;
     }
 
     .card {
@@ -95,7 +101,6 @@ class EmelyaDishwasherCard extends LitElement {
       padding:16px;
       height:320px;
       border-radius:24px;
-      background:#1C1B1F;
       color:white;
       cursor: pointer;
       user-select: none;
@@ -128,13 +133,43 @@ class EmelyaDishwasherCard extends LitElement {
       border-radius:16px; 
       background:rgba(255,255,255,0.1); 
       cursor:pointer; 
-      transition:0.2s; 
+      transition:0.2s;
+      position:relative;
+    }
+    .power::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
     .power.active{ 
       background:#E65332; 
     }
     ha-select{ 
       width:200px; 
+      position: relative !important;
+    }
+    ha-select::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
   `;
 
@@ -249,9 +284,20 @@ class EmelyaDishwasherCard extends LitElement {
 
     return html`
     <ha-card>
-      <div 
-        class="card" 
-        style="background: linear-gradient(180deg, rgba(28,27,31,0) 75%, #1C1B1F 100%), url('${bg}') center/cover no-repeat, #1C1B1F;"
+      <div
+        class="card"
+        style='
+          background-image:
+            url("${this.base}/images/container-images/dishwasher.png"),
+            linear-gradient( #1C1B1F, #1C1B1F),
+            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
+          background-size: cover, auto, auto;
+          background-position: center;
+          background-repeat: no-repeat;
+          border: 1px solid transparent;
+          background-origin: border-box;
+          background-clip: padding-box, padding-box, border-box;
+        '
       >
 
         <div class="header">

@@ -89,7 +89,9 @@ class EmelyaVacuumCleaner extends LitElement {
       max-width:320px; 
       width:100%; 
       font-family:Roboto; 
-      color:white; 
+      color:white;
+      border-radius: 24px !important;
+      border: none !important;
     }
     .frame{
       display:flex;
@@ -130,6 +132,21 @@ class EmelyaVacuumCleaner extends LitElement {
     }
     ha-select {
       width: 100%;
+      position: relative !important;
+    }
+    ha-select::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .start{
@@ -144,7 +161,22 @@ class EmelyaVacuumCleaner extends LitElement {
       font-size:14px;
       cursor:pointer;
       transition:0.2s;
+      position: relative;
     }
+    .start::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+    }  
 
     .start.active{
       background:#E65332;
@@ -240,10 +272,20 @@ class EmelyaVacuumCleaner extends LitElement {
     <ha-card>
       <div
         class="frame"
-        style="background:
-          url('${bg}') center/cover no-repeat,
-          #1C1B1F;"
         tabindex="0"
+        style='
+          background-image:
+            url("${bg}"),
+            linear-gradient( #1C1B1F, #1C1B1F),
+            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
+          background-size: cover, auto, auto;
+          background-position: center;
+          background-repeat: no-repeat;
+          border: 1px solid transparent;
+          background-origin: border-box;
+          background-clip: padding-box, padding-box, border-box;
+          border-radius: 24px !important;
+        '
       >
         <div class="type">
           <div class="title">Робот пылесос</div>

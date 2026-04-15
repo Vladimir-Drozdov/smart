@@ -107,6 +107,20 @@ class EmelyaKettleCard extends LitElement {
       cursor: pointer;
       user-select: none;
     }
+    .card::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+    }
 
     .header{
       display:flex;
@@ -139,13 +153,25 @@ class EmelyaKettleCard extends LitElement {
       display:flex;
       justify-content:center;
       align-items:center;
-      border:1px solid #656565;
+      border:1px solid transparent;
       font-weight:600;
       cursor: pointer;
-    }
-
-    .temp{
       flex-direction:row;
+      position: relative;
+    }
+    .box::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .value{
@@ -164,6 +190,21 @@ class EmelyaKettleCard extends LitElement {
       align-items:center;
       cursor:pointer;
       transition:background 0.2s;
+      position: relative;
+    }
+    .power::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .power.active{

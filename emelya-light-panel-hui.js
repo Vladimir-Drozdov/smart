@@ -8,7 +8,7 @@ const DEFAULT_TILE_CARD_MOD = {
   style: {
     ".": `
       ha-card {
-        --tile-color: #343239 !important;
+        --tile-color: #E65332 !important;
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
@@ -42,19 +42,12 @@ const DEFAULT_TILE_CARD_MOD = {
         padding: 0 !important;
       }
     `,
+
     "ha-tile-container": {
-      "hui-card-features $": {
-        "hui-card-feature $": {
-          "hui-light-brightness-card-feature $ ha-control-slider": `
-            --control-slider-thickness: 64px !important;
-          `,
-          "hui-light-color-temp-card-feature $ ha-control-slider": `
-            --control-slider-thickness: 64px !important;
-          `
-        }
-      },
       "$": `
-        .content { padding: 0 0 10px 0 !important; }
+        .content { 
+          padding: 0 0 10px 0 !important; 
+        }
       `,
       "ha-tile-info": {
         "$": `
@@ -64,6 +57,63 @@ const DEFAULT_TILE_CARD_MOD = {
             justify-content: space-between !important;
           }
         `
+      },
+
+      /* Толстый слайдер 64px + белая полоска с отступом 16px от конца */
+      "hui-card-features $": {
+        "hui-card-feature $": {
+          "hui-light-brightness-card-feature $":{
+            "ha-control-slider $":`
+              .slider .slider-track-bar::after{
+                right: 16px !important;
+                --handle-margin: 16px !important;
+              }
+              .slider .slider-track-cursor::after{
+                right: 16px !important;
+                --handle-margin: 16px !important;
+              }
+            `,
+            "." : `
+              ha-control-slider {
+                --control-slider-thickness: 64px !important;
+                height: 64px !important;
+                min-height: 64px !important;
+              }
+              ha-control-slider .container {
+                height: 64px !important;
+              }
+              ha-control-slider .slider {
+                height: 64px !important;
+                border-radius: 32px !important;
+              }
+              ha-control-slider .slider .slider-track-bar {
+                height: 64px !important;
+                border-radius: 32px !important;
+              }`,
+          },
+
+          "hui-light-color-temp-card-feature $": `
+            ha-control-slider {
+              --control-slider-thickness: 64px !important;
+              height: 64px !important;
+              min-height: 64px !important;
+            }
+            ha-control-slider .container,
+            ha-control-slider .slider,
+            ha-control-slider .slider .slider-track-bar {
+              height: 64px !important;
+              border-radius: 32px !important;
+            }
+
+            ha-control-slider .slider .slider-track-bar::after,
+            ha-control-slider .slider .slider-track-cursor::after {
+              right: 16px !important;
+              width: 4px !important;
+              background: rgba(255,255,255,0.7) !important;
+              opacity: 1 !important;
+            }
+          `
+        }
       }
     }
   }
@@ -73,7 +123,7 @@ const DEFAULT_TILE_CARD_MOD_TOGGLE = {
   style: {
     ".": `
       ha-card {
-        --tile-color: #343239 !important;
+        --tile-color: #E65332 !important;
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
@@ -164,7 +214,7 @@ function detectTileMode(tile) {
 function buildFeaturesByMode(mode) {
   if (mode === "brightness") return [{ type: "light-brightness" }];
   if (mode === "full") return [{ type: "light-brightness" }, { type: "light-color-temp" }];
-  if (mode === "toggle") return [{ type: "toggle" }];   // ←←← КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
+  if (mode === "toggle") return [{ type: "toggle" }];
   return undefined;
 }
 
@@ -208,12 +258,14 @@ class EmelyaLightPanelHui extends LitElement {
       display: block;
       max-width: 320px;
       width: 100%;
+      border-radius:24px;
+      border:none !important;
     }
-
-    ha-card {
+    ha-card{
+      border-radius:24px !important;
+      border:none !important;
       width: 100%;
       background: #1C1B1F;
-      border-radius: 28px;
       padding: 16px;
       box-sizing: border-box;
       display: flex;
@@ -221,6 +273,20 @@ class EmelyaLightPanelHui extends LitElement {
       gap: 16px;
       cursor: pointer;
       user-select: none;
+    }
+    ha-card::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .header {
@@ -242,6 +308,21 @@ class EmelyaLightPanelHui extends LitElement {
       flex-shrink: 0;
       font-size: 24px;
       line-height: 1;
+      position: relative;
+    }
+    .power-button::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .power-button.on {

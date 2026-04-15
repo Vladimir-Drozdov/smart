@@ -45,19 +45,29 @@ class DualThermostatCard extends LitElement {
   get hass() { return this._hass; }
 
   static styles = css`
-    :host { display: block; max-width: 320px; width: 100%; }
-    
+    :host { display: block; max-width: 320px; width: 100%;
+      border-radius: 24px !important;
+      border: none !important;
+    }
     .card {
       width: 100%;
       height: 424px;
       box-sizing: border-box;
-      background: #1C1B1F;
-      border-radius: 28px;
+      border-radius: 24px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       cursor: pointer;
       user-select: none;
+      position:relative;
+      background-image:
+        linear-gradient(#1C1B1F,#1C1B1F),
+        linear-gradient(135deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
+      border: 1px solid transparent;
+      border-width: 1px;
+      border-style: solid;
+      background-origin: border-box, border-box;
+      background-clip: padding-box, border-box;
     }
 
     .content { 
@@ -80,12 +90,26 @@ class DualThermostatCard extends LitElement {
       height: 56px;
       border-radius: 50%;
       background: #343239;
-      border: 1px solid rgba(101, 101, 101, 1);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       transition: background 0.2s;
+      position: relative;
+    }
+    .btn::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .btn.power.active {
@@ -102,9 +126,23 @@ class DualThermostatCard extends LitElement {
       width: 120px;
       height: 64px;
       background: #1C1B1F;
-      border: 1px solid rgba(101, 101, 101, 1);
       border-radius: 96px;
       box-sizing: border-box;
+      position: relative;
+    }
+    .toggle::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .slider {
@@ -133,20 +171,60 @@ class DualThermostatCard extends LitElement {
   `;
 
   firstUpdated() {
+    const mergeCardMod = (common, specific) => {
+      if (!specific) return common;
+      if (!common) return specific;
+
+      // Если оба — объекты, объединяем их
+      const merged = JSON.parse(JSON.stringify(common)); // глубокая копия
+
+      // Рекурсивно объединяем style (самая важная часть)
+      if (merged.style && specific.style) {
+        merged.style = this.deepMerge(merged.style, specific.style);
+      } else if (specific.style) {
+        merged.style = specific.style;
+      }
+
+      // Объединяем остальные ключи (если есть)
+      Object.keys(specific).forEach(key => {
+        if (key !== 'style') {
+          merged[key] = specific[key];
+        }
+      });
+
+      return merged;
+    };
+
+    // Вспомогательная функция глубокого слияния объектов
+    this.deepMerge = (target, source) => {
+      const output = JSON.parse(JSON.stringify(target));
+      if (!source) return output;
+
+      Object.keys(source).forEach(key => {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+          output[key] = this.deepMerge(output[key] || {}, source[key]);
+        } else {
+          output[key] = source[key];
+        }
+      });
+      return output;
+    };
+
+    // Создаём card1 (Тёплый пол — оранжевый)
     this.card1 = document.createElement("hui-thermostat-card");
     this.card1.setConfig({
       entity: this.config.entity1,
       name: this.config.name1 || "Термостат 1",
-      card_mod: this.config.card_mod
+      card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod1)
     });
 
+    // Создаём card2 (HVAC — синий)
     this.card2 = document.createElement("hui-thermostat-card");
     this.card2.setConfig({
       entity: this.config.entity2,
       name: this.config.name2 || "Термостат 2",
-      card_mod: this.config.card_mod
+      card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod2)
     });
-
     this.updatePowerState();
     this.requestUpdate();
 

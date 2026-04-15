@@ -83,11 +83,17 @@ class EmelyaHumidifierCard extends LitElement {
 
   static styles = css`
     :host { 
-      display: block; 
-      max-width: 320px; 
-      width: 100%; 
-      font-family: Roboto; 
-      color: white; 
+      display: block;
+      max-width: 320px;
+      width: 100%;
+      font-family: Roboto;
+      color: white;
+      border-radius:24px;
+      border:none !important;
+    }
+    ha-card{
+      border-radius:24px !important;
+      border:none !important;
     }
 
     .card{
@@ -135,6 +141,21 @@ class EmelyaHumidifierCard extends LitElement {
       background:rgba(255,255,255,0.1);
       cursor:pointer;
       transition:0.2s;
+      position: relative;
+    }
+    .power::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .power.active{
@@ -144,6 +165,24 @@ class EmelyaHumidifierCard extends LitElement {
     .power img{
       width:28px;
       height:28px;
+    }
+    ha-select{ 
+      position: relative !important;
+      background:rgba(255,255,255,0.1) !important;
+    }
+    ha-select::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
   `;
 
@@ -266,10 +305,16 @@ class EmelyaHumidifierCard extends LitElement {
       <div
         class="card"
         style="
-          background:
-            linear-gradient(180deg, rgba(28,27,31,0) 75%, #1C1B1F 100%),
-            url('${bg}') center/cover no-repeat,
-            #1C1B1F;
+          background-image:
+            url('${bg}'),
+            linear-gradient( #1C1B1F, #1C1B1F),
+            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
+          background-size: cover, auto, auto;
+          background-position: center;
+          background-repeat: no-repeat;
+          border: 1px solid transparent;
+          background-origin: border-box;
+          background-clip: padding-box, padding-box, border-box;
         "
       >
 

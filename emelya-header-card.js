@@ -88,7 +88,16 @@ class EmelyaHeaderCard extends LitElement {
       display: block; 
     }
     .outer{
+      background-image:
+        linear-gradient(90deg, #1C1B1F 0%, rgba(28, 27, 31, 0) 50%, #1C1B1F 100%),
+        linear-gradient(135deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
+      border: 1px solid transparent;
+      border-width: 1px;
+      border-style: solid;
+      background-origin: border-box, border-box;
+      background-clip: padding-box, border-box;
       container-type:inline-size;
+      border-radius: 24px;
     }
 
     .wrapper {

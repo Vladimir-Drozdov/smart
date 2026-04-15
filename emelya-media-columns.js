@@ -106,6 +106,7 @@ class EmelyaMediaColumns extends LitElement {
       border-radius:24px; 
       padding:16px; 
       box-sizing:border-box;
+      
       display:flex; 
       flex-direction:column; 
       justify-content:space-between;
@@ -118,15 +119,37 @@ class EmelyaMediaColumns extends LitElement {
     }
     .controls { display:flex; flex-direction:column; gap:8px; }
     .control {
-      background: rgba(255,255,255,0.1); 
-      border-radius:16px; 
-      padding:16px 20px;
-      display:flex; 
-      align-items:center; 
-      justify-content:center; 
-      gap:16px; 
-      cursor:pointer;
+      position: relative;
+      border-radius: 16px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      cursor: pointer;
       transition: background 0.2s ease;
+      background: rgba(255, 255, 255, 0.10);
+    }
+
+    .control::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      padding: 1px;
+      border-radius: inherit;
+      background: linear-gradient(
+        135deg,
+        rgba(101, 101, 101, 0) 0%,
+        #656565 50%,
+        rgba(101, 101, 101, 0) 100%
+      );
+      pointer-events: none;
+
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
     }
     .control img {
       width: 24px; 
@@ -135,13 +158,28 @@ class EmelyaMediaColumns extends LitElement {
     }
     .control.active { background: #E65332; }
     .title-wrapper {
-      display:inline-flex; 
-      align-items:center; 
-      width:50%; 
-      gap:8px; 
+      position: relative;
+      display:inline-flex;
+      align-items:center;
+      width:50%;
+      gap:8px;
       padding:6px 6px 6px 12px;
-      background:#1C1B1F; 
+      background: #1C1B1F;
       border-radius:100px;
+    }
+    .title-wrapper::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      padding: 1px;
+      border-radius: inherit;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
+      pointer-events: none;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
     }
     .title { 
       font-size:20px; 
@@ -315,10 +353,20 @@ class EmelyaMediaColumns extends LitElement {
   render() {
     return html`
       <div class="wrapper">
-
         <!-- ТВ -->
         <div class="column"
-            style='background-image: linear-gradient(180deg, rgba(0,0,0,0) 0%, #000 100%), url("${this.base}/images/container-images/background-tv.png");'
+            style='
+            background-image:
+              linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, #000000 100%),
+              url("${this.base}/images/container-images/background-tv.png"),
+              linear-gradient(135deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
+            border: 1px solid transparent;
+            background-size: auto, cover, auto;
+            border-width: 1px;
+            border-style: solid;
+            background-origin: border-box;
+            background-clip: padding-box, padding-box, border-box;
+            '
             @click=${() => this._fireMoreInfo(this.config?.tv)}>
 
           <div class="title-wrapper">
@@ -343,7 +391,21 @@ class EmelyaMediaColumns extends LitElement {
 
         <!-- Алиса колонка -->
         <div class="column"
-            style='background-image: linear-gradient(180deg, #000 0%, rgba(0,0,0,0.4) 40%, #000 100%), url("${this.base}/images/container-images/background-alice.png"); position:relative; overflow:hidden;'
+            style='
+            background-image:
+              linear-gradient(180deg, #000000 0%, rgba(0, 0, 0, 0.4) 39.77%, #000000 100%),
+              url("${this.base}/images/container-images/background-alice.png"),
+              linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
+            border: 1px solid transparent;
+            background-size: auto, cover, auto;
+            background-position: 0% 0%, center, 0% 0%;
+            background-repeat: no-repeat;
+            border-width: 1px;
+            border-style: solid;
+            background-origin: border-box;
+            background-clip: padding-box, padding-box, border-box;
+            position:relative; overflow:hidden;
+            '
             @click=${() => this._fireMoreInfo(this.config?.speaker)}>
 
           <div class="alice">

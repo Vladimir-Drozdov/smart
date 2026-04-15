@@ -87,7 +87,13 @@ class EmelyaDryerCard extends LitElement {
       max-width: 320px; 
       width: 100%; 
       font-family: Roboto; 
-      color: white; 
+      color: white;
+      border-radius:24px;
+      border:none !important;
+    }
+    ha-card{
+      border-radius:24px !important;
+      border:none !important;
     }
 
     .card{
@@ -135,10 +141,42 @@ class EmelyaDryerCard extends LitElement {
       background:#343239;
       cursor:pointer;
       transition:0.2s;
+      position:relative;
     }
 
     .power.active{
       background:#E65332;
+    }
+    .power::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+    }
+    ha-select{ 
+      position: relative !important;
+    }
+    ha-select::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .power img{
@@ -262,12 +300,18 @@ class EmelyaDryerCard extends LitElement {
     <ha-card>
       <div
         class="card"
-        style="
-          background:
-            linear-gradient(180deg, rgba(28,27,31,0) 67.56%, #1C1B1F 100%),
-            url('${bg}') center/cover no-repeat,
-            #1C1B1F;
-        "
+        style='
+          background-image:
+            url("${bg}"),
+            linear-gradient( #1C1B1F, #1C1B1F),
+            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
+          background-size: cover, auto, auto;
+          background-position: center;
+          background-repeat: no-repeat;
+          border: 1px solid transparent;
+          background-origin: border-box;
+          background-clip: padding-box, padding-box, border-box;
+        '
       >
 
         <div class="header">

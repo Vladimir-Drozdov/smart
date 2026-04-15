@@ -60,6 +60,10 @@ class EmelyaOvenCard extends LitElement {
 
   get hass(){ return this._hass; }
     static styles = css`
+    :host { 
+      border-radius: 24px !important;
+      border: none !important;
+    }
     .card{
       width:320px;
       box-sizing:border-box;
@@ -68,7 +72,7 @@ class EmelyaOvenCard extends LitElement {
       justify-content:space-between;
       padding:16px;
       height:250px;
-      border-radius:24px;
+      border-radius: 24px !important;
       color:white;
     }
 
@@ -105,6 +109,21 @@ class EmelyaOvenCard extends LitElement {
       align-items:center;
       gap:4px;
       font-weight:600;
+      position: relative;
+    }
+    .box::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .value{
@@ -124,6 +143,21 @@ class EmelyaOvenCard extends LitElement {
       align-items:center;
       cursor:pointer;
       transition: 0.2s;
+      position: relative;
+    }
+    .power::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .power.active{
@@ -192,10 +226,20 @@ class EmelyaOvenCard extends LitElement {
   render(){
     const bg = `${this.base}/images/container-images/oven.png`;
     return html`
-      <div class="card" @click=${this._handleCardClick} style="background:
-        linear-gradient(180deg, rgba(28,27,31,0) 62.6%, #1C1B1F 100%),
-        url('${bg}') center/cover no-repeat,
-        #1C1B1F;">
+      <div class="card" @click=${this._handleCardClick}
+        style='
+          background-image:
+            url("${bg}"),
+            linear-gradient( #1C1B1F, #1C1B1F),
+            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
+          background-size: cover, auto, auto;
+          background-position: center;
+          background-repeat: no-repeat;
+          border: 1px solid transparent;
+          background-origin: border-box;
+          background-clip: padding-box, padding-box, border-box;
+          border-radius: 24px !important;
+        '>
         <div class="header">
           <div class="title">Духовой шкаф</div>
           <div class="state">${this.power ? "Включено":"Выключено"}</div>

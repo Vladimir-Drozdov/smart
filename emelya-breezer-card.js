@@ -91,6 +91,9 @@ class EmelyaBreezerCard extends LitElement {
       font-family: Roboto; 
       color: white; 
     }
+    ha-card{
+      position: relative !important;
+    }
 
     .card{
       box-sizing:border-box;
@@ -100,11 +103,19 @@ class EmelyaBreezerCard extends LitElement {
       padding:16px;
       height:132px;
       width:100%;
-      background:#1C1B1F;
       border-radius:24px;
       color:white;
       cursor: pointer;
       user-select: none;
+      position:relative;
+      background-image:
+        linear-gradient(#1C1B1F,#1C1B1F),
+        linear-gradient(135deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
+      border: 1px solid transparent;
+      border-width: 1px;
+      border-style: solid;
+      background-origin: border-box, border-box;
+      background-clip: padding-box, border-box;
     }
 
     .header{
@@ -137,13 +148,54 @@ class EmelyaBreezerCard extends LitElement {
     .power{
       width:80px;
       height:56px;
-      background: #343239;
+      background: #1C1B1F;
       border-radius:16px;
       display:flex;
       justify-content:center;
       align-items:center;
       cursor:pointer;
       transition:0.2s;
+      position: relative;
+    }
+    .power::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+    }
+
+    ha-select {
+      border-radius: 16px !important; 
+      background: #1C1B1F !important;
+      position: relative !important;
+      overflow: hidden !important;
+    }
+
+    ha-select::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg,
+        rgba(101, 101, 101, 0) 0%, 
+        #656565 50%, 
+        rgba(101, 101, 101, 0) 100%
+      ) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .power.active{

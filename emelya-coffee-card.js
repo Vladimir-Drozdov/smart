@@ -85,11 +85,17 @@ class EmelyaCoffeeCard extends LitElement {
 
   static styles = css`
     :host { 
-      display: block; 
-      max-width: 320px; 
-      width: 100%; 
-      font-family: Roboto; 
-      color: white; 
+      display: block;
+      max-width: 320px;
+      width: 100%;
+      font-family: Roboto;
+      color: white;
+      border-radius: 24px !important;
+      border: none !important;
+    }
+    ha-card{
+      border-radius: 24px !important;
+      border: none !important;
     }
 
     .card{
@@ -100,11 +106,20 @@ class EmelyaCoffeeCard extends LitElement {
       justify-content:space-between;
       padding:16px;
       height:132px;
-      background: #1C1B1F;
-      border-radius:24px;
+      border-radius:24px !important;
       color:white;
       cursor: pointer;
       user-select: none;
+      position: relative !important;
+      overflow: hidden !important;
+      background-image:
+        linear-gradient(#1C1B1F,#1C1B1F),
+        linear-gradient(165deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
+      border: 1px solid transparent;
+      border-width: 1px;
+      border-style: solid;
+      background-origin: border-box, border-box;
+      background-clip: padding-box, border-box;
     }
 
     .header{
@@ -139,6 +154,38 @@ class EmelyaCoffeeCard extends LitElement {
       align-items:center;
       cursor:pointer;
       transition:0.2s;
+      position:relative;
+    }
+    .power::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+    }
+    ha-select{
+      position: relative !important;
+    }
+    ha-select::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     .power.active{
@@ -264,40 +311,42 @@ class EmelyaCoffeeCard extends LitElement {
     const coffeeState = this.hass?.states?.[this.config?.coffee_entity];
 
     return html`
-    <ha-card>
-      <div class="card">
+    <div class="wrapper">
+      <ha-card>
+        <div class="card">
 
-        <div class="header">
-          <div class="title">Кофеварка</div>
-          <div class="state">
-            ${this.power ? "Готовит" : "Выключено"}
+          <div class="header">
+            <div class="title">Кофеварка</div>
+            <div class="state">
+              ${this.power ? "Готовит" : "Выключено"}
+            </div>
+          </div>
+
+          <div class="controls">
+
+            ${coffeeState ? html`
+              <ha-select
+                .label=${coffeeState.attributes?.friendly_name || "Тип кофе"}
+                .value=${this.selectedCoffee}
+                @pointerdown=${this._stopPropagation}
+                @change=${this._handleSelectChange}
+                @dblclick=${this._handleSelectDblClick}
+              >
+                ${(coffeeState.attributes?.options || []).map((opt) => html`
+                  <mwc-list-item .value=${opt}>${opt}</mwc-list-item>
+                `)}
+              </ha-select>
+            ` : ""}
+
+            <div class="power ${this.power ? "active":""}" 
+                @pointerdown=${this._stopPropagation}
+                @click=${this._toggle}>
+              <img src="${this.base}/images/container-images/power_button.png">
+            </div>
           </div>
         </div>
-
-        <div class="controls">
-
-          ${coffeeState ? html`
-            <ha-select
-              .label=${coffeeState.attributes?.friendly_name || "Тип кофе"}
-              .value=${this.selectedCoffee}
-              @pointerdown=${this._stopPropagation}
-              @change=${this._handleSelectChange}
-              @dblclick=${this._handleSelectDblClick}
-            >
-              ${(coffeeState.attributes?.options || []).map((opt) => html`
-                <mwc-list-item .value=${opt}>${opt}</mwc-list-item>
-              `)}
-            </ha-select>
-          ` : ""}
-
-          <div class="power ${this.power ? "active":""}" 
-              @pointerdown=${this._stopPropagation}
-              @click=${this._toggle}>
-            <img src="${this.base}/images/container-images/power_button.png">
-          </div>
-        </div>
-      </div>
-    </ha-card>
+      </ha-card>
+    </div>
     `;
   }
 }

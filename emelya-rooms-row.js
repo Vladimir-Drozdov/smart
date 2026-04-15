@@ -53,7 +53,6 @@ class EmelyaRoomsRow extends LitElement {
       display: flex;
       justify-content: space-between;
       align-items: center;
-
       padding: 48px 28px 16px 16px;
       box-sizing: border-box;
       color: white;
@@ -62,12 +61,26 @@ class EmelyaRoomsRow extends LitElement {
     .icon {
       width: 64px;
       height: 64px;
-      background: rgba(255,255,255,0.1);
       border-radius: 20px;
-
+      background:rgba(255,255,255,0.1);
       display: flex;
       align-items: center;
+      position: relative;
       justify-content: center;
+    }
+    .icon::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      padding: 1px;
+      border-radius: inherit;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
+      pointer-events: none;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
     }
 
     .icon img {
@@ -178,13 +191,19 @@ class EmelyaRoomsRow extends LitElement {
             <div
               class="card"
               style="
-                background:
-                radial-gradient(
-                  179.4% 100% at 50% 0%,
-                  rgba(28,27,31,0) 0%,
-                  #1C1B1F 100%
-                ),
-                url(${room.background}) center / cover no-repeat
+                background-image:
+                  radial-gradient(179.4% 100% at 50% 0%, rgba(28, 27, 31, 0) 0%, #1C1B1F 100%),
+                  url(${room.background}),
+                  linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
+
+                background-size: auto, cover, auto;
+                background-position: center;
+                background-repeat: no-repeat;
+
+                border: 1px solid transparent;
+
+                background-origin: border-box;
+                background-clip: padding-box, padding-box, border-box;
               "
               @click=${() => this._onRoomClick(room)}
             >

@@ -1,16 +1,18 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";  // Матч с hood
+import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
-/* Основная карточка (без изменений) */
 export class MyElement extends LitElement {
-  static properties = { hass: {}, config: {} };
+  static properties = {
+    hass: {},
+    config: {},
+    lovelace: {},
+    _editingIndex: { state: true }
+  };
   async setConfig(config) {
     this.config = config || {};
     if (!this.config.cards) this.config.cards = [];
     const helpers = await window.loadCardHelpers();
     this._cards = this.config.cards.map(c => helpers.createCardElement(c));
-    if (this._hass) {
-      this._cards.forEach(c => (c.hass = this._hass));
-    }
+    if (this._hass) this._cards.forEach(c => (c.hass = this._hass));
     this.requestUpdate();
   }
   set hass(hass) {
@@ -18,6 +20,8 @@ export class MyElement extends LitElement {
     if (this._cards) this._cards.forEach(c => (c.hass = hass));
   }
   get hass() { return this._hass; }
+
+
   static styles = css`
     .wrapper {
       display: flex;
@@ -33,16 +37,10 @@ export class MyElement extends LitElement {
       max-width: 976px;
     }
     @container (max-width: 1000px) {
-      .container {
-        column-count: 2;
-        width: 648px;
-      }
+      .container { column-count: 2; width: 648px; }
     }
     @container (max-width: 670px) {
-      .container {
-        column-count: 1;
-        width: 320px;
-      }
+      .container { column-count: 1; width: 320px; }
     }
     .item {
       display: inline-block;
@@ -51,8 +49,13 @@ export class MyElement extends LitElement {
       break-inside: avoid;
       -webkit-column-break-inside: avoid;
       page-break-inside: avoid;
+      position: relative;
+      border-radius: 24px;
+      padding: 1px;
+      box-sizing: border-box;
     }
   `;
+
   render() {
     if (!this._cards) return html``;
     return html`
@@ -65,6 +68,7 @@ export class MyElement extends LitElement {
       </div>
     `;
   }
+
   static async getConfigElement() {
     return document.createElement("my-element-editor");
   }
@@ -256,12 +260,238 @@ export class MyElementEditor extends LitElement {
     config: {},
     _editingIndex: { state: true }
   };
+  coverTileCardMod = {
+    ".": `
+      :host {
+        border-radius: 24px !important;
+        --ha-card-border-radius: 24px !important;
+        border-color: transparent !important;
+        --ha-card-border-color: transparent !important;
+        --divider-color: transparent !important;
+      }
+
+      ha-card {
+        background-color: #1C1B1F !important;
+        height: 132px !important;
+        box-sizing: border-box !important;
+        --tile-color: transparent !important;
+        padding: 16px !important;
+      }
+
+      ha-card::before {
+        content: "" !important;
+        position: absolute !important;
+        inset: 0 !important;
+        padding: 1px !important;
+        border-radius: inherit !important;
+        background: linear-gradient(
+          165deg,
+          rgba(101, 101, 101, 0) 0%,
+          #656565 50%,
+          rgba(101, 101, 101, 0) 100%
+        ) !important;
+        pointer-events: none !important;
+        -webkit-mask:
+          linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor !important;
+        mask-composite: exclude !important;
+      }
+
+      ha-card hui-card-features {
+        padding-right: 0 !important;
+        padding-left: 0 !important;
+      }
+
+      ha-tile-icon {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+      }
+
+      ha-tile-info {
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        flex-wrap: nowrap !important;
+      }
+
+      ha-tile-info span:nth-child(2) {
+        text-align: right !important;
+        color: rgba(255, 255, 255, 0.50) !important;
+        opacity: 1 !important;
+        font-size: 15px !important;
+        font-style: normal !important;
+        font-weight: 400 !important;
+        line-height: 20px !important;
+      }
+
+      ha-tile-info span:nth-child(1) {
+        font-family: Roboto !important;
+        font-size: 16px !important;
+        font-style: normal !important;
+        font-weight: 600 !important;
+        line-height: 20px !important;
+      }
+    `,
+
+    "ha-tile-container": {
+      "$": `
+        .content {
+          padding-top: 0 !important;
+          padding-right: 0 !important;
+          padding-left: 0 !important;
+          align-items: start !important;
+          flex-grow: 0 !important;
+          flex-shrink: 0 !important;
+          flex-basis: 0% !important;
+          flex: 0 0 0% !important;
+          height: 50% !important;
+        }
+
+        .container {
+          justify-content: space-between !important;
+        }
+      `,
+
+      "ha-tile-info $": `
+        .info {
+          flex-direction: row !important;
+          justify-content: space-between !important;
+          align-items: center !important;
+        }
+      `,
+
+      "hui-card-features $": {
+        "hui-card-feature $": {
+          "hui-cover-open-close-card-feature $": {
+            "ha-control-button-group": {
+              "ha-control-button": {
+                "$": `
+                  .button::before {
+                    content: none !important;
+                    background-color: transparent !important;
+                    transition: none !important;
+                    opacity: 0 !important;
+                  }
+
+                  .button ha-ripple {
+                    --md-ripple-hover-color: transparent !important;
+                    --md-ripple-pressed-color: transparent !important;
+                  }
+                `
+              },
+
+              ".": `
+                ha-control-button {
+                  background-color: #343239 !important;
+                  position: relative !important;
+                }
+
+                ha-control-button::after {
+                  content: "" !important;
+                  position: absolute !important;
+                  inset: 0 !important;
+                  padding: 1px !important;
+                  border-radius: inherit !important;
+                  background: linear-gradient(
+                    165deg,
+                    rgba(101, 101, 101, 0) 0%,
+                    #656565 50%,
+                    rgba(101, 101, 101, 0) 100%
+                  ) !important;
+                  pointer-events: none !important;
+                  -webkit-mask:
+                    linear-gradient(#fff 0 0) content-box,
+                    linear-gradient(#fff 0 0);
+                  -webkit-mask-composite: xor !important;
+                  mask-composite: exclude !important;
+                }
+
+                ha-control-button[disabled] {
+                  background-color: #E65332 !important;
+                }
+
+                ha-control-button:nth-child(2)::before {
+                  content: "";
+                  position: absolute !important;
+                  top: 50% !important;
+                  left: 50% !important;
+                  width: 6px !important;
+                  height: 6px !important;
+                  border-right: 2px solid white !important;
+                  border-bottom: 2px solid white !important;
+                  transform: translate(-50%, -50%) rotate(45deg) !important;
+                }
+
+                ha-control-button:nth-child(4)::before {
+                  content: "";
+                  position: absolute !important;
+                  top: 50% !important;
+                  left: 50% !important;
+                  width: 6px !important;
+                  height: 6px !important;
+                  border-right: 2px solid white !important;
+                  border-bottom: 2px solid white !important;
+                  transform: translate(-50%, 0%) rotate(-135deg) !important;
+                }
+
+                ha-control-button:nth-child(even) {
+                  display: flex !important;
+                  height: 56px !important;
+                  padding: 20px !important;
+                  justify-content: center !important;
+                  align-items: center !important;
+                  gap: 8px !important;
+                  flex: 1 0 0 !important;
+                  border-radius: 16px !important;
+                  box-sizing: border-box !important;
+                }
+
+                ha-control-button:nth-child(3) {
+                  display: flex !important;
+                  width: 56px !important;
+                  height: 56px !important;
+                  padding: 20px !important;
+                  justify-content: center !important;
+                  align-items: center !important;
+                  gap: 8px !important;
+                  flex-grow: 0 !important;
+                  flex-basis: 56px !important;
+                  border-radius: 96px !important;
+                  background: #343239 !important;
+                  box-sizing: border-box !important;
+                }
+
+                ha-control-button:nth-child(3)::before {
+                  content: "";
+                  position: absolute !important;
+                  top: 50% !important;
+                  left: 50% !important;
+                  width: 12px !important;
+                  height: 12px !important;
+                  background: white !important;
+                  border-radius: 1px !important;
+                  transform: translate(-50%, -50%) !important;
+                }
+
+                ha-control-button ha-svg-icon {
+                  display: none !important;
+                  opacity: 0 !important;
+                  visibility: hidden !important;
+                }
+              `
+            }
+          }
+        }
+      }
+    }
+  };
 
   static styles = css`
-    :host {
-      display: block;
-      box-sizing: border-box;
-    }
+    :host { display: block; box-sizing: border-box; }
+
     .root {
       display: flex;
       flex-direction: column;
@@ -283,10 +513,11 @@ export class MyElementEditor extends LitElement {
       background: var(--secondary-background-color);
     }
     .row-info {
+      flex: 1;                    /* <-- главное изменение */
+      min-width: 0;
       display: flex;
       flex-direction: column;
       gap: 4px;
-      min-width: 0;
     }
     .type {
       font-weight: 600;
@@ -301,11 +532,21 @@ export class MyElementEditor extends LitElement {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    /* Компактные иконки вместо длинных кнопок */
     .actions {
       display: flex;
-      gap: 8px;
+      gap: 4px;
       flex-shrink: 0;
     }
+    .actions ha-icon-button {
+      --mdc-icon-button-size: 36px;
+      color: var(--secondary-text-color);
+    }
+    .actions ha-icon-button:hover {
+      color: var(--primary-text-color);
+    }
+
     .toolbar {
       display: flex;
       align-items: center;
@@ -319,6 +560,17 @@ export class MyElementEditor extends LitElement {
     }
     .back {
       align-self: flex-start;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .toolbar ha-button {
+      --mdc-theme-primary: var(--primary-color);
     }
   `;
 
@@ -340,6 +592,7 @@ export class MyElementEditor extends LitElement {
   render() {
     if (!this.config) return html``;
     const cards = this.config.cards || [];
+
     return html`
       <div class="root">
         ${this._editingIndex === null ? html`
@@ -347,19 +600,47 @@ export class MyElementEditor extends LitElement {
             ${cards.map((card, i) => html`
               <div class="row">
                 <div class="row-info">
-                  <div class="type">${card.type || "unknown"}</div>
-                  <div class="sub">${this._cardSummary(card)}</div>
+                  <div class="type" title="${card.type || 'unknown'}">
+                    ${card.type || "unknown"}
+                  </div>
+                  <div class="sub" title="${this._cardSummary(card)}">
+                    ${this._cardSummary(card)}
+                  </div>
                 </div>
+
                 <div class="actions">
-                  <ha-button @click=${() => this._moveUp(i)} ?disabled=${i === 0}>↑</ha-button>
-                  <ha-button @click=${() => this._moveDown(i)} ?disabled=${i === cards.length - 1}>↓</ha-button>
-                  <ha-button @click=${() => this._editCard(i)}>Редактировать</ha-button>
-                  <ha-button @click=${() => this._removeCard(i)}>Удалить</ha-button>
+                  <ha-icon-button 
+                    @click=${() => this._moveUp(i)}
+                    ?disabled=${i === 0}
+                    title="Вверх">
+                    ↑
+                  </ha-icon-button>
+                  <ha-icon-button 
+                    @click=${() => this._moveDown(i)}
+                    ?disabled=${i === cards.length - 1}
+                    title="Вниз">
+                    ↓
+                  </ha-icon-button>
+                  <ha-icon-button 
+                    @click=${() => this._editCard(i)}
+                    title="Редактировать">
+                    <ha-icon icon="mdi:pencil"></ha-icon>
+                  </ha-icon-button>
+                  <ha-icon-button 
+                    @click=${() => this._removeCard(i)}
+                    title="Удалить">
+                    <ha-icon icon="mdi:delete"></ha-icon>
+                  </ha-icon-button>
                 </div>
               </div>
             `)}
             <div class="toolbar">
               <div class="editor-title">Карточки</div>
+              
+              <ha-button raised @click=${this._addCard}>
+                <ha-icon icon="mdi:plus" slot="icon"></ha-icon>
+                Добавить карточку
+              </ha-button>
             </div>
           </div>
         ` : html`
@@ -384,32 +665,17 @@ export class MyElementEditor extends LitElement {
     return "Без дополнительного описания";
   }
 
-  _update(key, val) {
-    this.config = { ...this.config, [key]: val };
-    this._fire();
-  }
-
-  _editCard(i) {
-    this._editingIndex = i;
-  }
-
-  _closeEditor = () => {
-    this._editingIndex = null;
-  };
+  _editCard(i) { this._editingIndex = i; }
+  _closeEditor = () => { this._editingIndex = null; };
 
   _onChildConfigChanged = (e) => {
     e.stopPropagation();
-
     let newConfig = e.detail.config;
-
-    // Возвращаем card_mod обратно (он был удалён только для редактора)
     if (this._originalCardMod !== undefined) {
       newConfig = { ...newConfig, card_mod: this._originalCardMod };
     }
-
     const cards = [...(this.config.cards || [])];
     cards[this._editingIndex] = newConfig;
-
     this.config = { ...this.config, cards };
     this._fire();
   };
@@ -421,6 +687,126 @@ export class MyElementEditor extends LitElement {
     this._editingIndex = null;
     this._fire();
   }
+
+  _addCard = () => {
+    const popularCards = [
+      { label: "Emelya Media Columns",     type: "custom:emelya-media-columns",    config: { base_path: "/local" } },
+      { label: "Emelya Coffee Card",       type: "custom:emelya-coffee-card",      config: { base_path: "/local" } },
+      { label: "Emelya Kettle",            type: "custom:emelya-kettle-card",      config: { base_path: "/local" } },
+      { label: "Emelya Humidifier",        type: "custom:emelya-humidifier-card",  config: { base_path: "/local" } },
+      { label: "Emelya Oven",              type: "custom:emelya-oven-card",        config: { base_path: "/local" } },
+      { label: "Emelya Light Panel",       type: "custom:emelya-light-panel-hui",  config: {} },
+      { label: "Emelya Vacuum Cleaner",    type: "custom:emelya-vacuum-cleaner",   config: { base_path: "/local" } },
+      { label: "Emelya Hood",              type: "custom:emelya-hood-card",        config: { base_path: "/local" } },
+      { label: "Emelya Dishwasher",        type: "custom:emelya-dishwasher",       config: { base_path: "/local" } },
+      { label: "Dual Thermostat",          type: "custom:dual-thermostat-card",    config: {} },
+
+      {
+        label: "Tile: Шторы (Cover Open-Close)",
+        type: "tile",
+        config: {
+          type: "tile",
+          entity: "cover.hall_window",
+          name: "Шторы",
+          features: [
+            { type: "cover-open-close" }
+          ],
+          card_mod: {
+            style: this.coverTileCardMod
+          }
+        }
+      },
+
+      { label: "Tile Card (пустая)",       type: "tile",                         config: { entity: "" } },
+      { label: "Entities Card",            type: "entities",                     config: { entities: [] } },
+      { label: "Другая карточка вручную",  type: "other",                       config: {} },
+    ];
+
+    const dialog = document.createElement("ha-dialog");
+    dialog.heading = "Добавить карточку";
+    dialog.open = true;
+    dialog.style.setProperty("--mdc-dialog-min-width", "420px");
+
+    const content = document.createElement("div");
+    content.style.cssText = "padding: 20px 28px 12px;";
+
+    // Используем обычный HTML select — он гораздо стабильнее внутри ha-dialog
+    const select = document.createElement("select");
+    select.style.cssText = `
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 16px;
+      border-radius: 8px;
+      background: var(--card-background-color, #1e1e1e);
+      color: var(--primary-text-color);
+      border: 1px solid var(--divider-color);
+    `;
+
+    popularCards.forEach((item, i) => {
+      const option = document.createElement("option");
+      option.value = i.toString();
+      option.textContent = item.label;
+      select.appendChild(option);
+    });
+
+    content.appendChild(select);
+    dialog.appendChild(content);
+
+    const cancelBtn = document.createElement("ha-button");
+    cancelBtn.slot = "secondaryAction";
+    cancelBtn.textContent = "Отмена";
+
+    const addBtn = document.createElement("ha-button");
+    addBtn.slot = "primaryAction";
+    addBtn.textContent = "Добавить";
+
+    dialog.appendChild(cancelBtn);
+    dialog.appendChild(addBtn);
+    document.body.appendChild(dialog);
+
+    // Логика добавления
+    addBtn.addEventListener("click", () => {
+      const index = parseInt(select.value);
+      if (isNaN(index)) return;
+
+      const chosen = popularCards[index];
+      let newCard = { type: chosen.type };
+
+      if (chosen.config) {
+        newCard = { ...chosen.config, type: chosen.type };
+      }
+
+      if (chosen.type === "other") {
+        const manualType = prompt("Введите type карточки (например: custom:my-super-card):");
+        if (!manualType) return;
+        newCard = { type: manualType };
+      }
+
+      const cards = [...(this.config.cards || [])];
+      cards.push(newCard);
+
+      this.config = { ...this.config, cards };
+      this._fire();
+
+      dialog.close();
+      dialog.remove();
+
+      // this._editCard(cards.length - 1);   // если надо сразу редактировать
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      dialog.close();
+      dialog.remove();
+    });
+
+    // Закрытие по клику вне
+    dialog.addEventListener("closed", () => {
+      dialog.remove();
+    }, { once: true });
+  };
+
+
+
 
   _moveUp(i) {
     if (i <= 0) return;
@@ -446,6 +832,7 @@ export class MyElementEditor extends LitElement {
     }));
   }
 }
+
 
 customElements.define("my-element", MyElement);
 customElements.define("my-element-editor", MyElementEditor);
