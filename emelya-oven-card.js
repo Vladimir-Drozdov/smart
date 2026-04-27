@@ -1,12 +1,20 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
-class EmelyaOvenCard extends LitElement {
+import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
+import {
+  handleAction,
+  hasAction
+} from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
+
+class EmelyaOvenCard extends LitElement {
   static properties = {
     hass: {},
     config: {},
     power: { type:Boolean },
     temp: { type:Number },
-    timer: { type:Number }
+    timer: { type:Number },
+    tap_action: {},
+    hold_action: {},
+    double_tap_action: {},
   };
 
   constructor(){
@@ -27,11 +35,24 @@ class EmelyaOvenCard extends LitElement {
   set hass(hass){
     this._hass = hass;
 
-    // POWER
+    // POWER - универсальная проверка
     const powerEntity = this.config.power_entity || this.config.entity;
     const powerStateObj = hass.states?.[powerEntity];
     if(powerStateObj){
-      const newPower = powerStateObj.state !== "off";
+      let newPower = false;
+      const domain = powerEntity.split(".")[0];
+      
+      if(domain === "climate") {
+        // climate: включен, если не "off"
+        newPower = powerStateObj.state !== "off";
+      } else if(domain === "switch" || domain === "input_boolean" || domain === "fan") {
+        // стандартные домены
+        newPower = powerStateObj.state === "on";
+      } else {
+        // fallback
+        newPower = powerStateObj.state !== "off";
+      }
+      
       if(this._expectedPower !== null){
         if(newPower !== this._expectedPower) return;
         this._expectedPower = null;
@@ -39,22 +60,42 @@ class EmelyaOvenCard extends LitElement {
       this.power = newPower;
     }
 
-    // TEMP
+    // TEMP - добавляем sensor
     const tempEntity = this.config.temp_entity || this.config.entity;
     const tempStateObj = hass.states?.[tempEntity];
     if(tempStateObj){
       let newTemp = 0;
       const domain = tempEntity.split(".")[0];
-      if(domain === "climate") newTemp = tempStateObj.attributes?.temperature ?? 0;
-      else newTemp = Number(tempStateObj.state) || 0;
+      
+      if(domain === "climate") {
+        newTemp = tempStateObj.attributes?.temperature ?? 0;
+      } else if(domain === "number" || domain === "input_number" || domain === "sensor") {
+        newTemp = Number(tempStateObj.state) || 0;
+      }
       this.temp = newTemp;
     }
 
-    // TIMER
+    // TIMER - добавляем sensor
     const timerEntity = this.config.timer_entity;
     if(timerEntity){
       const timerStateObj = hass.states?.[timerEntity];
-      if(timerStateObj) this.timer = Number(timerStateObj.state) || 0;
+      if(timerStateObj) {
+        let newTimer = 0;
+        const domain = timerEntity.split(".")[0];
+        
+        if(domain === "timer") {
+          // timer: duration в секундах или state
+          newTimer = Math.round((timerStateObj.attributes?.duration || 0) / 60);
+        } else if(domain === "number" || domain === "input_number") {
+          newTimer = Number(timerStateObj.state) || 0;
+        } else if(domain === "sensor") {
+          // sensor: может быть в минутах или секундах
+          const value = Number(timerStateObj.state) || 0;
+          // Если значение больше 1000, вероятно это секунды
+          newTimer = value > 1000 ? Math.round(value / 60) : value;
+        }
+        this.timer = newTimer;
+      }
     }
   }
 
@@ -65,7 +106,7 @@ class EmelyaOvenCard extends LitElement {
       border: none !important;
     }
     .card{
-      width:320px;
+      max-width:450px; min-width:320px;
       box-sizing:border-box;
       display:flex;
       flex-direction:column;
@@ -74,6 +115,20 @@ class EmelyaOvenCard extends LitElement {
       height:250px;
       border-radius: 24px !important;
       color:white;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%) border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+      pointer-events: none;                /* чтобы не мешал кликам */
     }
 
     .header{
@@ -110,6 +165,7 @@ class EmelyaOvenCard extends LitElement {
       gap:4px;
       font-weight:600;
       position: relative;
+      background: rgba(255, 255, 255, 0.10);
     }
     .box::before {
       content: "" !important;
@@ -136,7 +192,7 @@ class EmelyaOvenCard extends LitElement {
     .power{
       width:80px;
       height:56px;
-      background: #343239;
+      background: rgba(255, 255, 255, 0.10);
       border-radius:16px;
       display:flex;
       justify-content:center;
@@ -161,7 +217,7 @@ class EmelyaOvenCard extends LitElement {
     }
 
     .power.active{
-      background: #e65332;
+      background: #4D4A54;
     }
 
     .power img{
@@ -186,13 +242,21 @@ class EmelyaOvenCard extends LitElement {
         entity_id: entity,
         hvac_mode: newPower ? "heat" : "off"
       });
-    } else if(domain === "switch" || domain === "input_boolean"){
+    } else if(domain === "switch" || domain === "input_boolean" || domain === "fan"){
       this.hass.callService("homeassistant", newPower ? "turn_on":"turn_off", {
         entity_id: entity
       });
     } else {
       console.warn("Неизвестный домен для power:", domain);
     }
+  }
+  firstUpdated() {
+    const card = this.renderRoot.querySelector(".card");
+    if (!card) return;
+
+    card.addEventListener("pointerdown", this._onDown.bind(this));
+    card.addEventListener("pointerup", this._onUp.bind(this));
+    card.addEventListener("click", this._onClick.bind(this));
   }
 
   _fireMoreInfo(entityId){
@@ -217,6 +281,46 @@ class EmelyaOvenCard extends LitElement {
       this._fireMoreInfo(this.config.entity);
     }
   }
+  _onDown(e) {
+    if (e.target.closest(".box") || e.target.closest(".power")) return;
+
+    if (hasAction(this.config, "hold_action")) {
+      this._holdTimer = setTimeout(() => {
+        this._runAction("hold");
+      }, 500);
+    }
+  }
+  _onUp() {
+    if (this._holdTimer) {
+      clearTimeout(this._holdTimer);
+      this._holdTimer = null;
+    }
+  }
+  _onClick(e) {
+    if (e.target.closest(".box") || e.target.closest(".power")) return;
+
+    const now = Date.now();
+
+    if (this._lastTap && now - this._lastTap < 300) {
+      if (hasAction(this.config, "double_tap_action")) {
+        this._runAction("double_tap");
+        this._lastTap = 0;
+        return;
+      }
+    }
+
+    this._lastTap = now;
+
+    setTimeout(() => {
+      if (this._lastTap === now) {
+        this._runAction("tap");
+      }
+    }, 320);
+  }
+  _runAction(type) {
+    if (!this.hass || !this.config) return;
+    handleAction(this, this.hass, this.config, type);
+  }
 
   _handleTimerClick(e){
     e.stopPropagation();
@@ -228,16 +332,9 @@ class EmelyaOvenCard extends LitElement {
     return html`
       <div class="card" @click=${this._handleCardClick}
         style='
-          background-image:
-            url("${bg}"),
-            linear-gradient( #1C1B1F, #1C1B1F),
-            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
-          background-size: cover, auto, auto;
-          background-position: center;
-          background-repeat: no-repeat;
-          border: 1px solid transparent;
-          background-origin: border-box;
-          background-clip: padding-box, padding-box, border-box;
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%), url("${bg}") 46.046px -49.611px / 100% 128% no-repeat, var(--Background-Surface-2, #1C1B1F);
+          background-blend-mode: normal, luminosity, normal;
+          border: none;
           border-radius: 24px !important;
         '>
         <div class="header">
@@ -261,7 +358,204 @@ class EmelyaOvenCard extends LitElement {
 
 }
 
-customElements.define("emelya-oven-card", EmelyaOvenCard);
+/* EDITOR */
+
+class EmelyaOvenCardEditor extends LitElement {
+  static properties = {
+    hass: {},
+    _config: {},
+    _tab: { state: true }
+  };
+
+  static styles = css`
+    :host {
+      display: block;
+      box-sizing: border-box;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--divider-color);
+      background: var(--secondary-background-color);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .tab.active {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+    }
+  `;
+
+  constructor() {
+    super();
+    this._tab = 0;
+    this._holdTimer = null;
+    this._lastTap = 0;
+    this._config = {};
+  }
+
+  setConfig(config) {
+    this._config = {
+      tap_action: { action: "more-info" },
+      hold_action: { action: "none" },
+      double_tap_action: { action: "none" },
+      ...config
+    };
+  }
+
+  render() {
+    if (!this._config) return html``;
+
+    return html`
+      <div class="tabs">
+        ${["Сущности", "Взаимодействия"].map((title, index) => html`
+          <div
+            class="tab ${this._tab === index ? "active" : ""}"
+            @click=${() => this._tab = index}
+          >
+            ${title}
+          </div>
+        `)}
+      </div>
+
+      ${this._tab === 0 ? this._entitiesTab() : ""}
+      ${this._tab === 1 ? this._actionsTab() : ""}
+    `;
+  }
+
+  _entitiesTab() {
+    return this._form([
+      {
+        name: "entity",
+        label: "Основная сущность духовки",
+        selector: {
+          entity: {
+            domain: ["climate"]
+          }
+        }
+      },
+      {
+        name: "power_entity",
+        label: "Сущность питания",
+        selector: {
+          entity: {
+            domain: ["switch", "input_boolean", "fan", "climate"]
+          }
+        }
+      },
+      {
+        name: "temp_entity",
+        label: "Сущность температуры",
+        selector: {
+          entity: {
+            domain: ["climate", "number", "input_number", "sensor"]
+          }
+        }
+      },
+      {
+        name: "timer_entity",
+        label: "Сущность таймера",
+        selector: {
+          entity: {
+            domain: ["timer", "number", "input_number", "sensor"]
+          }
+        }
+      },
+      {
+        name: "base_path",
+        label: "Базовый путь к ресурсам",
+        selector: {
+          text: {}
+        }
+      }
+    ]);
+  }
+
+  _actionsTab() {
+    return this._form([
+      {
+        name: "tap_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
+        selector: { ui_action: {} }
+      },
+      {
+        name: "hold_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
+        selector: { ui_action: {} }
+      },
+      {
+        name: "double_tap_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
+        selector: { ui_action: {} }
+      }
+    ]);
+  }
+
+  _form(schema) {
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${this._config}
+        .schema=${schema}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
+    `;
+  }
+
+  _valueChanged = (e) => {
+    this._config = e.detail.value;
+
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config: this._config },
+      bubbles: true,
+      composed: true
+    }));
+  };
+}
+
+/* REGISTRATION */
+
+EmelyaOvenCard.getConfigElement = function () {
+  return document.createElement("emelya-oven-card-editor");
+};
+
+EmelyaOvenCard.getStubConfig = function () {
+  return {
+    entity: "",
+    power_entity: "",
+    temp_entity: "",
+    timer_entity: "",
+    base_path: "/local"
+  };
+};
+
+if (!customElements.get("emelya-oven-card-editor")) {
+  customElements.define("emelya-oven-card-editor", EmelyaOvenCardEditor);
+}
+
+if (!customElements.get("emelya-oven-card")) {
+  customElements.define("emelya-oven-card", EmelyaOvenCard);
+}
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "custom:emelya-oven-card",
+  name: "Emelya Oven Card",
+  description: "Управление духовым шкафом",
+  preview: true
+});
+
+
 
 /* 
 # вариант 1: классическая climate духовка

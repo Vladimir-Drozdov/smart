@@ -2,12 +2,13 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 
 import {
   handleAction,
-  hasAction
+  hasAction,
+  fireEvent,
 } from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
 
 class DualThermostatCard extends LitElement {
 
-  static properties = {
+static properties = {
     hass: {},
     config: {},
     active: { type: Number },
@@ -24,13 +25,50 @@ class DualThermostatCard extends LitElement {
     this.card2 = null;
   }
 
+  // ==================== УТИЛИТЫ ====================
+  clone(value) {
+    return value == null ? value : structuredClone(value);
+  }
+
+  deepMerge(target, source) {
+    const output = this.clone(target);
+    if (!source) return output;
+
+    Object.keys(source).forEach(key => {
+      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+        output[key] = this.deepMerge(output[key] || {}, source[key]);
+      } else {
+        output[key] = source[key];
+      }
+    });
+    return output;
+  }
+
+  // ==================== CONFIG ====================
   setConfig(config) {
     this.config = {
       tap_action: { action: "more-info" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
+      objects: [],
+      ...this.clone(config || {}),
       ...config,
     };
+
+    // Обрабатываем вложенные dual-thermostat-card в objects
+    this.config.objects = (this.config.objects || []).map((obj) => {
+      if (obj?.type === "custom:dual-thermostat-card") {
+        return this.normalizeThermostatObject(obj);
+      }
+      return obj;
+    });
+
+    // АВТОМАТИЧЕСКОЕ НАЛОЖЕНИЕ card_mod
+    const autoMods = this.buildDualThermostatCardMods(this.config);
+    this.config.card_mod  = this.deepMerge(autoMods.card_mod,  this.config.card_mod  || {});
+    this.config.card_mod1 = this.deepMerge(autoMods.card_mod1, this.config.card_mod1 || {});
+    this.config.card_mod2 = this.deepMerge(autoMods.card_mod2, this.config.card_mod2 || {});
+
     this.base = this.config.base_path || "/local";
   }
 
@@ -41,11 +79,14 @@ class DualThermostatCard extends LitElement {
     this.updatePowerState();
     this.requestUpdate();
   }
-
   get hass() { return this._hass; }
 
+  isObject(value) {
+    return value && typeof value === 'object' && !Array.isArray(value);
+  }
+
   static styles = css`
-    :host { display: block; max-width: 320px; width: 100%;
+    :host { display: block; max-width:450px; min-width:320px; width: 100%;
       border-radius: 24px !important;
       border: none !important;
     }
@@ -62,7 +103,7 @@ class DualThermostatCard extends LitElement {
       position:relative;
       background-image:
         linear-gradient(#1C1B1F,#1C1B1F),
-        linear-gradient(135deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
+        linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
       border: 1px solid transparent;
       border-width: 1px;
       border-style: solid;
@@ -89,7 +130,7 @@ class DualThermostatCard extends LitElement {
       width: 56px;
       height: 56px;
       border-radius: 50%;
-      background: #343239;
+      background: #1C1B1F;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -113,7 +154,7 @@ class DualThermostatCard extends LitElement {
     }
 
     .btn.power.active {
-      background: #E65332;
+      background: #343239;;
     }
 
     .btn img { width: 24px; height: 24px; }
@@ -170,47 +211,305 @@ class DualThermostatCard extends LitElement {
     .toggle-btn img { width: 24px; height: 24px; }
   `;
 
+  buildDualThermostatCardMods(config = {}) {
+    const entity1 = config.entity1 || "climate.heatpump";
+
+    const circularSliderStyle = `
+      :host {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        background: #1C1B1F !important;
+        --ha-card-background: #1C1B1F !important;
+        --card-background-color: #1C1B1F !important;
+        --state-climate-heat-color: #FFF !important;
+        --state-climate-cool-color: #FFF !important;
+        --control-circular-slider-color: #FFF !important;
+        --control-circular-slider-high-color: #FFF !important;
+        --control-circular-slider-low-color: #FFF !important;
+        --control-circular-slider-thumb-color: #343239 !important;
+        --control-circular-slider-handle-color: #343239 !important;
+        --slider-thumb-color: #343239 !important;
+        --action-color: transparent !important;
+      }
+
+      svg {
+        width: 240px !important;
+        height: 240px !important;
+      }
+    `;
+
+    const mainCardStyle = `
+      .title {
+        text-align: start !important;
+        padding: 16px 0 0 16px !important;
+      }
+
+      :host {
+        background: #1C1B1F !important;
+        border-radius: 24px !important;
+        --ha-card-background: #1C1B1F !important;
+        --card-background-color: #1C1B1F !important;
+        --min-temp: "{{ state_attr('${entity1}','min_temp') }}°";
+        --max-temp: "{{ state_attr('${entity1}','max_temp') }}°";
+        --state-climate-heat-color: transparent !important;
+        --state-climate-active-color: transparent !important;
+        --state-active-color: transparent !important;
+        --action-color: transparent !important;
+      }
+
+      ha-card {
+        border-width: 0 !important;
+        border-style: none !important;
+        border-color: transparent !important;
+        border: none !important;
+        --ha-card-border-width: 0 !important;
+        --ha-card-border-style: none !important;
+        --ha-card-border-color: transparent !important;
+      }
+
+      ha-card::slotted(.container) {
+        height: 288px !important;
+      }
+
+      ha-card .container {
+        height: 288px !important;
+        flex: 0 0 auto !important;
+      }
+    `;
+
+    const climateRootStyle = `
+      :host {
+        background: #1C1B1F !important;
+        --ha-card-background: #1C1B1F !important;
+        --card-background-color: #1C1B1F !important;
+      }
+    `;
+
+    const buttonsStyle = `
+      ha-outlined-icon-button {
+        position: relative !important;
+        border-radius: 24px !important;
+        --_outline-color: transparent !important;
+      }
+
+      ha-outlined-icon-button::before {
+        content: "" !important;
+        position: absolute !important;
+        inset: 0 !important;
+        padding: 1px !important;
+        border-radius: 24px !important;
+        z-index: 4 !important;
+        background: linear-gradient(
+          135deg,
+          rgba(101, 101, 101, 0) 0%,
+          #656565 50%,
+          rgba(101, 101, 101, 0) 100%
+        ) !important;
+        pointer-events: none !important;
+        -webkit-mask:
+          linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor !important;
+        mask-composite: exclude !important;
+      }
+    `;
+
+    const outlinedButtonStyle = `
+      .icon-button.outlined {
+        background: #323135 !important;
+        color: white !important;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        border: none !important;
+      }
+
+      .icon-button.outlined .icon {
+        transform: scale(0.6);
+        transform-origin: center;
+        color: white !important;
+      }
+    `;
+
+    const firstButtonStyle = `
+      .icon-button.outlined::after {
+        content: "{{ state_attr('${entity1}','min_temp')|round(0) }}°C";
+        position: absolute;
+        left: -35px;
+        top: 30%;
+        color: #8E8D8F;
+        white-space: nowrap;
+        text-align: center;
+        font-family: Roboto;
+        font-size: 16px;
+        font-style: normal;
+        font-weight: 400;
+        line-height: 20px;
+      }
+
+      #button {
+        background: #323135 !important;
+      }
+    `;
+
+    const lastButtonStyle = `
+      .icon-button.outlined::after {
+        content: "{{ state_attr('${entity1}','max_temp')|round(0) }}°C";
+        position: absolute;
+        right: -45px;
+        top: 30%;
+        color: #8E8D8F;
+        white-space: nowrap;
+        text-align: center;
+        font-family: Roboto;
+        font-size: 16px;
+        font-style: normal;
+        font-weight: 400;
+        line-height: 20px;
+      }
+
+      #button {
+        background: #323135 !important;
+      }
+    `;
+
+    const hideSecondaryIconStyle = `
+      :host {
+        display: none !important;
+      }
+    `;
+
+    const bigNumberStyle = `
+      .decimal {
+        opacity: 0 !important;
+        visibility: hidden !important;
+      }
+    `;
+
+    const climateMiscStyle = `
+      :host {
+        background: #1C1B1F !important;
+        --ha-card-background: #1C1B1F !important;
+        --card-background-color: #1C1B1F !important;
+      }
+
+      .info .label:first-child {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+      }
+
+      .info .label.secondary {
+        color: #8E8D8F;
+      }
+
+      .buttons {
+        top: 220px;
+        gap: 8px !important;
+      }
+    `;
+
+    return {
+      card_mod1: {
+        style: {
+          "ha-state-control-climate-temperature": {
+            "$": {
+              "ha-control-circular-slider": {
+                "$": circularSliderStyle
+              }
+            }
+          }
+        }
+      },
+
+      card_mod2: {
+        style: {
+          "ha-state-control-climate-temperature": {
+            "$": {
+              "ha-control-circular-slider": {
+                "$": circularSliderStyle
+              }
+            }
+          }
+        }
+      },
+
+      card_mod: {
+        style: {
+          ".": mainCardStyle,
+          "ha-state-control-climate-temperature": {
+            ".": climateRootStyle,
+            "$": {
+              ".buttons": {
+                ".": buttonsStyle,
+                "ha-outlined-icon-button": {
+                  "$": outlinedButtonStyle
+                },
+                "ha-outlined-icon-button:first-child": {
+                  "$": firstButtonStyle
+                },
+                "ha-outlined-icon-button:last-child": {
+                  "$": lastButtonStyle
+                }
+              },
+              "p.label.secondary ha-svg-icon": {
+                "$": hideSecondaryIconStyle
+              },
+              "ha-big-number": {
+                "$": bigNumberStyle
+              },
+              ".": climateMiscStyle
+            }
+          }
+        }
+      }
+    };
+  }
+  normalizeThermostatObject(obj = {}) {
+    const normalized = {
+      type: "custom:dual-thermostat-card",
+      entity1: "",
+      entity2: "",
+      name1: "Тёплый пол",
+      name2: "Тёплый пол",
+      base_path: "/local",
+      power_icon: "/local/images/power.png",
+      heat_icon: "/local/images/heat.png",
+      cool_icon: "/local/images/cool.png",
+      ...clone(obj)
+    };
+
+    const autoMods = buildDualThermostatCardMods(normalized);
+
+    normalized.card_mod = deepMerge(autoMods.card_mod, normalized.card_mod || {});
+    normalized.card_mod1 = deepMerge(autoMods.card_mod1, normalized.card_mod1 || {});
+    normalized.card_mod2 = deepMerge(autoMods.card_mod2, normalized.card_mod2 || {});
+
+    return normalized;
+  }
+
   firstUpdated() {
     const mergeCardMod = (common, specific) => {
       if (!specific) return common;
       if (!common) return specific;
 
-      // Если оба — объекты, объединяем их
-      const merged = JSON.parse(JSON.stringify(common)); // глубокая копия
+      const merged = JSON.parse(JSON.stringify(common));
 
-      // Рекурсивно объединяем style (самая важная часть)
       if (merged.style && specific.style) {
         merged.style = this.deepMerge(merged.style, specific.style);
       } else if (specific.style) {
         merged.style = specific.style;
       }
 
-      // Объединяем остальные ключи (если есть)
       Object.keys(specific).forEach(key => {
-        if (key !== 'style') {
-          merged[key] = specific[key];
-        }
+        if (key !== 'style') merged[key] = specific[key];
       });
 
       return merged;
     };
 
-    // Вспомогательная функция глубокого слияния объектов
-    this.deepMerge = (target, source) => {
-      const output = JSON.parse(JSON.stringify(target));
-      if (!source) return output;
-
-      Object.keys(source).forEach(key => {
-        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-          output[key] = this.deepMerge(output[key] || {}, source[key]);
-        } else {
-          output[key] = source[key];
-        }
-      });
-      return output;
-    };
-
-    // Создаём card1 (Тёплый пол — оранжевый)
     this.card1 = document.createElement("hui-thermostat-card");
     this.card1.setConfig({
       entity: this.config.entity1,
@@ -218,13 +517,13 @@ class DualThermostatCard extends LitElement {
       card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod1)
     });
 
-    // Создаём card2 (HVAC — синий)
     this.card2 = document.createElement("hui-thermostat-card");
     this.card2.setConfig({
       entity: this.config.entity2,
       name: this.config.name2 || "Термостат 2",
       card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod2)
     });
+
     this.updatePowerState();
     this.requestUpdate();
 
@@ -234,6 +533,27 @@ class DualThermostatCard extends LitElement {
       frame.addEventListener("pointerup", this._onPointerUp.bind(this));
       frame.addEventListener("click", this._onClick.bind(this));
     }
+  }
+  _updateObject(index, patch) {
+    const objects = [...(this._value?.objects || [])];
+    const current = objects[index] || {};
+    const updated = { ...current, ...patch };
+
+    objects[index] = updated.type === "custom:dual-thermostat-card"
+      ? this.normalizeThermostatObject(updated)
+      : updated;
+
+    this._value = { ...this._value, objects };
+    fireEvent(this, "config-changed", { config: this._value });
+  }
+  _addThermostatCard() {
+    const objects = [...(this._value?.objects || [])];
+    objects.push(this.normalizeThermostatObject({
+      type: "custom:dual-thermostat-card",
+      entity1: "", entity2: "", name1: "Тёплый пол", name2: "Тёплый пол"
+    }));
+    this._value = { ...this._value, objects };
+    fireEvent(this, "config-changed", { config: this._value });
   }
 
   updatePowerState() {
@@ -369,8 +689,16 @@ class DualThermostatCardEditor extends LitElement {
     this._tab = 0;
   }
 
-  setConfig(config) {
-    this._config = { ...config };
+  setConfig(config) {  //здесь устанавливаются значения для визуального редактора, которые перезаписывают getStubConfig
+    this._config = { entity1: "",
+    name1: "Тёплый пол",
+    entity2: "",
+    name2: "Кондиционер",
+    power_icon: `/local/images/power.png`,
+    heat_icon: `/local/images/heat.png`,
+    cool_icon: `/local/images/cool.png`,
+    base_path: `/local`,
+    ...config };//config перезаписывает, то что было сверху, берется из my-element.js метода _addCard
   }
 
   render() {
@@ -391,12 +719,12 @@ class DualThermostatCardEditor extends LitElement {
   }
 
   _objectTab() {
-    return this._form([
+    return this._form([ //поля визуального редактора, их значения по умолчанию берутся из setConfig(config)
       { name: "entity1", required: true, selector: { entity: { domain: "climate" } } },
       { name: "name1", selector: { text: {} } },
       { name: "entity2", required: true, selector: { entity: { domain: "climate" } } },
       { name: "name2", selector: { text: {} } },
-      { name: "power_icon", selector: { icon: {} } },
+      { name: "power_icon", selector: { icon: {} }},
       { name: "heat_icon", selector: { icon: {} } },
       { name: "cool_icon", selector: { icon: {} } },
       { name: "base_path", selector: { text: {} } }
@@ -452,9 +780,9 @@ DualThermostatCard.getStubConfig = () => ({
   name1: "Тёплый пол",
   entity2: "",
   name2: "Кондиционер",
-  power_icon: "mdi:power",
-  heat_icon: "mdi:fire",
-  cool_icon: "mdi:snowflake",
+  power_icon: `${this.config.base_path}/images/power.png`,
+  heat_icon: `${this.config.base_path}/images/heat.png`,
+  cool_icon: `${this.config.base_path}/images/cool.png`,
   base_path: this.config.base_path,
 });
 
@@ -466,5 +794,5 @@ window.customCards.push({
   type: "custom:dual-thermostat-card",
   name: "Dual Thermostat Card",
   description: "Два термостата с переключателем режимов",
-  preview: false
+  preview: true
 });

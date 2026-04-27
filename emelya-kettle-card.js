@@ -1,224 +1,125 @@
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
-
-import {
-  handleAction,
-  hasAction
-} from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
+import { handleAction, hasAction } from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
 
 class EmelyaKettleCard extends LitElement {
 
   static properties = {
-    hass: {},
-    config: {},
-    power: { type: Boolean },
-    temperature: { type: Number }
+    hass: { attribute: false },
+    config: { attribute: false },
+    power: { type: Boolean, state: true }
   };
 
-  constructor(){
+  constructor() {
     super();
     this.power = false;
-    this.temperature = 0;
-    this._expectedPower = null;
     this._holdTimer = null;
     this._lastTap = 0;
   }
 
-  set hass(hass){
-    this._hass = hass;
-
-    // POWER
-    const powerEntity = this.config.power_entity || this.config.entity;
-    const powerStateObj = hass.states?.[powerEntity];
-
-    if(powerStateObj){
-      let newPower = false;
-      const domain = powerEntity.split(".")[0];
-
-      if(domain === "climate") {
-        newPower = powerStateObj.state !== "off";
-      } else if(domain === "switch" || domain === "input_boolean") {
-        newPower = powerStateObj.state === "on";
-      } else {
-        newPower = powerStateObj.state !== "off" && powerStateObj.state !== "unavailable";
-      }
-
-      if(this._expectedPower !== null){
-        if(newPower === this._expectedPower){
-          this._expectedPower = null;
-          this.power = newPower;
-        }
-      } else {
-        this.power = newPower;
-      }
-    }
-
-    // TEMPERATURE
-    const tempEntity = this.config.temp_entity || this.config.entity;
-    const tempStateObj = hass.states?.[tempEntity];
-
-    if(tempStateObj){
-      let newTemp = 0;
-      const domain = tempEntity.split(".")[0];
-
-      if(domain === "climate") {
-        newTemp = tempStateObj.attributes?.temperature ?? 0;
-      } else {
-        newTemp = Number(tempStateObj.state) || 0;
-      }
-
-      this.temperature = newTemp;
-    }
-  }
-
-  get hass(){
-    return this._hass;
-  }
-
-  setConfig(config){
+  setConfig(config) {
     this.config = {
       tap_action: { action: "more-info" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
+      title: "Чайник",
+      preheat_temp: 80,
+      boil_temp: 100,
       ...config,
     };
     this.base = this.config.base_path || "/local";
   }
 
-  static styles = css`
-    :host { 
-      display: block; 
-      max-width: 320px; 
-      width: 100%; 
-      font-family: Roboto; 
-      color: white; 
-    }
+  set hass(hass) {
+    this._hass = hass;
 
-    .card{
-      width:100%;
-      box-sizing:border-box;
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
-      padding:16px;
-      height:132px;
-      background: #1C1B1F;
-      border-radius:24px;
-      color:white;
-      cursor: pointer;
-      user-select: none;
-    }
-    .card::before {
-      content: "" !important;
-      position: absolute !important;
-      inset: 0 !important;
-      padding: 1px !important;
-      border-radius: inherit !important;
-      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
-      pointer-events: none !important;
-      -webkit-mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor !important;
-      mask-composite: exclude !important;
-    }
+    if (hass) {
+      const powerEntity = this.config.power_entity || this.config.entity;
+      const powerState = hass.states?.[powerEntity];
 
-    .header{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
+      this.power = powerState ? 
+        (powerState.state === "on" || powerState.state === "heat" || powerState.state !== "off") : 
+        false;
     }
+  }
 
-    .title{
-      font-size:16px;
-      font-weight:600;
-    }
+  get hass() { return this._hass; }
 
-    .state{
-      font-size:15px;
-      opacity:0.6;
-    }
+  _stopPropagation(e) { e.stopPropagation(); }
 
-    .controls{
-      display:flex;
-      gap:8px;
-      align-items:center;
-      justify-content:space-between;
-    }
-
-    .box{
-      height:56px;
-      width: 80px;
-      background: #1C1B1F;
-      border-radius:16px;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      border:1px solid transparent;
-      font-weight:600;
-      cursor: pointer;
-      flex-direction:row;
-      position: relative;
-    }
-    .box::before {
-      content: "" !important;
-      position: absolute !important;
-      inset: 0 !important;
-      padding: 1px !important;
-      border-radius: inherit !important;
-      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
-      pointer-events: none !important;
-      -webkit-mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor !important;
-      mask-composite: exclude !important;
-    }
-
-    .value{
-      min-width:40px;
-      text-align:center;
-      font-weight:600;
-    }
-
-    .power{
-      width:80px;
-      height:56px;
-      background:#343239;
-      border-radius:16px;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      cursor:pointer;
-      transition:background 0.2s;
-      position: relative;
-    }
-    .power::before {
-      content: "" !important;
-      position: absolute !important;
-      inset: 0 !important;
-      padding: 1px !important;
-      border-radius: inherit !important;
-      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
-      pointer-events: none !important;
-      -webkit-mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor !important;
-      mask-composite: exclude !important;
-    }
-
-    .power.active{
-      background:#E65332;
-    }
-
-    img{
-      width:24px;
-      height:24px;
-    }
-  `;
-
-  _stopPropagation(e){
+  _togglePower(e) {
     e.stopPropagation();
+    const entity = this.config.power_entity || this.config.entity;
+    if (!entity || !this.hass) return;
+
+    const newPower = !this.power;
+    const domain = entity.split(".")[0];
+
+    // Универсальная обработка
+    if (domain === "climate") {
+      this.hass.callService("climate", "set_hvac_mode", {
+        entity_id: entity,
+        hvac_mode: newPower ? "heat" : "off"
+      });
+    } else if (domain === "switch" || domain === "input_boolean") {
+      this.hass.callService(domain, newPower ? "turn_on" : "turn_off", {
+        entity_id: entity
+      });
+    } else {
+      // Fallback для fan, light и др.
+      this.hass.callService("homeassistant", newPower ? "turn_on" : "turn_off", {
+        entity_id: entity
+      });
+    }
+  }
+
+  _setTemperature(temp) {
+    const entity = this.config.temp_entity;
+    if (!entity || !this.hass) return;
+
+    const domain = entity.split(".")[0];
+
+    if (domain === "climate") {
+      this.hass.callService("climate", "set_temperature", {
+        entity_id: entity,
+        temperature: temp
+      });
+    } else if (domain === "number" || domain === "input_number") {
+      this.hass.callService(domain, "set_value", {
+        entity_id: entity,
+        value: temp
+      });
+    }
+  }
+
+  // Одинарный клик — установка температуры
+  _handlePreheat(e) {
+    e.stopPropagation();
+    this._setTemperature(this.config.preheat_temp || 80);
+  }
+
+  _handleBoil(e) {
+    e.stopPropagation();
+    this._setTemperature(this.config.boil_temp || 100);
+  }
+
+  // Двойной клик по всей панели управления (кроме power)
+  _handleControlsClick(e) {
+    // Проверяем, что клик был НЕ по кнопке питания
+    if (e.target.closest('.power-btn')) return;
+
+    const tempEntity = this.config.temp_entity;
+    if (tempEntity && this.hass) {
+      this.dispatchEvent(new CustomEvent("hass-more-info", {
+        detail: { entityId: tempEntity },
+        bubbles: true,
+        composed: true
+      }));
+    }
+  }
+
+  _performAction(actionType) {
+    if (!this.hass || !this.config) return;
+    handleAction(this, this.hass, this.config, actionType);
   }
 
   firstUpdated() {
@@ -232,23 +133,17 @@ class EmelyaKettleCard extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._holdTimer) {
-      clearTimeout(this._holdTimer);
-      this._holdTimer = null;
-    }
+    if (this._holdTimer) clearTimeout(this._holdTimer);
   }
 
   _onPointerDown(e) {
-    if (e.target.closest('.box.temp') || e.target.closest('.power')) return;
-
-    if (hasAction(this.config, 'hold_action')) {
-      this._holdTimer = setTimeout(() => {
-        this._performAction('hold');
-      }, 500);
+    if (e.target.closest(".power-btn")) return;
+    if (hasAction(this.config, "hold_action")) {
+      this._holdTimer = setTimeout(() => this._performAction("hold"), 500);
     }
   }
 
-  _onPointerUp(e) {
+  _onPointerUp() {
     if (this._holdTimer) {
       clearTimeout(this._holdTimer);
       this._holdTimer = null;
@@ -256,147 +151,217 @@ class EmelyaKettleCard extends LitElement {
   }
 
   _onClick(e) {
-    if (e.target.closest('.box.temp') || e.target.closest('.power')) return;
+    if (e.target.closest(".controls")) return;
 
     const now = Date.now();
-
     if (this._lastTap && now - this._lastTap < 300) {
-      if (hasAction(this.config, 'double_tap_action')) {
-        e.stopImmediatePropagation();
-        this._performAction('double_tap');
+      if (hasAction(this.config, "double_tap_action")) {
+        this._performAction("double_tap");
         this._lastTap = 0;
         return;
       }
     }
-
     this._lastTap = now;
 
     setTimeout(() => {
-      if (this._lastTap === now) {
-        this._performAction('tap');
-      }
+      if (this._lastTap === now) this._performAction("tap");
     }, 320);
   }
 
-  _performAction(actionType) {
-    console.log(`Action performed: ${actionType}`);
-    if (!this.hass || !this.config) return;
-    handleAction(this, this.hass, this.config, actionType);
-  }
-
-  _toggle(e){
-    e.stopPropagation();
-    const newPower = !this.power;
-    this.power = newPower;
-    this._expectedPower = newPower;
-
-    const entity = this.config.power_entity || this.config.entity;
-    if(!this.hass?.states?.[entity]) return;
-
-    const domain = entity.split(".")[0];
-
-    if(domain === "climate") {
-      this.hass.callService("climate", "set_hvac_mode", {
-        entity_id: entity,
-        hvac_mode: newPower ? "heat" : "off"
-      });
-    } else if(domain === "switch" || domain === "input_boolean") {
-      this.hass.callService("homeassistant", newPower ? "turn_on" : "turn_off", {
-        entity_id: entity
-      });
-    } else {
-      this.hass.callService(domain, newPower ? "turn_on" : "turn_off", {
-        entity_id: entity
-      });
-    }
-  }
-
-  _handleTempClick(e){
-    e.stopPropagation();
-    const entity = this.config.temp_entity || this.config.entity;
-    if(entity) {
-      this.dispatchEvent(new CustomEvent("hass-more-info", {
-        detail: { entityId: entity },
-        bubbles: true,
-        composed: true
-      }));
-    }
-  }
-
-  render(){
-    return html`
-      <div class="card">
-
-        <div class="header">
-          <div class="title">Чайник</div>
-          <div class="state">
-            ${this.power ? "Нагревает" : "Выключено"}
-          </div>
-        </div>
-
-        <div class="controls">
-          <div class="box temp" @click=${this._handleTempClick}>
-            <div class="value">
-              ${this.temperature} °C
-            </div>
-          </div>
-
-          <div class="power ${this.power ? "active" : ""}" 
-              @pointerdown=${this._stopPropagation}
-              @click=${this._toggle}>
-            <img src="${this.base}/images/container-images/power_button.png">
-          </div>
-        </div>
-
-      </div>
-    `;
-  }
-}
-
-/*  EDITOR  */
-
-class EmelyaKettleCardEditor extends LitElement {
-  static properties = {
-    hass: {},
-    _config: {},
-    _tab: { state: true }
-  };
-
   static styles = css`
-    :host {
-      display: block;
+    :host, ha-card { 
+      display: block; 
+      width: 100%; 
+      border: none !important; 
+      border-radius: 24px !important; 
+    }
+
+    .card {
+      position: relative;
       box-sizing: border-box;
-    }
-
-    .tabs {
+      width: 100%;
+      height: 320px;
+      padding: 16px;
       display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
+      flex-direction: column;
+      justify-content: space-between;
+      border-radius: 24px;
+      overflow: hidden;
+      color: #fff;
+      font-family: Roboto, sans-serif;
+      cursor: pointer;
+      user-select: none;
     }
 
-    .tab {
-      padding: 8px 12px;
-      border-radius: 10px;
-      border: 1px solid var(--divider-color);
-      background: var(--secondary-background-color);
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .header { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      z-index: 1; 
+    }
+
+    .title { font-size: 16px; font-weight: 600; }
+    .state { font-size: 15px; color: rgba(255,255,255,0.6); }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px;
+      width: 100%;
+      height: 64px;
+      background: rgba(255,255,255,0.10);
+      border-radius: 16px;
+      z-index: 1;
       cursor: pointer;
     }
 
-    .tab.active {
-      background: var(--primary-color);
-      color: white;
-      border-color: var(--primary-color);
+    .mode-btn {
+      flex: 1;
+      height: 56px;
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.92);
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-btn:active {
+      transform: scale(0.96);
+    }
+
+    .power-btn {
+      width: 56px;
+      height: 56px;
+      border: none;
+      background: rgba(255,255,255,0.10);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .power-btn.active {
+      background: #4D4A54;
+    }
+
+    .power-btn img {
+      width: 28px;
+      height: 28px;
     }
   `;
 
-  constructor() {
-    super();
-    this._tab = 0;
+  render() {
+    const bg = `${this.base}/images/container-images/kettle.png`;
+
+    return html`
+      <ha-card>
+        <div 
+          class="card"
+          style="
+            background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 56.97%, #1C1B1F 88.4%), 
+                        url('${bg}') 53.318px 57.809px / 81.463% 82.494% no-repeat, 
+                        #1C1B1F;
+            background-blend-mode: normal, luminosity, normal;
+          "
+        >
+          <div class="header">
+            <div class="title">${this.config?.title || "Чайник"}</div>
+            <div class="state">${this.power ? "Включено" : "Выключено"}</div>
+          </div>
+
+          <div 
+            class="controls"
+            @click=${this._handleControlsClick}
+          >
+            <button 
+              class="mode-btn" 
+              @pointerdown=${this._stopPropagation}
+              @click=${this._handlePreheat}
+            >
+              Подогрев
+            </button>
+
+            <button 
+              class="power-btn ${this.power ? "active" : ""}" 
+              @pointerdown=${this._stopPropagation}
+              @click=${this._togglePower}
+            >
+              <img src="${this.base}/images/container-images/power_button.png" alt="power">
+            </button>
+
+            <button 
+              class="mode-btn" 
+              @pointerdown=${this._stopPropagation}
+              @click=${this._handleBoil}
+            >
+              Кипяток
+            </button>
+          </div>
+        </div>
+      </ha-card>
+    `;
   }
 
-  setConfig(config) {
-    this._config = { ...config };
+  /* ==================== РЕДАКТОР ==================== */
+  static getConfigElement() {
+    return document.createElement("emelya-kettle-card-editor");
   }
+
+  static getStubConfig() {
+    return {
+      title: "Чайник",
+      entity: "",
+      power_entity: "",
+      temp_entity: "",
+      base_path: "/local",
+      preheat_temp: 80,
+      boil_temp: 100
+    };
+  }
+}
+
+class EmelyaKettleCardEditor extends LitElement {
+  static properties = { hass: {}, _config: {}, _tab: { state: true } };
+
+  constructor() { super(); this._tab = 0; }
+
+  setConfig(config) { this._config = { ...config }; }
+
+  static styles = css`
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab { 
+      padding: 8px 12px; 
+      border-radius: 10px; 
+      border: 1px solid var(--divider-color); 
+      background: var(--secondary-background-color); 
+      cursor: pointer; 
+    }
+    .tab.active { 
+      background: var(--primary-color); 
+      color: white; 
+      border-color: var(--primary-color); 
+    }
+  `;
 
   render() {
     if (!this._config) return html``;
@@ -404,70 +369,37 @@ class EmelyaKettleCardEditor extends LitElement {
     return html`
       <div class="tabs">
         ${["Объект", "Взаимодействия"].map((t, i) => html`
-          <div
-            class="tab ${this._tab === i ? "active" : ""}"
-            @click=${() => this._tab = i}
-          >
-            ${t}
-          </div>
+          <div class="tab ${this._tab === i ? "active" : ""}" @click=${() => this._tab = i}>${t}</div>
         `)}
       </div>
 
-      ${this._tab === 0 ? this._objectTab() : ""}
-      ${this._tab === 1 ? this._actionsTab() : ""}
-    `;
-  }
-
-  _objectTab() {
-    return this._form([
-      { 
-        name: "entity", 
-        required: true, 
-        selector: { entity: { domain: ["switch", "climate", "input_boolean"] } } 
-      },
-      { 
-        name: "power_entity", 
-        selector: { entity: { domain: ["switch", "climate", "input_boolean"] } } 
-      },
-      { 
-        name: "temp_entity", 
-        selector: { entity: { domain: ["number", "climate", "sensor"] } } 
-      },
-      { 
-        name: "base_path", 
-        selector: { text: {} } 
-      }
-    ]);
-  }
-
-  _actionsTab() {
-    return this._form([
-      {
-        name: "tap_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
-        selector: { ui_action: {} }
-      },
-      {
-        name: "hold_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
-        selector: { ui_action: {} }
-      },
-      {
-        name: "double_tap_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
-        selector: { ui_action: {} }
-      }
-    ]);
-  }
-
-  _form(schema) {
-    return html`
-      <ha-form
-        .hass=${this.hass}
-        .data=${this._config}
-        .schema=${schema}
-        @value-changed=${this._valueChanged}
-      ></ha-form>
+      ${this._tab === 0 ? html`
+        <ha-form
+          .hass=${this.hass}
+          .data=${this._config}
+          .schema=${[
+            { name: "title", selector: { text: {} } },
+            { name: "entity", selector: { entity: {} }, label: "Основная entity (опционально)" },
+            { name: "power_entity", required: true, selector: { entity: { domain: ["switch", "climate", "input_boolean"] } }, label: "Power Entity (вкл/выкл)" },
+            { name: "temp_entity", required: true, selector: { entity: { domain: ["climate", "number", "input_number"] } }, label: "Temperature Entity" },
+            { name: "base_path", selector: { text: {} }, label: "Base Path" },
+            { name: "preheat_temp", selector: { number: { min: 30, max: 100, step: 1 } }, label: "Температура Подогрева (°C)" },
+            { name: "boil_temp", selector: { number: { min: 90, max: 100, step: 1 } }, label: "Температура Кипятка (°C)" }
+          ]}
+          @value-changed=${this._valueChanged}
+        ></ha-form>
+      ` : html`
+        <ha-form
+          .hass=${this.hass}
+          .data=${this._config}
+          .schema=${[
+            { name: "tap_action", label: "При нажатии", selector: { ui_action: {} } },
+            { name: "hold_action", label: "При удержании", selector: { ui_action: {} } },
+            { name: "double_tap_action", label: "При двойном нажатии", selector: { ui_action: {} } }
+          ]}
+          @value-changed=${this._valueChanged}
+        ></ha-form>
+      `}
     `;
   }
 
@@ -481,27 +413,13 @@ class EmelyaKettleCardEditor extends LitElement {
   };
 }
 
-/* Регистрация */
-EmelyaKettleCard.getConfigElement = function () {
-  return document.createElement("emelya-kettle-card-editor");
-};
-
-EmelyaKettleCard.getStubConfig = function () {
-  return {
-    entity: "",
-    power_entity: "",
-    temp_entity: "",
-    base_path: this.config.base_path,
-  };
-};
-
 customElements.define("emelya-kettle-card-editor", EmelyaKettleCardEditor);
-customElements.define("emelya-kettle-card", EmelyaKettleCard);
+customElements.define("emelya-kettle", EmelyaKettleCard);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "custom:emelya-kettle-card",
+  type: "custom:emelya-kettle",
   name: "Emelya Kettle Card",
   description: "Управление чайником",
-  preview: false
+  preview: true
 });

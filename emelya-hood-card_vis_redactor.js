@@ -290,7 +290,7 @@ window.customCards.push({
 
 
 /* =================*/
-
+/*
 import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
 const LEVEL_MAP = {1:33, 2:66, 3:100};
 class EmelyaHoodCard extends LitElement {
@@ -583,3 +583,4 @@ class EmelyaHoodCard extends LitElement {
 }
 
 customElements.define("emelya-hood-card", EmelyaHoodCard);
+*/

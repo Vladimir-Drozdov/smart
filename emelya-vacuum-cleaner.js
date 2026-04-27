@@ -14,6 +14,86 @@ class EmelyaVacuumCleaner extends LitElement {
     cleaning: { state: true },
     battery: { state: true }
   };
+  DEFAULT_VACUUM_CARD_MOD = {
+      // Стили для корневого элемента (.)
+      ".": `
+        :host {
+          border-radius: 24px !important;
+          border: none !important;
+        }
+        
+        ha-card {
+          font-size: 16px !important;
+          border-radius: 24px !important;
+          border: none !important;
+        }
+        
+        ha-card ha-select { 
+          border-radius: 16px !important;
+          --restore-card-border-radius: 16px !important;
+          --ha-card-border-radius: 16px !important;
+          box-sizing: border-box !important;                    
+        }
+      `,
+
+      // Стили для ha-select и его внутренних элементов
+      "ha-select": {
+        "$": `
+          .mdc-select {
+            border-radius: 16px !important;
+            background-color: transparent !important;
+          }  
+
+          .mdc-select__anchor {
+            border-radius: 16px !important;
+            background-color: transparent !important;
+            align-items: center !important;
+          }
+
+          .mdc-select__anchor .mdc-select__selected-text-container .mdc-select__selected-text {
+            line-height: 100%;
+            display: flex;
+            align-items: center;
+          }
+
+          .mdc-select__anchor .mdc-line-ripple {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+          }  
+
+          .mdc-select__anchor .mdc-floating-label {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+          }  
+
+          .mdc-select__anchor .mdc-select__dropdown-icon {
+            width: 8px !important;
+            height: 8px !important;
+            border-right: 1px solid white !important; 
+            border-bottom: 1px solid white !important;
+            transform: translateY(-50%) rotate(45deg) !important;
+          }   
+
+          .mdc-select__anchor[aria-expanded="true"] .mdc-select__dropdown-icon {
+            transform: translateY(0%) rotate(225deg) !important;
+          }  
+
+          .mdc-select__dropdown-icon-graphic polyline {
+            stroke: white !important;
+            stroke-width: 1px !important;
+          }  
+
+          .mdc-select__anchor .mdc-select__dropdown-icon svg {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+          }
+        `
+
+    }
+  };
 
   constructor(){
     super();
@@ -78,6 +158,9 @@ class EmelyaVacuumCleaner extends LitElement {
       tap_action: { action: "more-info" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
+      card_mod: {
+        style: structuredClone(this.DEFAULT_VACUUM_CARD_MOD)
+      },
       ...config,
     };
     this.base = this.config.base_path || "/local";
@@ -86,7 +169,7 @@ class EmelyaVacuumCleaner extends LitElement {
   static styles = css`
     :host { 
       display:block; 
-      max-width:320px; 
+      min-width:320px;
       width:100%; 
       font-family:Roboto; 
       color:white;
@@ -107,6 +190,20 @@ class EmelyaVacuumCleaner extends LitElement {
       color:white;
       cursor: pointer;
       user-select: none;
+    }
+    .frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%) border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+      pointer-events: none;                /* чтобы не мешал кликам */
     }
 
     .type{
@@ -133,6 +230,7 @@ class EmelyaVacuumCleaner extends LitElement {
     ha-select {
       width: 100%;
       position: relative !important;
+      background: rgba(255, 255, 255, 0.10);
     }
     ha-select::before {
       content: "" !important;
@@ -162,6 +260,7 @@ class EmelyaVacuumCleaner extends LitElement {
       cursor:pointer;
       transition:0.2s;
       position: relative;
+      background:rgba(255, 255, 255, 0.10);
     }
     .start::before {
       content: "" !important;
@@ -179,7 +278,7 @@ class EmelyaVacuumCleaner extends LitElement {
     }  
 
     .start.active{
-      background:#E65332;
+      background: #4D4A54;
     }
   `;
 
@@ -274,16 +373,9 @@ class EmelyaVacuumCleaner extends LitElement {
         class="frame"
         tabindex="0"
         style='
-          background-image:
-            url("${bg}"),
-            linear-gradient( #1C1B1F, #1C1B1F),
-            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
-          background-size: cover, auto, auto;
-          background-position: center;
-          background-repeat: no-repeat;
-          border: 1px solid transparent;
-          background-origin: border-box;
-          background-clip: padding-box, padding-box, border-box;
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%), url("${bg}") 9.86px -113.795px / 134.876% 110.996% no-repeat, var(--Background-Surface-2, #1C1B1F);
+          background-blend-mode: normal, luminosity, normal;
+          border: none;
           border-radius: 24px !important;
         '
       >
@@ -416,12 +508,12 @@ class EmelyaVacuumCleanerEditor extends LitElement {
       { 
         name: "entity", 
         required: true, 
-        selector: { entity: { domain: "vacuum" } } 
+        selector: { entity: { domain: "vacuum" } } //только vacuum
       },
       { 
         name: "base_path", 
         selector: { text: {} } 
-      }
+      },
     ]);
   }
 
@@ -474,7 +566,7 @@ EmelyaVacuumCleaner.getConfigElement = function () {
 EmelyaVacuumCleaner.getStubConfig = function () {
   return {
     entity: "",
-    base_path: this.config.base_path,
+    base_path: "/local",
   };
 };
 
@@ -486,5 +578,5 @@ window.customCards.push({
   type: "custom:emelya-vacuum-cleaner",
   name: "Emelya Vacuum Cleaner",
   description: "Управление роботом-пылесосом",
-  preview: false
+  preview: true
 });

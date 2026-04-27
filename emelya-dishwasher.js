@@ -14,6 +14,86 @@ class EmelyaDishwasherCard extends LitElement {
     power: { type: Boolean },
     modes: { state: true }
   };
+  DEFAULT_DISHWASHER_CARD_MOD = {
+    // Стили для корневого элемента (.)
+    ".": `
+      :host {
+        border-radius: 24px !important;
+      }
+      
+      ha-card {
+        font-size: 16px !important;
+      } 
+      
+      ha-card ha-select { 
+        --mdc-select-fill-color: rgba(255, 255, 255, 0.10);
+        --mdc-theme-surface: #1C1B1F;
+        background-color: rgba(255, 255, 255, 0.10) !important;
+        border-radius: 16px !important;
+        --restore-card-border-radius: 16px !important;
+        --ha-card-border-radius: 16px !important;
+        box-sizing: border-box !important;                    
+      }
+    `,
+
+    // Стили для ha-select и его внутренних элементов
+    "ha-select": {
+      "$": `
+        .mdc-select {
+          border-radius: 16px !important;
+          background-color: transparent !important;
+        }  
+
+        .mdc-select__anchor {
+          border-radius: 16px !important;
+          background-color: transparent !important;
+          align-items: center !important;
+        }
+
+        .mdc-select__anchor .mdc-select__selected-text-container .mdc-select__selected-text {
+          line-height: 100%;
+          display: flex;
+          align-items: center;
+        }
+
+        .mdc-select__anchor .mdc-line-ripple {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+        }  
+
+        .mdc-select__anchor .mdc-floating-label {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+        }  
+
+        .mdc-select__anchor .mdc-select__dropdown-icon {
+          width: 8px !important;
+          height: 8px !important;
+          border-right: 1px solid white !important; 
+          border-bottom: 1px solid white !important;
+          transform: translateY(-50%) rotate(45deg) !important;
+        }   
+
+        .mdc-select__anchor[aria-expanded="true"] .mdc-select__dropdown-icon {
+          transform: translateY(0%) rotate(225deg) !important;
+        }  
+
+        .mdc-select__dropdown-icon-graphic polyline {
+          stroke: white !important;
+          stroke-width: 1px !important;
+        }  
+
+        .mdc-select__anchor .mdc-select__dropdown-icon svg {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+        }
+      `
+
+    }
+  };
 
   constructor(){
     super();
@@ -72,6 +152,9 @@ class EmelyaDishwasherCard extends LitElement {
       tap_action: { action: "more-info" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
+      card_mod: {
+        style: structuredClone(this.DEFAULT_DISHWASHER_CARD_MOD)
+      },
       ...config,
     };
     this.base = this.config.base_path || "/local";
@@ -80,7 +163,7 @@ class EmelyaDishwasherCard extends LitElement {
   static styles = css`
     :host { 
       display: block; 
-      max-width: 320px; 
+      max-width:450px; min-width:320px; 
       width: 100%; 
       font-family: Roboto; 
       color: white; 
@@ -104,6 +187,21 @@ class EmelyaDishwasherCard extends LitElement {
       color:white;
       cursor: pointer;
       user-select: none;
+      position: relative;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%) border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+      pointer-events: none;                /* чтобы не мешал кликам */
     }
 
     .header{ 
@@ -124,18 +222,21 @@ class EmelyaDishwasherCard extends LitElement {
       gap:8px; 
       align-items:center; 
     }
-    .power{ 
-      width:80px; 
-      height:56px; 
-      display:flex; 
-      justify-content:center; 
-      align-items:center; 
-      border-radius:16px; 
-      background:rgba(255,255,255,0.1); 
-      cursor:pointer; 
-      transition:0.2s;
-      position:relative;
+    .power{
+      display: flex;
+      width: 56px;
+      height: 56px;
+      padding: 20px;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      aspect-ratio: 1/1;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.10);
+      box-sizing: border-box;
+      position: relative;
     }
+      
     .power::before {
       content: "" !important;
       position: absolute !important;
@@ -151,11 +252,12 @@ class EmelyaDishwasherCard extends LitElement {
       mask-composite: exclude !important;
     }
     .power.active{ 
-      background:#E65332; 
+      background: #4D4A54;
     }
-    ha-select{ 
-      width:200px; 
+    ha-select{
+      width:100%;
       position: relative !important;
+      background: rgba(255, 255, 255, 0.10) !important;
     }
     ha-select::before {
       content: "" !important;
@@ -249,7 +351,18 @@ class EmelyaDishwasherCard extends LitElement {
     this.power = newPower;
     this._expectedPower = newPower;
 
-    this.hass.callService("switch", "toggle", { entity_id: entity });
+    const domain = entity.split(".")[0];
+    
+    // Для разных доменов используем соответствующие сервисы
+    if(domain === "switch") {
+      this.hass.callService("switch", "toggle", { entity_id: entity });
+    } else if(domain === "fan") {
+      // Для fan используем toggle или turn_on/turn_off
+      this.hass.callService("fan", "toggle", { entity_id: entity });
+    } else {
+      // Fallback: пробуем toggle
+      this.hass.callService(domain, "toggle", { entity_id: entity });
+    }
   }
 
   _handleSelectChange(e){
@@ -261,10 +374,24 @@ class EmelyaDishwasherCard extends LitElement {
     const modeEntity = this.config?.mode_entity;
     if(!this.hass?.states?.[modeEntity]) return;
 
-    this.hass.callService("select", "select_option", {
-      entity_id: modeEntity,
-      option: value
-    });
+    const domain = modeEntity.split(".")[0];
+    const stateObj = this.hass.states[modeEntity];
+    
+    // Маппинг доменов на сервисы и параметры
+    if(domain === "select" || domain === "input_select") {
+      this.hass.callService(domain, "select_option", {
+        entity_id: modeEntity,
+        option: value
+      });
+    } else if(domain === "fan") {
+      // Некоторые посудомойки через fan с preset_mode
+      this.hass.callService("fan", "set_preset_mode", {
+        entity_id: modeEntity,
+        preset_mode: value
+      });
+    } else {
+      console.warn(`Unsupported domain for mode_entity: ${domain}`);
+    }
   }
 
   _handleSelectDblClick(e){
@@ -287,16 +414,10 @@ class EmelyaDishwasherCard extends LitElement {
       <div
         class="card"
         style='
-          background-image:
-            url("${this.base}/images/container-images/dishwasher.png"),
-            linear-gradient( #1C1B1F, #1C1B1F),
-            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
-          background-size: cover, auto, auto;
-          background-position: center;
-          background-repeat: no-repeat;
-          border: 1px solid transparent;
-          background-origin: border-box;
-          background-clip: padding-box, padding-box, border-box;
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 75%, #1C1B1F 100%), url("${bg}") 41.817px 1.357px / 100.889% 102.166% no-repeat, #1C1B1F;
+          background-blend-mode: normal, luminosity, normal;
+          border: none;
+          border-radius: 24px !important;
         '
       >
 
@@ -306,6 +427,13 @@ class EmelyaDishwasherCard extends LitElement {
         </div>
 
         <div class="controls">
+          <div 
+            class="power ${this.power ? "active" : ""}"
+            @pointerdown=${this._stopPropagation}
+            @click=${this._togglePower}
+          >
+            <img src="${this.base}/images/container-images/power_button.png">
+          </div>
           ${modeState ? html`
             <ha-select
               .label=${modeState.attributes?.friendly_name || "Режим"}
@@ -319,14 +447,6 @@ class EmelyaDishwasherCard extends LitElement {
               `)}
             </ha-select>
           ` : ""}
-
-          <div 
-            class="power ${this.power ? "active" : ""}" 
-            @pointerdown=${this._stopPropagation}
-            @click=${this._togglePower}
-          >
-            <img src="${this.base}/images/container-images/power_button.png">
-          </div>
         </div>
 
       </div>
@@ -405,12 +525,12 @@ class EmelyaDishwasherCardEditor extends LitElement {
       { 
         name: "entity", 
         required: true, 
-        selector: { entity: { domain: "switch" } } 
+        selector: { entity: { domain: ["switch", "fan"] } } 
       },
       { 
         name: "mode_entity", 
         required: true, 
-        selector: { entity: { domain: "select" } } 
+        selector: { entity: { domain: ["select", "input_select"] } } 
       },
       { 
         name: "base_path", 
@@ -481,5 +601,5 @@ window.customCards.push({
   type: "custom:emelya-dishwasher",
   name: "Emelya Dishwasher Card",
   description: "Управление посудомоечной машиной",
-  preview: false
+  preview: true
 });

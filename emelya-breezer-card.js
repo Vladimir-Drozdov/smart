@@ -14,6 +14,86 @@ class EmelyaBreezerCard extends LitElement {
     selectedMode: { state: true },
     modes: { state: true }
   };
+  DEFAULT_BREEZER_CARD_MOD = {
+    // Стили для корневого элемента (.)
+    ".": `
+      ha-card {
+        font-size: 16px !important;
+        border-radius: 24px !important;
+      }
+      
+      :host {
+        border-radius: 24px !important;
+        border-color: transparent !important;
+        --ha-card-border-color: transparent !important;
+        --divider-color: transparent !important;
+      }
+      
+      ha-card ha-select {                         
+        border-radius: 16px !important;
+        --restore-card-border-radius: 16px !important;
+        --ha-card-border-radius: 16px !important;
+        box-sizing: border-box !important;                    
+      }
+    `,
+
+    // Стили для ha-select и его внутренних элементов
+    "ha-select": {
+      "$": `
+        .mdc-select {
+          border-radius: 16px !important;
+          background-color: transparent !important;
+        }  
+
+        .mdc-select__anchor {
+          border-radius: 16px !important;
+          background-color: transparent !important;
+          align-items: center !important;
+        }
+
+        .mdc-select__anchor .mdc-select__selected-text-container .mdc-select__selected-text {
+          line-height: 100%;
+          display: flex;
+          align-items: center;
+        }
+
+        .mdc-select__anchor .mdc-line-ripple {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+        }  
+
+        .mdc-select__anchor .mdc-floating-label {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+        }  
+
+        .mdc-select__anchor .mdc-select__dropdown-icon {
+          width: 8px !important;
+          height: 8px !important;
+          border-right: 1px solid white !important; 
+          border-bottom: 1px solid white !important;
+          transform: translateY(-50%) rotate(45deg) !important;
+        }   
+
+        .mdc-select__anchor[aria-expanded="true"] .mdc-select__dropdown-icon {
+          transform: translateY(0%) rotate(225deg) !important;
+        }  
+
+        .mdc-select__dropdown-icon-graphic polyline {
+          stroke: white !important;
+          stroke-width: 1px !important;
+        }  
+
+        .mdc-select__anchor .mdc-select__dropdown-icon svg {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+        }
+      `
+    }
+  };
 
   constructor(){
     super();
@@ -51,20 +131,16 @@ class EmelyaBreezerCard extends LitElement {
     const modeState = hass.states?.[modeEntity];
 
     if(modeState){
-      const option = modeState.state;
-      const options = modeState.attributes?.options;
+      this.modes = modeState.attributes?.options || [];
+      const newMode = modeState.state;
 
       if(this._expectedMode !== null){
-        if(option === this._expectedMode){
+        if(newMode === this._expectedMode){
           this._expectedMode = null;
-          this.selectedMode = option;
+          this.selectedMode = newMode;
         }
       } else {
-        this.selectedMode = option || this.selectedMode;
-      }
-
-      if(options){
-        this.modes = options;
+        this.selectedMode = newMode || this.selectedMode;
       }
     }
   }
@@ -78,6 +154,9 @@ class EmelyaBreezerCard extends LitElement {
       tap_action: { action: "more-info" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
+      card_mod: {
+        style: structuredClone(this.DEFAULT_BREEZER_CARD_MOD)
+      },
       ...config,
     };
     this.base = this.config.base_path || "/local";
@@ -86,77 +165,82 @@ class EmelyaBreezerCard extends LitElement {
   static styles = css`
     :host { 
       display: block; 
-      max-width: 320px; 
+      max-width:450px; 
+      min-width:320px; 
       width: 100%; 
       font-family: Roboto; 
       color: white; 
+      border-radius: 24px !important;
+      border: none !important;
     }
     ha-card{
-      position: relative !important;
+      border-radius: 24px !important;
+      border: none !important;
     }
 
-    .card{
+    .card {
+      width:100%;
       box-sizing:border-box;
       display:flex;
       flex-direction:column;
       justify-content:space-between;
       padding:16px;
-      height:132px;
-      width:100%;
+      height:320px;
       border-radius:24px;
       color:white;
       cursor: pointer;
       user-select: none;
-      position:relative;
-      background-image:
-        linear-gradient(#1C1B1F,#1C1B1F),
-        linear-gradient(135deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
-      border: 1px solid transparent;
-      border-width: 1px;
-      border-style: solid;
-      background-origin: border-box, border-box;
-      background-clip: padding-box, border-box;
+      position: relative;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%) border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+      pointer-events: none;
     }
 
-    .header{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
+    .header{ 
+      display:flex; 
+      justify-content:space-between; 
+      align-items:center; 
     }
-
-    .title{
-      font-size:16px;
-      font-weight:600;
+    .title{ 
+      font-size:16px; 
+      font-weight:600; 
     }
-
-    .state{
-      font-size:15px;
-      opacity:0.5;
+    .state{ 
+      font-size:15px; 
+      opacity:0.6; 
     }
-
-    .controls{
-      display:flex;
-      gap:8px;
-      align-items:center;
-    }
-
-    .option.selected{
-      background:#343239;
-      font-weight:600;
+    .controls{ 
+      display:flex; 
+      gap:8px; 
+      align-items:center; 
     }
 
     .power{
-      width:80px;
-      height:56px;
-      background: #1C1B1F;
-      border-radius:16px;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      cursor:pointer;
-      transition:0.2s;
+      display: flex;
+      width: 56px;
+      height: 56px;
+      padding: 20px;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      aspect-ratio: 1/1;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.10);
+      box-sizing: border-box;
       position: relative;
     }
+      
     .power::before {
       content: "" !important;
       position: absolute !important;
@@ -172,11 +256,14 @@ class EmelyaBreezerCard extends LitElement {
       mask-composite: exclude !important;
     }
 
-    ha-select {
-      border-radius: 16px !important; 
-      background: #1C1B1F !important;
+    .power.active{ 
+      background: #4D4A54;
+    }
+
+    ha-select{
+      width:100%;
       position: relative !important;
-      overflow: hidden !important;
+      background: rgba(255, 255, 255, 0.10) !important;
     }
 
     ha-select::before {
@@ -185,11 +272,7 @@ class EmelyaBreezerCard extends LitElement {
       inset: 0 !important;
       padding: 1px !important;
       border-radius: inherit !important;
-      background: linear-gradient(165deg,
-        rgba(101, 101, 101, 0) 0%, 
-        #656565 50%, 
-        rgba(101, 101, 101, 0) 100%
-      ) !important;
+      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
       pointer-events: none !important;
       -webkit-mask:
         linear-gradient(#fff 0 0) content-box,
@@ -197,33 +280,7 @@ class EmelyaBreezerCard extends LitElement {
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
     }
-
-    .power.active{
-      background: #E65332;
-    }
-
-    .power img{
-      width:24px;
-      height:24px;
-    }
   `;
-
-  _toggle(e){
-    e.stopPropagation();
-    const entity = this.config?.entity;
-    if(!this.hass?.states?.[entity]) return;
-
-    const newPower = !this.power;
-    this.power = newPower;
-    this._expectedPower = newPower;
-
-    const domain = entity.split(".")[0];
-    const service = newPower ? "turn_on" : "turn_off";
-
-    this.hass.callService(domain, service, {
-      entity_id: entity
-    });
-  }
 
   _stopPropagation(e){
     e.stopPropagation();
@@ -287,9 +344,26 @@ class EmelyaBreezerCard extends LitElement {
   }
 
   _performAction(actionType) {
-    console.log(`Action performed: ${actionType}`);
     if (!this.hass || !this.config) return;
     handleAction(this, this.hass, this.config, actionType);
+  }
+
+  _togglePower(e){
+    e.stopPropagation();
+    const entity = this.config?.entity;
+    if(!this.hass?.states?.[entity]) return;
+
+    const newPower = !this.power;
+    this.power = newPower;
+    this._expectedPower = newPower;
+
+    const domain = entity.split(".")[0];
+    
+    const service = newPower ? "turn_on" : "turn_off";
+    
+    this.hass.callService(domain, service, {
+      entity_id: entity
+    });
   }
 
   _handleSelectChange(e){
@@ -301,10 +375,14 @@ class EmelyaBreezerCard extends LitElement {
     const modeEntity = this.config?.mode_entity;
     if(!this.hass?.states?.[modeEntity]) return;
 
-    this.hass.callService("select", "select_option", {
-      entity_id: modeEntity,
-      option: value
-    });
+    const domain = modeEntity.split(".")[0];
+    
+    if(domain === "select" || domain === "input_select") {
+      this.hass.callService(domain, "select_option", {
+        entity_id: modeEntity,
+        option: value
+      });
+    }
   }
 
   _handleSelectDblClick(e){
@@ -320,10 +398,18 @@ class EmelyaBreezerCard extends LitElement {
 
   render(){
     const modeState = this.hass?.states?.[this.config?.mode_entity];
-
+    const bg = `${this.base}/images/container-images/breezer.png`;
     return html`
     <ha-card>
-      <div class="card">
+      <div
+        class="card"
+        style='
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.20) 74.79%, #1C1B1F 100%), url("${bg}") 105.316px 49.164px / 70.472% 98.523% no-repeat, #1C1B1F;
+          background-blend-mode: normal, luminosity, normal;
+          border: none;
+          border-radius: 24px !important;
+        '
+      >
 
         <div class="header">
           <div class="title">Бризер</div>
@@ -333,7 +419,13 @@ class EmelyaBreezerCard extends LitElement {
         </div>
 
         <div class="controls">
-
+          <div 
+            class="power ${this.power ? "active" : ""}"
+            @pointerdown=${this._stopPropagation}
+            @click=${this._togglePower}
+          >
+            <img src="${this.base}/images/container-images/power_button.png">
+          </div>
           ${modeState ? html`
             <ha-select
               .label=${modeState.attributes?.friendly_name || "Режим"}
@@ -347,13 +439,6 @@ class EmelyaBreezerCard extends LitElement {
               `)}
             </ha-select>
           ` : ""}
-
-          <div class="power ${this.power ? "active":""}" 
-              @pointerdown=${this._stopPropagation}
-              @click=${this._toggle}>
-            <img src="${this.base}/images/container-images/power_button.png">
-          </div>
-
         </div>
 
       </div>
@@ -372,10 +457,7 @@ class EmelyaBreezerCardEditor extends LitElement {
   };
 
   static styles = css`
-    :host {
-      display: block;
-      box-sizing: border-box;
-    }
+    :host { display: block; box-sizing: border-box; }
 
     .tabs {
       display: flex;
@@ -413,10 +495,7 @@ class EmelyaBreezerCardEditor extends LitElement {
     return html`
       <div class="tabs">
         ${["Объект", "Взаимодействия"].map((t, i) => html`
-          <div
-            class="tab ${this._tab === i ? "active" : ""}"
-            @click=${() => this._tab = i}
-          >
+          <div class="tab ${this._tab === i ? "active" : ""}" @click=${() => this._tab = i}>
             ${t}
           </div>
         `)}
@@ -432,12 +511,12 @@ class EmelyaBreezerCardEditor extends LitElement {
       { 
         name: "entity", 
         required: true, 
-        selector: { entity: { domain: "switch" } } 
+        selector: { entity: { domain: ["fan", "switch"] } } 
       },
       { 
         name: "mode_entity", 
         required: true, 
-        selector: { entity: { domain: "select" } } 
+        selector: { entity: { domain: ["select", "input_select"] } } 
       },
       { 
         name: "base_path", 
@@ -496,7 +575,7 @@ EmelyaBreezerCard.getStubConfig = function () {
   return {
     entity: "",
     mode_entity: "",
-    base_path: this.config.base_path,
+    base_path: "/local",
   };
 };
 
@@ -508,5 +587,5 @@ window.customCards.push({
   type: "custom:emelya-breezer-card",
   name: "Emelya Breezer Card",
   description: "Управление бризером",
-  preview: false
+  preview: true
 });

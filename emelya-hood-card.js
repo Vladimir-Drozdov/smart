@@ -74,8 +74,22 @@ class EmelyaHoodCard extends LitElement {
   }
 
   static styles = css`
-    :host { display:block; max-width:320px; width:100%; font-family:Roboto; color:white; }
-    .frame { display:flex; flex-direction:column; justify-content:space-between; padding:16px; height:264px; border-radius:24px; }
+    :host { display:block; max-width:450px; min-width:320px; font-family:Roboto; color:white; }
+    .frame { display:flex; flex-direction:column; justify-content:space-between; padding:16px; height:264px; border-radius:24px; position: relative;}
+    .frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%) border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+      pointer-events: none;                /* чтобы не мешал кликам */
+    }
     .title { font-weight:600; font-size:16px; }
     .controls {
       position:relative;
@@ -88,6 +102,7 @@ class EmelyaHoodCard extends LitElement {
       flex-shrink: 0;
       align-self: stretch;
       border-radius: 16px;
+      background: rgba(255, 255, 255, 0.10);
     }
     .controls::before {
       content: "" !important;
@@ -104,25 +119,41 @@ class EmelyaHoodCard extends LitElement {
       mask-composite: exclude !important;
     }
     .btn { flex:1; display:flex; justify-content:center; align-items:center; height:48px; border-radius:12px; cursor:pointer; }
-    .btn:hover { background:#343239; }
-    .btn.active { background:#343239; }
     .btn.power{
-      background-image:
-        linear-gradient(#343239,#343239),
-        linear-gradient(135deg, rgba(101, 101, 101, 0.0) 0%, #656565 50%, rgba(101, 101, 101, 0.0) 100%);
-      border: 1px solid transparent;
-      border-width: 1px;
-      border-style: solid;
-      background-origin: border-box, border-box;
-      background-clip: padding-box, border-box;
+      background: rgba(255, 255, 255, 0.10);
+      border: none;
+      border-width: 1px; flex-grow: 1; flex-shrink: 0;
+      display: flex;
+      padding: 16px;
+      justify-content: center;
+      align-items: center;
+      box-sizing:border-box;
+      width:64px;
+      max-width:64px;
+      height:48px;
+      position: relative;
     }
-    .btn.power.active { background:#E65332; }
+    .btn.power::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+    }
+    .btn.power.active { background: #4D4A54; }
     .circle { border:2px solid white; border-radius:50%; opacity:0.25; }
     .circle.small{ width:10px; height:10px; }
     .circle.medium{ width:14px; height:14px; }
     .circle.big{ width:18px; height:18px; }
     .btn .circle { opacity:1; border-color: white; }
-    .btn.active .circle { opacity:1; border-color:#E65332; }
+    .btn.active .circle { opacity:1; border-color:#4D4A54; }
   `;
 
   _togglePower(e){
@@ -242,17 +273,10 @@ class EmelyaHoodCard extends LitElement {
         class="frame"
         tabindex="0"
         style='
-          background-image:
-            url("${bg}"),
-            linear-gradient( #1C1B1F, #1C1B1F),
-            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
-          background-size: cover, auto, auto;
-          background-position: center;
-          background-repeat: no-repeat;
-          border: 1px solid transparent;
-          background-origin: border-box;
-          background-clip: padding-box, padding-box, border-box;
-          cursor: pointer; user-select: none;
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%), url("${bg}") 52.763px -213.194px / 135.625% 164.394% no-repeat, #1C1B1F;
+          background-blend-mode: normal, luminosity, normal;
+          border: none;
+          border-radius: 24px !important;
         '
       >
         <div class="title">Вытяжка</div>
@@ -357,7 +381,7 @@ class EmelyaHoodCardEditor extends LitElement {
       { 
         name: "entity", 
         required: true, 
-        selector: { entity: { domain: "fan" } } 
+        selector: { entity: { domain: "fan" } } //только fan 
       },
       { 
         name: "base_path", 
@@ -427,5 +451,5 @@ window.customCards.push({
   type: "custom:emelya-hood-card",
   name: "Emelya Hood Card",
   description: "Управление кухонной вытяжкой",
-  preview: false
+  preview: true
 });

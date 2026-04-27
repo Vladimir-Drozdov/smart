@@ -8,20 +8,87 @@ const DEFAULT_TILE_CARD_MOD = {
   style: {
     ".": `
       ha-card {
-        --tile-color: #E65332 !important;
-        background: transparent !important;
+        --tile-color: #4D4A54 !important;
+        background: rgba(28, 27, 31, 1) !important;
         border: none !important;
         box-shadow: none !important;
+        padding: 8px !important;
+        border-radius: 24px !important;
       }
       ha-card:hover { background: transparent !important; }
+      ha-card::before {
+        content: "" !important;
+        position: absolute !important;
+        inset: 0 !important;
+        padding: 1px !important;
+        border-radius: inherit !important;
+        background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+        pointer-events: none !important;
+        -webkit-mask:
+          linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor !important;
+        mask-composite: exclude !important;
+      }
 
       ha-card ha-tile-container ha-tile-info {
-        width: 286px !important;
-        max-width: 286px !important;
+        max-width: 100% !important;
         box-sizing: content-box !important;
       }
-      ha-card ha-tile-container ha-tile-icon {
-        display: none !important;
+      ha-card ha-tile-container ha-tile-icon{
+        width: 64px !important;
+        height: 64px !important;
+        border-radius: 20px !important;
+        margin: 0px !important;
+        box-sizing:border-box !important;
+        padding: 0px !important;
+        display:flex !important;
+        justify-content:center !important;
+        align-items:center !important;
+        --tile-icon-color: none !important;
+        position: relative !important;
+        cursor: pointer !important;
+        pointer-events: auto !important;
+      }
+      ha-card ha-tile-container ha-tile-icon ha-state-icon{
+        display:none;
+        opacity:0;
+        visibility: hidden;
+      }
+      ha-card ha-tile-container ha-tile-icon[data-state="on"]{
+        background: #343239;
+      }
+      ha-card ha-tile-container ha-tile-icon::after{
+        content: "" !important;
+        position: absolute !important;
+        top:50% !important;
+        left:50% !important;
+        background: 
+          url("/local/images/container-images/light_button.png") center / 14px 20px no-repeat !important;
+        transform: translate(-50%, -50%) !important;
+        width: 14px !important;
+        height:20px !important;
+        pointer-events: none !important;
+      }
+      ha-card ha-tile-container ha-tile-icon::before {
+        content: "" !important;
+        position: absolute !important;
+        inset: 0 !important;
+        padding: 1px !important;
+        border-radius: inherit !important;
+
+        /* ← Вот сюда добавляем картинку */
+        background: 
+          linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%),
+          url("/local/images/container-images/light_button.png") center / 32px 32px no-repeat !important;
+
+        pointer-events: none !important;
+
+        -webkit-mask:
+          linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0) !important;
+        -webkit-mask-composite: xor !important;
+        mask-composite: exclude !important;
       }
       ha-card ha-tile-container ha-tile-info span:nth-child(2) {
         text-align: left !important;
@@ -31,7 +98,7 @@ const DEFAULT_TILE_CARD_MOD = {
         line-height: 20px;
       }
       ha-card ha-tile-container ha-tile-info span:nth-child(3) {
-        text-align: right !important;
+        text-align: left !important;
         color: rgba(255, 255, 255, 0.50);
         font-family: Roboto;
         font-size: 15px;
@@ -42,7 +109,26 @@ const DEFAULT_TILE_CARD_MOD = {
         padding: 0 !important;
       }
     `,
-
+    "ha-tile-container ha-tile-icon":{
+      "$":`
+        .container.background{
+          opacity:0 !important;
+          width:64px !important;
+          height: 64px !important;
+          border-radius: 20px !important;
+          --tile-icon-size:64px !important;
+          --tile-icon-border-radius: 20px !important;
+        }
+        .container{
+          opacity:0 !important;
+          width:64px !important;
+          height: 64px !important;
+          border-radius: 20px !important;
+          --tile-icon-size:64px !important;
+          --tile-icon-border-radius: 20px !important;
+        }
+      `
+    },
     "ha-tile-container": {
       "$": `
         .content { 
@@ -52,9 +138,8 @@ const DEFAULT_TILE_CARD_MOD = {
       "ha-tile-info": {
         "$": `
           .info {
-            flex-direction: row !important;
-            align-items: center !important;
-            justify-content: space-between !important;
+            flex-direction: column !important;
+            align-items: left !important;
           }
         `
       },
@@ -64,6 +149,11 @@ const DEFAULT_TILE_CARD_MOD = {
         "hui-card-feature $": {
           "hui-light-brightness-card-feature $":{
             "ha-control-slider $":`
+              .slider{
+                height: 64px !important;
+                border-radius: 20px !important;
+                background: linear-gradient(90deg, #343239 50%, #1C1B1F 100%);
+              }
               .slider .slider-track-bar::after{
                 right: 16px !important;
                 --handle-margin: 16px !important;
@@ -72,23 +162,37 @@ const DEFAULT_TILE_CARD_MOD = {
                 right: 16px !important;
                 --handle-margin: 16px !important;
               }
+              .container {
+                height: 64px !important;
+                border-radius: 20px !important;
+              }
+              .slider .slider-track-bar{
+                height: 64px !important;
+                border-radius: 20px !important;
+              }
             `,
             "." : `
               ha-control-slider {
                 --control-slider-thickness: 64px !important;
                 height: 64px !important;
                 min-height: 64px !important;
+                border-radius: 20px !important;
+                --feature-border-radius: 20px !important;
+                --control-slider-border-radius: 20px !important;
               }
-              ha-control-slider .container {
-                height: 64px !important;
-              }
-              ha-control-slider .slider {
-                height: 64px !important;
-                border-radius: 32px !important;
-              }
-              ha-control-slider .slider .slider-track-bar {
-                height: 64px !important;
-                border-radius: 32px !important;
+              ha-control-slider::before {
+                content: "" !important;
+                position: absolute !important;
+                inset: 0 !important;
+                padding: 1px !important;
+                border-radius: inherit !important;
+                background: linear-gradient(292deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+                pointer-events: none !important;
+                -webkit-mask:
+                  linear-gradient(#fff 0 0) content-box,
+                  linear-gradient(#fff 0 0);
+                -webkit-mask-composite: xor !important;
+                mask-composite: exclude !important;
               }`,
           },
 
@@ -102,7 +206,7 @@ const DEFAULT_TILE_CARD_MOD = {
             ha-control-slider .slider,
             ha-control-slider .slider .slider-track-bar {
               height: 64px !important;
-              border-radius: 32px !important;
+              border-radius: 20px !important;
             }
 
             ha-control-slider .slider .slider-track-bar::after,
@@ -123,21 +227,85 @@ const DEFAULT_TILE_CARD_MOD_TOGGLE = {
   style: {
     ".": `
       ha-card {
-        --tile-color: #E65332 !important;
-        background: transparent !important;
+        --tile-color: #4D4A54 !important;
+        background: rgba(28, 27, 31, 1) !important;
         border: none !important;
         box-shadow: none !important;
+        padding: 8px !important;
+        border-radius: 24px !important;
       }
       ha-card:hover { background: transparent !important; }
-
-      ha-card ha-tile-container ha-tile-icon {
-        display: none !important;
+      ha-card::before {
+        content: "" !important;
+        position: absolute !important;
+        inset: 0 !important;
+        padding: 1px !important;
+        border-radius: inherit !important;
+        background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+        pointer-events: none !important;
+        -webkit-mask:
+          linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor !important;
+        mask-composite: exclude !important;
       }
+
       ha-card ha-tile-container ha-tile-info {
-        width: 286px !important;
-        max-width: 286px !important;
+        max-width: 100% !important;
         box-sizing: content-box !important;
       }
+
+      /* === Иконка лампочки (точно как во втором типе) === */
+      ha-card ha-tile-container ha-tile-icon{
+        width: 64px !important;
+        height: 64px !important;
+        border-radius: 20px !important;
+        margin: 0px !important;
+        padding: 0px !important;
+        display:flex !important;
+        justify-content:center !important;
+        align-items:center !important;
+        position: relative !important;
+        cursor: pointer !important;
+        pointer-events: auto !important;
+      }
+      ha-card ha-tile-container ha-tile-icon ha-state-icon{
+        display:none !important;
+        opacity:0 !important;
+        visibility: hidden !important;
+      }
+      ha-card ha-tile-container ha-tile-icon[data-state="on"]{
+        background: #343239 !important;
+      }
+      ha-card ha-tile-container ha-tile-icon::after{
+        content: "" !important;
+        position: absolute !important;
+        top:50% !important;
+        left:50% !important;
+        background: url("/local/images/container-images/light_button.png") center / 14px 20px no-repeat !important;
+        transform: translate(-50%, -50%) !important;
+        width: 14px !important;
+        height:20px !important;
+        pointer-events: none !important;
+      }
+      ha-card ha-tile-container ha-tile-icon::before {
+        content: "" !important;
+        position: absolute !important;
+        inset: 0 !important;
+        padding: 1px !important;
+        border-radius: inherit !important;
+        background: 
+          linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%),
+          url("/local/images/container-images/light_button.png") center / 32px 32px no-repeat !important;
+        pointer-events: none !important;
+        -webkit-mask:
+          linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0) !important;
+        -webkit-mask-composite: xor !important;
+        mask-composite: exclude !important;
+      }
+
+      /* Текст */
       ha-card ha-tile-container ha-tile-info span:nth-child(2) {
         text-align: left !important;
         font-family: Roboto;
@@ -146,46 +314,52 @@ const DEFAULT_TILE_CARD_MOD_TOGGLE = {
         line-height: 20px;
       }
       ha-card ha-tile-container ha-tile-info span:nth-child(3) {
-        display: none !important; /* убираем процент */
-      }
-
-      /* === Главное: чистый нативный toggle === */
-      ha-tile-container hui-card-feature hui-toggle-card-feature {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: flex-end !important;
-        width: 100% !important;
-      }
-      ha-tile-container hui-card-feature hui-toggle-card-feature ha-icon {
-        display: none !important; /* убираем лампочку */
-      }
-      ha-tile-container hui-card-feature hui-toggle-card-feature ha-switch {
-        --mdc-switch-track-height: 28px !important;
-        --mdc-switch-handle-size: 24px !important;
-        --mdc-switch-track-width: 52px !important;
-        margin-left: auto !important;
+        text-align: left !important;
+        color: rgba(255, 255, 255, 0.50) !important;
+        font-family: Roboto;
+        font-size: 15px;
+        font-weight: 400;
+        line-height: 20px;
       }
 
       ha-card ha-tile-container hui-card-features {
-        padding: 0 !important;
+        display: none !important; /* убираем любой feature справа */
+        opacity:0 !important;
+        visibility:hidden !important;
       }
     `,
+
+    /* Скрываем стандартный фон иконки HA */
+    "ha-tile-container ha-tile-icon":{
+      "$":`
+        .container.background,
+        .container {
+          opacity:0 !important;
+          width:64px !important;
+          height: 64px !important;
+          border-radius: 20px !important;
+        }
+      `
+    },
+
     "ha-tile-container": {
       "$": `
-        .content { padding: 0 0 10px 0 !important; }
+        .content { 
+          padding: 0 !important; 
+        }
       `,
       "ha-tile-info": {
         "$": `
           .info {
-            flex-direction: row !important;
-            align-items: center !important;
-            justify-content: space-between !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
           }
         `
       }
     }
   }
 };
+
 
 function clone(value) {
   return structuredClone(value);
@@ -206,14 +380,12 @@ function detectTileMode(tile) {
   const features = Array.isArray(tile?.features) ? tile.features : [];
   const types = features.map((f) => f?.type).filter(Boolean);
 
-  if (types.includes("light-brightness") && types.includes("light-color-temp")) return "full";
   if (types.includes("light-brightness")) return "brightness";
   return "toggle";
 }
 
 function buildFeaturesByMode(mode) {
   if (mode === "brightness") return [{ type: "light-brightness" }];
-  if (mode === "full") return [{ type: "light-brightness" }, { type: "light-color-temp" }];
   if (mode === "toggle") return [{ type: "toggle" }];
   return undefined;
 }
@@ -256,14 +428,13 @@ class EmelyaLightPanelHui extends LitElement {
   static styles = css`
     :host {
       display: block;
-      max-width: 320px;
+      max-width:450px; min-width:320px;
       width: 100%;
       border-radius:24px;
       border:none !important;
     }
     ha-card{
       border-radius:24px !important;
-      border:none !important;
       width: 100%;
       background: #1C1B1F;
       padding: 16px;
@@ -280,7 +451,7 @@ class EmelyaLightPanelHui extends LitElement {
       inset: 0 !important;
       padding: 1px !important;
       border-radius: inherit !important;
-      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
       pointer-events: none !important;
       -webkit-mask:
         linear-gradient(#fff 0 0) content-box,
@@ -298,7 +469,7 @@ class EmelyaLightPanelHui extends LitElement {
     .power-button {
       width: 64px;
       height: 64px;
-      background: #343239;
+      background: #1C1B1F;
       border-radius: 16px;
       display: flex;
       align-items: center;
@@ -326,7 +497,11 @@ class EmelyaLightPanelHui extends LitElement {
     }
 
     .power-button.on {
-      background: #E65332;
+      background: #343239;
+    }
+    .power-button img{
+      width:14px;
+      height:20px;
     }
 
     .text-wrap {
@@ -548,7 +723,7 @@ class EmelyaLightPanelHui extends LitElement {
             class="power-button ${this.power ? "on" : ""}"
             @click=${this.togglePower}
           >
-            <img src="/local/images/container-images/power_button.png" />
+            <img src="/local/images/container-images/light_button.png" />
           </div>
 
           <div class="text-wrap">
@@ -700,6 +875,7 @@ class EmelyaLightPanelEditor extends LitElement {
   }
 
   setConfig(config) {
+    console.log(config);
     this._config = {
       title: "Освещение",
       subtitle: "Мастер-выключатель",
@@ -709,6 +885,7 @@ class EmelyaLightPanelEditor extends LitElement {
       double_tap_action: { action: "none" },
       ...clone(config || {})
     };
+    console.log(config);
 
     this._config.tiles = (this._config.tiles || []).map((tile) => normalizeTileConfig(tile));
 
@@ -829,9 +1006,6 @@ class EmelyaLightPanelEditor extends LitElement {
         <ha-button @click=${() => this._addTile("brightness")}>
           Добавить: яркость + вкл/выкл
         </ha-button>
-        <ha-button @click=${() => this._addTile("full")}>
-          Добавить: яркость + цвет + вкл/выкл
-        </ha-button>
       </div>
     `;
   }
@@ -857,8 +1031,7 @@ class EmelyaLightPanelEditor extends LitElement {
             mode: "dropdown",
             options: [
               { value: "toggle", label: "Только вкл/выкл" },
-              { value: "brightness", label: "Яркость + вкл/выкл" },
-              { value: "full", label: "Яркость + цвет + вкл/выкл" }
+              { value: "brightness", label: "Яркость + вкл/выкл" }
             ]
           }
         }
@@ -924,7 +1097,6 @@ class EmelyaLightPanelEditor extends LitElement {
   }
 
   _tileTypeLabel(type) {
-    if (type === "full") return "Яркость + цвет + вкл/выкл";
     if (type === "brightness") return "Яркость + вкл/выкл";
     return "Только вкл/выкл";
   }

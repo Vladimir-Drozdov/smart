@@ -14,6 +14,82 @@ class EmelyaHumidifierCard extends LitElement {
     mode: { state: true },
     modes: { state: true }
   };
+  DEFAULT_HUMIDIFIER_CARD_MOD = {
+    ".": `
+      :host {
+        border-radius: 24px !important;
+      }
+      
+      ha-card {
+        font-size: 16px !important;
+      } 
+      
+      ha-card ha-select { 
+        --mdc-select-fill-color: rgba(255, 255, 255, 0.10);
+        --mdc-theme-surface: #1C1B1F;
+        background-color: rgba(255, 255, 255, 0.10) !important;
+        border-radius: 16px !important;
+        --restore-card-border-radius: 16px !important;
+        --ha-card-border-radius: 16px !important;
+        box-sizing: border-box !important;
+      }
+    `,
+    "ha-select": {
+      "$": `
+        .mdc-select {
+          border-radius: 16px !important;
+          background-color: transparent !important;
+        }  
+
+        .mdc-select__anchor {
+          border-radius: 16px !important;
+          background-color: transparent !important;
+          align-items: center !important;
+        }
+
+        .mdc-select__anchor .mdc-select__selected-text-container .mdc-select__selected-text {
+          line-height: 100%;
+          display: flex;
+          align-items: center;
+        }
+
+        .mdc-select__anchor .mdc-line-ripple {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+        }  
+
+        .mdc-select__anchor .mdc-floating-label {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+        }  
+
+        .mdc-select__anchor .mdc-select__dropdown-icon {
+          width: 8px !important;
+          height: 8px !important;
+          border-right: 1px solid white !important; 
+          border-bottom: 1px solid white !important;
+          transform: translateY(-50%) rotate(45deg) !important;
+        }   
+
+        .mdc-select__anchor[aria-expanded="true"] .mdc-select__dropdown-icon {
+          transform: translateY(0%) rotate(225deg) !important;
+        }  
+
+        .mdc-select__dropdown-icon-graphic polyline {
+          stroke: white !important;
+          stroke-width: 1px !important;
+        }  
+
+        .mdc-select__anchor .mdc-select__dropdown-icon svg {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+        }
+      `
+    }
+  };
 
   constructor(){
     super();
@@ -76,6 +152,9 @@ class EmelyaHumidifierCard extends LitElement {
       tap_action: { action: "more-info" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
+      card_mod: {
+        style: structuredClone(this.DEFAULT_HUMIDIFIER_CARD_MOD)
+      },
       ...config,
     };
     this.base = this.config.base_path || "/local";
@@ -84,7 +163,7 @@ class EmelyaHumidifierCard extends LitElement {
   static styles = css`
     :host { 
       display: block;
-      max-width: 320px;
+      max-width:450px; min-width:320px;
       width: 100%;
       font-family: Roboto;
       color: white;
@@ -108,6 +187,20 @@ class EmelyaHumidifierCard extends LitElement {
       color:white;
       cursor: pointer;
       user-select: none;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%) border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+      pointer-events: none;                /* чтобы не мешал кликам */
     }
 
     .header{
@@ -133,14 +226,17 @@ class EmelyaHumidifierCard extends LitElement {
     }
 
     .power{
-      width:80px;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      border-radius:16px;
-      background:rgba(255,255,255,0.1);
-      cursor:pointer;
-      transition:0.2s;
+      display: flex;
+      width: 56px;
+      height: 56px;
+      padding: 20px;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      aspect-ratio: 1/1;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.10);
+      box-sizing: border-box;
       position: relative;
     }
     .power::before {
@@ -159,16 +255,17 @@ class EmelyaHumidifierCard extends LitElement {
     }
 
     .power.active{
-      background: #E65332;
+      background: #4D4A54;
     }
 
     .power img{
       width:28px;
       height:28px;
     }
-    ha-select{ 
+    ha-select{
+      width:100%;
       position: relative !important;
-      background:rgba(255,255,255,0.1) !important;
+      background: rgba(255, 255, 255, 0.10) !important;
     }
     ha-select::before {
       content: "" !important;
@@ -279,10 +376,32 @@ class EmelyaHumidifierCard extends LitElement {
     const modeEntity = this.config?.mode_entity;
     if(!this.hass?.states?.[modeEntity]) return;
 
-    this.hass.callService("select", "select_option", {
-      entity_id: modeEntity,
-      option: value
-    });
+    const stateObj = this.hass.states[modeEntity];
+    const domain = modeEntity.split(".")[0];
+    
+    // Маппинг доменов на сервисы и параметры
+    const serviceMap = {
+      "select": { service: "select_option", param: "option" },
+      "input_select": { service: "select_option", param: "option" },
+      "fan": { service: "set_preset_mode", param: "preset_mode" },
+      "humidifier": { service: "set_mode", param: "mode" }
+    };
+    
+    const mapping = serviceMap[domain];
+    
+    if(mapping) {
+      this.hass.callService(domain, mapping.service, {
+        entity_id: modeEntity,
+        [mapping.param]: value
+      });
+    } else if(domain === "number") {
+      this.hass.callService("number", "set_value", {
+        entity_id: modeEntity,
+        value: parseFloat(value)
+      });
+    } else {
+      console.warn(`Unsupported domain for mode_entity: ${domain}`);
+    }
   }
 
   _handleSelectDblClick(e){
@@ -304,18 +423,12 @@ class EmelyaHumidifierCard extends LitElement {
     <ha-card>
       <div
         class="card"
-        style="
-          background-image:
-            url('${bg}'),
-            linear-gradient( #1C1B1F, #1C1B1F),
-            linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
-          background-size: cover, auto, auto;
-          background-position: center;
-          background-repeat: no-repeat;
-          border: 1px solid transparent;
-          background-origin: border-box;
-          background-clip: padding-box, padding-box, border-box;
-        "
+        style='
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%), url("${bg}") -22.849px 67.463px / 141.697% 141.697% no-repeat, var(--Background-Surface-2, #1C1B1F);
+          background-blend-mode: normal, luminosity, normal;
+          border: none;
+          border-radius: 24px !important;
+        '
       >
 
         <div class="header">
@@ -328,6 +441,13 @@ class EmelyaHumidifierCard extends LitElement {
         </div>
 
         <div class="controls">
+          <div 
+              class="power ${this.power ? "active" : ""}" 
+              @pointerdown=${this._stopPropagation}
+              @click=${this._togglePower}
+          >
+            <img src="${this.base}/images/container-images/power_button.png">
+          </div>
           ${modeState ? html`
             <ha-select
               .label=${modeState.attributes?.friendly_name || "Режим"}
@@ -341,14 +461,6 @@ class EmelyaHumidifierCard extends LitElement {
               `)}
             </ha-select>
           ` : ""}
-
-          <div 
-            class="power ${this.power ? "active" : ""}" 
-            @pointerdown=${this._stopPropagation}
-            @click=${this._togglePower}
-          >
-            <img src="${this.base}/images/container-images/power_button.png">
-          </div>
         </div>
       </div>
     </ha-card>
@@ -410,8 +522,8 @@ class EmelyaHumidifierCardEditor extends LitElement {
 
   _objectTab() {
     return this._form([
-      { name: "entity", required: true, selector: { entity: { domain: "switch" } } },
-      { name: "mode_entity", required: true, selector: { entity: { domain: "select" } } },
+      { name: "entity", required: true, selector: { entity: { domain: ["switch", "fan", "humidifier"] } } },
+      { name: "mode_entity", required: true, selector: { entity: { domain: ["select", "input_select", "fan", "humidifier"] } } },
       { name: "base_path", selector: { text: {} } }
     ]);
   }
@@ -478,5 +590,5 @@ window.customCards.push({
   type: "custom:emelya-humidifier-card",
   name: "Emelya Humidifier Card",
   description: "Управление увлажнителем",
-  preview: false
+  preview: true
 });
