@@ -134,9 +134,6 @@ class EmelyaHeaderCard extends LitElement {
       display: flex;
       flex-direction: column;
       border-radius: 24px;
-      /* background-image set inline so the URL resolves correctly */
-      background-size: cover;
-      background-position: center 75%;
       position: relative;
       overflow: hidden;
     }
@@ -148,10 +145,14 @@ class EmelyaHeaderCard extends LitElement {
       position: absolute;
       inset: 0;
       border-radius: 24px;
-      background:
-        linear-gradient(90deg, #1C1B1F 0%, rgba(28,27,31,0) 50%, #1C1B1F 100%),
-        linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-      pointer-events: none;
+      padding: 1px;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%) border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+      pointer-events: none;                /* чтобы не мешал кликам */
     }
 
     .row {
@@ -371,7 +372,6 @@ class EmelyaHeaderCard extends LitElement {
   render() {
     // Fix: set background-image directly on .wrapper via style attribute
     const bgUrl = this.config?.background_image || `${this.base}/images/header-bg.png`;
-    const wrapperStyle = `background-image: url('${bgUrl}');`;
 
     const showOnline = this._onlinePersons.length > 0;
     const avatarsToRender = showOnline
@@ -382,7 +382,11 @@ class EmelyaHeaderCard extends LitElement {
       <div class="outer">
         <div
           class="wrapper"
-          style="${wrapperStyle}"
+          style='
+            background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 75%, #1C1B1F 100%), url("${bgUrl}") 0px -329.447px / 100% 457.197% no-repeat;
+            border: none;
+            border-radius: 24px !important;
+          '
           @pointerdown=${this._onPointerDown}
           @pointerup=${this._onPointerUp}
           @pointercancel=${this._onPointerCancel}

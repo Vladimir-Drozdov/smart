@@ -109,15 +109,18 @@ class EmelyaMediaColumns extends LitElement {
       width: 100%; 
       font-family: Roboto, sans-serif; 
       color: white; 
+      min-height:1px;
     }
 
     .wrapper {
       display: flex;
       gap: 8px;
       max-width: 100%;
+      min-height:1px;
     }
 
     .column {
+      min-height:1px;
       width: 50%; 
       height: 280px; 
       border-radius: 24px; 
@@ -256,7 +259,7 @@ class EmelyaMediaColumns extends LitElement {
     }
 
     .volume-value {
-      font-size: 58px;
+      font-size: 53px;
       font-weight: 600;
       text-align: right;
       line-height: 1;
@@ -444,8 +447,7 @@ class EmelyaMediaColumns extends LitElement {
   render() {
     return html`
       <div class="wrapper">
-
-        <!-- ══ АЛИСА ══ -->
+        <!-- АЛИСА -->
         <div class="column"
             style='
               background-image:

@@ -8,17 +8,19 @@ import {
 
 class DualThermostatCard extends LitElement {
 
-static properties = {
+  static properties = {
     hass: {},
     config: {},
     active: { type: Number },
-    powerOn: { type: Boolean }
+    powerOn: { type: Boolean },
+    _cardReady: { state: true }
   };
 
   constructor() {
     super();
     this.active = 0;
     this.powerOn = false;
+    this._cardReady = false;
     this._holdTimer = null;
     this._lastTap = 0;
     this.card1 = null;
@@ -33,7 +35,6 @@ static properties = {
   deepMerge(target, source) {
     const output = this.clone(target);
     if (!source) return output;
-
     Object.keys(source).forEach(key => {
       if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
         output[key] = this.deepMerge(output[key] || {}, source[key]);
@@ -50,80 +51,123 @@ static properties = {
       tap_action: { action: "more-info" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
-      objects: [],
       ...this.clone(config || {}),
-      ...config,
     };
 
-    // Обрабатываем вложенные dual-thermostat-card в objects
-    this.config.objects = (this.config.objects || []).map((obj) => {
-      if (obj?.type === "custom:dual-thermostat-card") {
-        return this.normalizeThermostatObject(obj);
-      }
-      return obj;
-    });
-
-    // АВТОМАТИЧЕСКОЕ НАЛОЖЕНИЕ card_mod
     const autoMods = this.buildDualThermostatCardMods(this.config);
     this.config.card_mod  = this.deepMerge(autoMods.card_mod,  this.config.card_mod  || {});
     this.config.card_mod1 = this.deepMerge(autoMods.card_mod1, this.config.card_mod1 || {});
     this.config.card_mod2 = this.deepMerge(autoMods.card_mod2, this.config.card_mod2 || {});
 
     this.base = this.config.base_path || "/local";
+
+    // Пересоздаём карточки при смене конфига
+    this._buildCards();
   }
 
   set hass(hass) {
     this._hass = hass;
+    // Передаём hass в карточки, даже если они ещё строятся
     if (this.card1) this.card1.hass = hass;
     if (this.card2) this.card2.hass = hass;
     this.updatePowerState();
     this.requestUpdate();
   }
+
   get hass() { return this._hass; }
 
-  isObject(value) {
-    return value && typeof value === 'object' && !Array.isArray(value);
+  // ==================== BUILD CARDS ====================
+  // Строим карточки сразу при setConfig, не ждём firstUpdated
+  _buildCards() {
+    const mergeCardMod = (common, specific) => {
+      if (!specific) return common;
+      if (!common) return specific;
+      const merged = this.clone(common);
+      if (merged.style && specific.style) {
+        merged.style = this.deepMerge(merged.style, specific.style);
+      } else if (specific.style) {
+        merged.style = specific.style;
+      }
+      Object.keys(specific).forEach(key => {
+        if (key !== 'style') merged[key] = specific[key];
+      });
+      return merged;
+    };
+
+    const card1 = document.createElement("hui-thermostat-card");
+    card1.setConfig({
+      entity: this.config.entity1,
+      name: this.config.name1 || "Термостат 1",
+      card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod1)
+    });
+
+    const card2 = document.createElement("hui-thermostat-card");
+    card2.setConfig({
+      entity: this.config.entity2,
+      name: this.config.name2 || "Термостат 2",
+      card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod2)
+    });
+
+    // Если hass уже есть — сразу передаём
+    if (this._hass) {
+      card1.hass = this._hass;
+      card2.hass = this._hass;
+    }
+
+    this.card1 = card1;
+    this.card2 = card2;
+    this._cardReady = true;
+    this.updatePowerState();
+    this.requestUpdate();
   }
 
   static styles = css`
-    :host { display: block; max-width:450px; min-width:320px; width: 100%;
-      border-radius: 24px !important;
-      border: none !important;
+    :host {
+      display: block;
+      max-width: 450px;
+      min-width: 320px;
+      width: 100%;
     }
+
     .card {
       width: 100%;
-      height: 424px;
       box-sizing: border-box;
       border-radius: 24px;
-      overflow: hidden;
       display: flex;
       flex-direction: column;
       cursor: pointer;
       user-select: none;
-      position:relative;
+      position: relative;
       background-image:
-        linear-gradient(#1C1B1F,#1C1B1F),
+        linear-gradient(#1C1B1F, #1C1B1F),
         linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
       border: 1px solid transparent;
-      border-width: 1px;
-      border-style: solid;
       background-origin: border-box, border-box;
       background-clip: padding-box, border-box;
+      /* Убрали overflow:hidden и фиксированную высоту — они вызывали чёрную линию */
     }
 
-    .content { 
-      display: flex; 
-      flex-direction: column; 
-      flex: 1; 
-      position: relative;
+    .thermo-wrapper {
+      /* Обрезаем только внутри термостата, не всю карточку */
+      overflow: hidden;
+      border-radius: 24px 24px 0 0;
+      flex: 1;
+    }
+
+    .thermo-container {
+      display: block;
+      width: 100%;
     }
 
     .buttons {
       display: flex;
       justify-content: center;
       gap: 12px;
-      padding: 0 16px 16px;
+      padding: 12px 16px 16px;
       background: #1C1B1F;
+      border-radius: 0 0 24px 24px;
+      /* Граница сверху чтобы не было артефакта стыка */
+      border-top: 1px solid #1C1B1F;
     }
 
     .btn {
@@ -144,7 +188,7 @@ static properties = {
       inset: 0 !important;
       padding: 1px !important;
       border-radius: inherit !important;
-      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      background: linear-gradient(135deg, rgba(101,101,101,0) 0%, #656565 50%, rgba(101,101,101,0) 100%) !important;
       pointer-events: none !important;
       -webkit-mask:
         linear-gradient(#fff 0 0) content-box,
@@ -152,15 +196,12 @@ static properties = {
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
     }
-
     .btn.power.active {
-      background: #343239;;
+      background: #343239;
     }
-
     .btn img { width: 24px; height: 24px; }
 
     .toggle {
-      position: relative;
       display: flex;
       align-items: center;
       padding: 4px;
@@ -177,7 +218,7 @@ static properties = {
       inset: 0 !important;
       padding: 1px !important;
       border-radius: inherit !important;
-      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      background: linear-gradient(165deg, rgba(101,101,101,0) 0%, #656565 50%, rgba(101,101,101,0) 100%) !important;
       pointer-events: none !important;
       -webkit-mask:
         linear-gradient(#fff 0 0) content-box,
@@ -229,10 +270,10 @@ static properties = {
         --control-circular-slider-low-color: #FFF !important;
         --control-circular-slider-thumb-color: #343239 !important;
         --control-circular-slider-handle-color: #343239 !important;
+        --control-circular-slider-background: rgba(255, 255, 255, 0.1) !important;
         --slider-thumb-color: #343239 !important;
         --action-color: transparent !important;
       }
-
       svg {
         width: 240px !important;
         height: 240px !important;
@@ -244,34 +285,29 @@ static properties = {
         text-align: start !important;
         padding: 16px 0 0 16px !important;
       }
-
       :host {
         background: #1C1B1F !important;
-        border-radius: 24px !important;
+        border-radius: 24px 24px 0 0 !important;
         --ha-card-background: #1C1B1F !important;
         --card-background-color: #1C1B1F !important;
-        --min-temp: "{{ state_attr('${entity1}','min_temp') }}°";
-        --max-temp: "{{ state_attr('${entity1}','max_temp') }}°";
         --state-climate-heat-color: transparent !important;
         --state-climate-active-color: transparent !important;
         --state-active-color: transparent !important;
         --action-color: transparent !important;
       }
-
       ha-card {
         border-width: 0 !important;
         border-style: none !important;
         border-color: transparent !important;
         border: none !important;
+        border-radius: 0 !important;
         --ha-card-border-width: 0 !important;
         --ha-card-border-style: none !important;
         --ha-card-border-color: transparent !important;
+        /* Убираем любые тени/отступы снизу карточки термостата */
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
       }
-
-      ha-card::slotted(.container) {
-        height: 288px !important;
-      }
-
       ha-card .container {
         height: 288px !important;
         flex: 0 0 auto !important;
@@ -292,7 +328,6 @@ static properties = {
         border-radius: 24px !important;
         --_outline-color: transparent !important;
       }
-
       ha-outlined-icon-button::before {
         content: "" !important;
         position: absolute !important;
@@ -302,9 +337,9 @@ static properties = {
         z-index: 4 !important;
         background: linear-gradient(
           135deg,
-          rgba(101, 101, 101, 0) 0%,
+          rgba(101,101,101,0) 0%,
           #656565 50%,
-          rgba(101, 101, 101, 0) 100%
+          rgba(101,101,101,0) 100%
         ) !important;
         pointer-events: none !important;
         -webkit-mask:
@@ -325,7 +360,6 @@ static properties = {
         position: relative;
         border: none !important;
       }
-
       .icon-button.outlined .icon {
         transform: scale(0.6);
         transform-origin: center;
@@ -344,14 +378,10 @@ static properties = {
         text-align: center;
         font-family: Roboto;
         font-size: 16px;
-        font-style: normal;
         font-weight: 400;
         line-height: 20px;
       }
-
-      #button {
-        background: #323135 !important;
-      }
+      #button { background: #323135 !important; }
     `;
 
     const lastButtonStyle = `
@@ -365,20 +395,14 @@ static properties = {
         text-align: center;
         font-family: Roboto;
         font-size: 16px;
-        font-style: normal;
         font-weight: 400;
         line-height: 20px;
       }
-
-      #button {
-        background: #323135 !important;
-      }
+      #button { background: #323135 !important; }
     `;
 
     const hideSecondaryIconStyle = `
-      :host {
-        display: none !important;
-      }
+      :host { display: none !important; }
     `;
 
     const bigNumberStyle = `
@@ -394,17 +418,12 @@ static properties = {
         --ha-card-background: #1C1B1F !important;
         --card-background-color: #1C1B1F !important;
       }
-
       .info .label:first-child {
         display: none !important;
         opacity: 0 !important;
         visibility: hidden !important;
       }
-
-      .info .label.secondary {
-        color: #8E8D8F;
-      }
-
+      .info .label.secondary { color: #8E8D8F; }
       .buttons {
         top: 220px;
         gap: 8px !important;
@@ -423,7 +442,6 @@ static properties = {
           }
         }
       },
-
       card_mod2: {
         style: {
           "ha-state-control-climate-temperature": {
@@ -435,7 +453,6 @@ static properties = {
           }
         }
       },
-
       card_mod: {
         style: {
           ".": mainCardStyle,
@@ -467,93 +484,14 @@ static properties = {
       }
     };
   }
-  normalizeThermostatObject(obj = {}) {
-    const normalized = {
-      type: "custom:dual-thermostat-card",
-      entity1: "",
-      entity2: "",
-      name1: "Тёплый пол",
-      name2: "Тёплый пол",
-      base_path: "/local",
-      power_icon: "/local/images/power.png",
-      heat_icon: "/local/images/heat.png",
-      cool_icon: "/local/images/cool.png",
-      ...clone(obj)
-    };
-
-    const autoMods = buildDualThermostatCardMods(normalized);
-
-    normalized.card_mod = deepMerge(autoMods.card_mod, normalized.card_mod || {});
-    normalized.card_mod1 = deepMerge(autoMods.card_mod1, normalized.card_mod1 || {});
-    normalized.card_mod2 = deepMerge(autoMods.card_mod2, normalized.card_mod2 || {});
-
-    return normalized;
-  }
 
   firstUpdated() {
-    const mergeCardMod = (common, specific) => {
-      if (!specific) return common;
-      if (!common) return specific;
-
-      const merged = JSON.parse(JSON.stringify(common));
-
-      if (merged.style && specific.style) {
-        merged.style = this.deepMerge(merged.style, specific.style);
-      } else if (specific.style) {
-        merged.style = specific.style;
-      }
-
-      Object.keys(specific).forEach(key => {
-        if (key !== 'style') merged[key] = specific[key];
-      });
-
-      return merged;
-    };
-
-    this.card1 = document.createElement("hui-thermostat-card");
-    this.card1.setConfig({
-      entity: this.config.entity1,
-      name: this.config.name1 || "Термостат 1",
-      card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod1)
-    });
-
-    this.card2 = document.createElement("hui-thermostat-card");
-    this.card2.setConfig({
-      entity: this.config.entity2,
-      name: this.config.name2 || "Термостат 2",
-      card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod2)
-    });
-
-    this.updatePowerState();
-    this.requestUpdate();
-
     const frame = this.shadowRoot.querySelector(".card");
     if (frame) {
       frame.addEventListener("pointerdown", this._onPointerDown.bind(this));
       frame.addEventListener("pointerup", this._onPointerUp.bind(this));
       frame.addEventListener("click", this._onClick.bind(this));
     }
-  }
-  _updateObject(index, patch) {
-    const objects = [...(this._value?.objects || [])];
-    const current = objects[index] || {};
-    const updated = { ...current, ...patch };
-
-    objects[index] = updated.type === "custom:dual-thermostat-card"
-      ? this.normalizeThermostatObject(updated)
-      : updated;
-
-    this._value = { ...this._value, objects };
-    fireEvent(this, "config-changed", { config: this._value });
-  }
-  _addThermostatCard() {
-    const objects = [...(this._value?.objects || [])];
-    objects.push(this.normalizeThermostatObject({
-      type: "custom:dual-thermostat-card",
-      entity1: "", entity2: "", name1: "Тёплый пол", name2: "Тёплый пол"
-    }));
-    this._value = { ...this._value, objects };
-    fireEvent(this, "config-changed", { config: this._value });
   }
 
   updatePowerState() {
@@ -562,7 +500,6 @@ static properties = {
     this.powerOn = state ? state.state !== "off" : false;
   }
 
-  // Tap / Hold / Double-tap
   _onPointerDown(e) {
     if (e.target.closest('.btn') || e.target.closest('.toggle')) return;
     if (hasAction(this.config, 'hold_action')) {
@@ -608,15 +545,10 @@ static properties = {
   togglePower(e) {
     e.stopPropagation();
     if (!this._hass || !this.config?.entity1) return;
-
     const isOff = this._hass.states[this.config.entity1]?.state === "off";
-    const newPowerOn = !isOff;
-
-    // Оптимистическое обновление
-    this.powerOn = newPowerOn;
-
+    this.powerOn = !isOff;
     this._hass.callService("climate", isOff ? "turn_on" : "turn_off", {
-      entity_id: [this.config.entity1, this.config.entity2]
+      entity_id: [this.config.entity1, this.config.entity2].filter(Boolean)
     });
   }
 
@@ -625,32 +557,30 @@ static properties = {
 
     return html`
       <div class="card">
-        <div class="content">
+        <div class="thermo-wrapper">
           <div class="thermo-container">
-            ${thermo}
+            ${thermo ?? html``}
           </div>
         </div>
 
         <div class="buttons">
-          <!-- POWER BUTTON -->
           <div
             class="btn power ${this.powerOn ? 'active' : ''}"
             @click=${this.togglePower}>
-            <img src="${this.config.power_icon || 'mdi:power'}">
+            <img src="${this.config?.power_icon || `${this.base}/images/power.png`}">
           </div>
 
-          <!-- TOGGLE -->
           <div class="toggle">
             <div class="slider ${this.active === 1 ? 'cool' : ''}"></div>
 
-            <div class="toggle-btn heat-btn" 
+            <div class="toggle-btn heat-btn"
                 @click=${(e) => { e.stopPropagation(); this.setMode(0); }}>
-              <img src="${this.config.heat_icon}">
+              <img src="${this.config?.heat_icon || `${this.base}/images/heat.png`}">
             </div>
 
-            <div class="toggle-btn cool-btn" 
+            <div class="toggle-btn cool-btn"
                 @click=${(e) => { e.stopPropagation(); this.setMode(1); }}>
-              <img src="${this.config.cool_icon}">
+              <img src="${this.config?.cool_icon || `${this.base}/images/cool.png`}">
             </div>
           </div>
         </div>
@@ -658,8 +588,10 @@ static properties = {
     `;
   }
 }
-/* EDITOR */
 
+/* ══════════════════════════════════════════
+   EDITOR
+══════════════════════════════════════════ */
 class DualThermostatCardEditor extends LitElement {
   static properties = {
     hass: {},
@@ -689,21 +621,22 @@ class DualThermostatCardEditor extends LitElement {
     this._tab = 0;
   }
 
-  setConfig(config) {  //здесь устанавливаются значения для визуального редактора, которые перезаписывают getStubConfig
-    this._config = { entity1: "",
-    name1: "Тёплый пол",
-    entity2: "",
-    name2: "Кондиционер",
-    power_icon: `/local/images/power.png`,
-    heat_icon: `/local/images/heat.png`,
-    cool_icon: `/local/images/cool.png`,
-    base_path: `/local`,
-    ...config };//config перезаписывает, то что было сверху, берется из my-element.js метода _addCard
+  setConfig(config) {
+    this._config = {
+      entity1: "",
+      name1: "Тёплый пол",
+      entity2: "",
+      name2: "Кондиционер",
+      power_icon: "/local/images/power.png",
+      heat_icon: "/local/images/heat.png",
+      cool_icon: "/local/images/cool.png",
+      base_path: "/local",
+      ...config
+    };
   }
 
   render() {
     if (!this._config) return html``;
-
     return html`
       <div class="tabs">
         ${["Объект", "Взаимодействия"].map((t, i) => html`
@@ -712,19 +645,18 @@ class DualThermostatCardEditor extends LitElement {
           </div>
         `)}
       </div>
-
       ${this._tab === 0 ? this._objectTab() : ""}
       ${this._tab === 1 ? this._actionsTab() : ""}
     `;
   }
 
   _objectTab() {
-    return this._form([ //поля визуального редактора, их значения по умолчанию берутся из setConfig(config)
+    return this._form([
       { name: "entity1", required: true, selector: { entity: { domain: "climate" } } },
       { name: "name1", selector: { text: {} } },
       { name: "entity2", required: true, selector: { entity: { domain: "climate" } } },
       { name: "name2", selector: { text: {} } },
-      { name: "power_icon", selector: { icon: {} }},
+      { name: "power_icon", selector: { icon: {} } },
       { name: "heat_icon", selector: { icon: {} } },
       { name: "cool_icon", selector: { icon: {} } },
       { name: "base_path", selector: { text: {} } }
@@ -772,7 +704,9 @@ class DualThermostatCardEditor extends LitElement {
   };
 }
 
-/* Регистрация */
+/* ══════════════════════════════════════════
+   Регистрация
+══════════════════════════════════════════ */
 DualThermostatCard.getConfigElement = () => document.createElement("dual-thermostat-card-editor");
 
 DualThermostatCard.getStubConfig = () => ({
@@ -780,10 +714,10 @@ DualThermostatCard.getStubConfig = () => ({
   name1: "Тёплый пол",
   entity2: "",
   name2: "Кондиционер",
-  power_icon: `${this.config.base_path}/images/power.png`,
-  heat_icon: `${this.config.base_path}/images/heat.png`,
-  cool_icon: `${this.config.base_path}/images/cool.png`,
-  base_path: this.config.base_path,
+  power_icon: "/local/images/power.png",
+  heat_icon: "/local/images/heat.png",
+  cool_icon: "/local/images/cool.png",
+  base_path: "/local",
 });
 
 customElements.define("dual-thermostat-card-editor", DualThermostatCardEditor);

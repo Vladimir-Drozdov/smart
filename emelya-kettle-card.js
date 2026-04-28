@@ -6,12 +6,14 @@ class EmelyaKettleCard extends LitElement {
   static properties = {
     hass: { attribute: false },
     config: { attribute: false },
-    power: { type: Boolean, state: true }
+    power: { type: Boolean, state: true },
+    _currentTemp: { state: true }
   };
 
   constructor() {
     super();
     this.power = false;
+    this._currentTemp = null;
     this._holdTimer = null;
     this._lastTap = 0;
   }
@@ -35,14 +37,32 @@ class EmelyaKettleCard extends LitElement {
     if (hass) {
       const powerEntity = this.config.power_entity || this.config.entity;
       const powerState = hass.states?.[powerEntity];
+      this.power = powerState
+        ? (powerState.state === "on" || powerState.state === "heat" || powerState.state !== "off")
+        : false;
 
-      this.power = powerState ? 
-        (powerState.state === "on" || powerState.state === "heat" || powerState.state !== "off") : 
-        false;
+      const tempEntity = this.config.temp_entity;
+      if (tempEntity && hass.states?.[tempEntity]) {
+        const raw = hass.states[tempEntity].state;
+        const parsed = parseFloat(raw);
+        this._currentTemp = isNaN(parsed) ? null : parsed;
+      } else {
+        this._currentTemp = null;
+      }
     }
   }
 
   get hass() { return this._hass; }
+
+  get _isPreheatActive() {
+    if (this._currentTemp === null) return false;
+    return Math.abs(this._currentTemp - (this.config.preheat_temp || 80)) < 0.5;
+  }
+
+  get _isBoilActive() {
+    if (this._currentTemp === null) return false;
+    return Math.abs(this._currentTemp - (this.config.boil_temp || 100)) < 0.5;
+  }
 
   _stopPropagation(e) { e.stopPropagation(); }
 
@@ -54,7 +74,6 @@ class EmelyaKettleCard extends LitElement {
     const newPower = !this.power;
     const domain = entity.split(".")[0];
 
-    // Универсальная обработка
     if (domain === "climate") {
       this.hass.callService("climate", "set_hvac_mode", {
         entity_id: entity,
@@ -65,7 +84,6 @@ class EmelyaKettleCard extends LitElement {
         entity_id: entity
       });
     } else {
-      // Fallback для fan, light и др.
       this.hass.callService("homeassistant", newPower ? "turn_on" : "turn_off", {
         entity_id: entity
       });
@@ -91,20 +109,19 @@ class EmelyaKettleCard extends LitElement {
     }
   }
 
-  // Одинарный клик — установка температуры
   _handlePreheat(e) {
     e.stopPropagation();
     this._setTemperature(this.config.preheat_temp || 80);
+    this._currentTemp = this.config.preheat_temp || 80;
   }
 
   _handleBoil(e) {
     e.stopPropagation();
     this._setTemperature(this.config.boil_temp || 100);
+    this._currentTemp = this.config.boil_temp || 100;
   }
 
-  // Двойной клик по всей панели управления (кроме power)
   _handleControlsClick(e) {
-    // Проверяем, что клик был НЕ по кнопке питания
     if (e.target.closest('.power-btn')) return;
 
     const tempEntity = this.config.temp_entity;
@@ -169,11 +186,11 @@ class EmelyaKettleCard extends LitElement {
   }
 
   static styles = css`
-    :host, ha-card { 
-      display: block; 
-      width: 100%; 
-      border: none !important; 
-      border-radius: 24px !important; 
+    :host, ha-card {
+      display: block;
+      width: 100%;
+      border: none !important;
+      border-radius: 24px !important;
     }
 
     .card {
@@ -199,19 +216,20 @@ class EmelyaKettleCard extends LitElement {
       inset: 0;
       border-radius: 24px;
       padding: 1px;
-      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%) border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
       pointer-events: none;
-      z-index: -1;
     }
 
-    .header { 
-      display: flex; 
-      justify-content: space-between; 
-      align-items: center; 
-      z-index: 1; 
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 1;
     }
 
     .title { font-size: 16px; font-weight: 600; }
@@ -228,6 +246,7 @@ class EmelyaKettleCard extends LitElement {
       border-radius: 16px;
       z-index: 1;
       cursor: pointer;
+      box-sizing: border-box;
     }
 
     .mode-btn {
@@ -240,12 +259,11 @@ class EmelyaKettleCard extends LitElement {
       font-weight: 600;
       border-radius: 16px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background 0.2s, transform 0.1s;
     }
 
-    .mode-btn:active {
-      transform: scale(0.96);
-    }
+    .mode-btn:active { transform: scale(0.96); }
+    .mode-btn.active { background: #4D4A54; }
 
     .power-btn {
       width: 56px;
@@ -258,11 +276,11 @@ class EmelyaKettleCard extends LitElement {
       justify-content: center;
       cursor: pointer;
       position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s;
     }
 
-    .power-btn.active {
-      background: #4D4A54;
-    }
+    .power-btn.active { background: #4D4A54; }
 
     .power-btn img {
       width: 28px;
@@ -271,15 +289,17 @@ class EmelyaKettleCard extends LitElement {
   `;
 
   render() {
-    const bg = `${this.base}/images/container-images/kettle.png`;
+    const bg = this.config.background_image
+      ? this.config.background_image
+      : `${this.base}/images/container-images/kettle.png`;
 
     return html`
       <ha-card>
-        <div 
+        <div
           class="card"
           style="
-            background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 56.97%, #1C1B1F 88.4%), 
-                        url('${bg}') 53.318px 57.809px / 81.463% 82.494% no-repeat, 
+            background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 56.97%, #1C1B1F 88.4%),
+                        url('${bg}') 53.318px 57.809px / 81.463% 82.494% no-repeat,
                         #1C1B1F;
             background-blend-mode: normal, luminosity, normal;
           "
@@ -289,28 +309,25 @@ class EmelyaKettleCard extends LitElement {
             <div class="state">${this.power ? "Включено" : "Выключено"}</div>
           </div>
 
-          <div 
-            class="controls"
-            @click=${this._handleControlsClick}
-          >
-            <button 
-              class="mode-btn" 
+          <div class="controls" @click=${this._handleControlsClick}>
+            <button
+              class="mode-btn ${this._isPreheatActive ? "active" : ""}"
               @pointerdown=${this._stopPropagation}
               @click=${this._handlePreheat}
             >
               Подогрев
             </button>
 
-            <button 
-              class="power-btn ${this.power ? "active" : ""}" 
+            <button
+              class="power-btn ${this.power ? "active" : ""}"
               @pointerdown=${this._stopPropagation}
               @click=${this._togglePower}
             >
               <img src="${this.base}/images/container-images/power_button.png" alt="power">
             </button>
 
-            <button 
-              class="mode-btn" 
+            <button
+              class="mode-btn ${this._isBoilActive ? "active" : ""}"
               @pointerdown=${this._stopPropagation}
               @click=${this._handleBoil}
             >
@@ -322,7 +339,6 @@ class EmelyaKettleCard extends LitElement {
     `;
   }
 
-  /* ==================== РЕДАКТОР ==================== */
   static getConfigElement() {
     return document.createElement("emelya-kettle-card-editor");
   }
@@ -334,32 +350,169 @@ class EmelyaKettleCard extends LitElement {
       power_entity: "",
       temp_entity: "",
       base_path: "/local",
+      background_image: "",
       preheat_temp: 80,
       boil_temp: 100
     };
   }
 }
 
+/* ==================== РЕДАКТОР ==================== */
+
 class EmelyaKettleCardEditor extends LitElement {
-  static properties = { hass: {}, _config: {}, _tab: { state: true } };
+  static properties = {
+    hass: {},
+    _config: { state: true },
+    _tab: { state: true },
+    _imgError: { state: true }
+  };
 
-  constructor() { super(); this._tab = 0; }
+  constructor() {
+    super();
+    this._tab = 0;
+    this._imgError = false;
+  }
 
-  setConfig(config) { this._config = { ...config }; }
+  setConfig(config) {
+    this._config = { ...config };
+    this._imgError = false;
+  }
 
   static styles = css`
-    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-    .tab { 
-      padding: 8px 12px; 
-      border-radius: 10px; 
-      border: 1px solid var(--divider-color); 
-      background: var(--secondary-background-color); 
-      cursor: pointer; 
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
     }
-    .tab.active { 
-      background: var(--primary-color); 
-      color: white; 
-      border-color: var(--primary-color); 
+    .tab {
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--divider-color);
+      background: var(--secondary-background-color);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .tab.active {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+    }
+
+    .img-field {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .img-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--primary-text-color);
+    }
+
+    /* Превью */
+    .img-preview {
+      width: 100%;
+      height: 160px;
+      border-radius: 20px;
+      overflow: hidden;
+      position: relative;
+      background: #1C1B1F;
+      border: 1px solid rgba(101,101,101,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .img-preview img.preview-img {
+      width: 120px;
+      height: 120px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .img-preview-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--secondary-text-color);
+      text-align: center;
+      padding: 16px;
+      line-height: 1.5;
+      box-sizing: border-box;
+    }
+
+    .img-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .img-input {
+      flex: 1;
+      border: 1px solid var(--divider-color);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: var(--secondary-background-color);
+      color: var(--primary-text-color);
+      font: inherit;
+      font-size: 14px;
+      box-sizing: border-box;
+      transition: border-color 0.15s;
+    }
+
+    .img-input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+    }
+
+    .img-input.error {
+      border-color: var(--error-color, #db4437);
+    }
+
+    .img-clear {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--divider-color);
+      border-radius: 10px;
+      background: var(--secondary-background-color);
+      color: var(--secondary-text-color);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .img-clear:hover {
+      color: var(--error-color, #db4437);
+      border-color: var(--error-color, #db4437);
+    }
+
+    .img-error {
+      font-size: 12px;
+      color: var(--error-color, #db4437);
+      line-height: 1.4;
+    }
+
+    .img-hint {
+      font-size: 12px;
+      color: var(--secondary-text-color);
+      line-height: 1.6;
+    }
+
+    .img-hint code {
+      background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 11px;
     }
   `;
 
@@ -368,7 +521,7 @@ class EmelyaKettleCardEditor extends LitElement {
 
     return html`
       <div class="tabs">
-        ${["Объект", "Взаимодействия"].map((t, i) => html`
+        ${["Основное", "Внешний вид", "Действия"].map((t, i) => html`
           <div class="tab ${this._tab === i ? "active" : ""}" @click=${() => this._tab = i}>${t}</div>
         `)}
       </div>
@@ -378,7 +531,7 @@ class EmelyaKettleCardEditor extends LitElement {
           .hass=${this.hass}
           .data=${this._config}
           .schema=${[
-            { name: "title", selector: { text: {} } },
+            { name: "title", selector: { text: {} }, label: "Заголовок" },
             { name: "entity", selector: { entity: {} }, label: "Основная entity (опционально)" },
             { name: "power_entity", required: true, selector: { entity: { domain: ["switch", "climate", "input_boolean"] } }, label: "Power Entity (вкл/выкл)" },
             { name: "temp_entity", required: true, selector: { entity: { domain: ["climate", "number", "input_number"] } }, label: "Temperature Entity" },
@@ -388,6 +541,34 @@ class EmelyaKettleCardEditor extends LitElement {
           ]}
           @value-changed=${this._valueChanged}
         ></ha-form>
+      ` : this._tab === 1 ? html`
+        <div class="img-field">
+          <div class="img-label">Фоновое изображение</div>
+
+          ${this._renderPreview()}
+
+          <div class="img-row">
+            <input
+              class="img-input ${this._imgError ? "error" : ""}"
+              type="text"
+              placeholder="/local/images/kettle.png"
+              .value=${this._config.background_image || ""}
+              @input=${this._onImgInput}
+            />
+            ${this._config.background_image ? html`
+              <button class="img-clear" @click=${this._clearImg} title="Сбросить">✕</button>
+            ` : ""}
+          </div>
+
+          ${this._imgError ? html`
+            <div class="img-error">⚠ Изображение не найдено. Проверь путь — файл должен лежать в папке <code>config/www/</code></div>
+          ` : ""}
+
+          <div class="img-hint">
+            Файлы из папки <code>config/www/</code> доступны по пути <code>/local/</code>.<br>
+            Пример: файл <code>www/images/kettle.png</code> → путь <code>/local/images/kettle.png</code>
+          </div>
+        </div>
       ` : html`
         <ha-form
           .hass=${this.hass}
@@ -403,14 +584,65 @@ class EmelyaKettleCardEditor extends LitElement {
     `;
   }
 
+  _renderPreview() {
+    const src = this._config?.background_image;
+
+    if (!src) {
+      return html`
+        <div class="img-preview">
+          <div class="img-preview-empty">
+            Изображение не задано.<br>
+            Будет использована картинка по умолчанию.
+          </div>
+        </div>
+      `;
+    }
+
+    return html`
+      <div class="img-preview">
+        <img
+          class="preview-img"
+          src=${src}
+          alt="preview"
+          @error=${this._onImgError}
+          @load=${this._onImgLoad}
+        />
+      </div>
+    `;
+  }
+
+  _onImgInput(e) {
+    const value = e.target.value.trim();
+    this._imgError = false;
+    const config = { ...this._config, background_image: value || undefined };
+    if (!value) delete config.background_image;
+    this._config = config;
+    this._fire();
+  }
+
+  _clearImg() {
+    this._imgError = false;
+    const config = { ...this._config };
+    delete config.background_image;
+    this._config = config;
+    this._fire();
+  }
+
+  _onImgError() { this._imgError = true; }
+  _onImgLoad()  { this._imgError = false; }
+
   _valueChanged = (e) => {
     this._config = e.detail.value;
+    this._fire();
+  };
+
+  _fire() {
     this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config: this._config },
       bubbles: true,
       composed: true
     }));
-  };
+  }
 }
 
 customElements.define("emelya-kettle-card-editor", EmelyaKettleCardEditor);

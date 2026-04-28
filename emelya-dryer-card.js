@@ -407,7 +407,9 @@ class EmelyaDryerCard extends LitElement {
   }
 
   render(){
-    const bg = `${this.base}/images/container-images/dryer.png`;
+    const bg = this.config.background_image
+      ? this.config.background_image
+      : `${this.base}/images/container-images/dryer.png`;
     const modeState = this.hass?.states?.[this.config.mode_entity];
 
     return html`
@@ -463,103 +465,278 @@ class EmelyaDryerCard extends LitElement {
 class EmelyaDryerCardEditor extends LitElement {
   static properties = {
     hass: {},
-    _config: {},
-    _tab: { state: true }
+    _config: { state: true },
+    _tab: { state: true },
+    _uploadState: { state: true },
+    _uploadError: { state: true },
+    _dragOver: { state: true }
   };
 
   static styles = css`
-    :host {
-      display: block;
-      box-sizing: border-box;
-    }
+    :host { display: block; box-sizing: border-box; }
 
-    .tabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
     .tab {
-      padding: 8px 12px;
-      border-radius: 10px;
+      padding: 8px 12px; border-radius: 10px;
       border: 1px solid var(--divider-color);
       background: var(--secondary-background-color);
-      cursor: pointer;
+      cursor: pointer; font-size: 14px;
+    }
+    .tab.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+    .img-field { display: flex; flex-direction: column; gap: 12px; }
+    .img-label { font-size: 13px; font-weight: 600; color: var(--primary-text-color); }
+
+    .img-preview {
+      width: 100%; height: 160px; border-radius: 20px; overflow: hidden;
+      background: #1C1B1F; border: 1px solid rgba(101,101,101,0.3);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .img-preview img { width: 120px; height: 120px; object-fit: contain; display: block; }
+    .img-preview-empty {
+      font-size: 12px; color: var(--secondary-text-color);
+      text-align: center; padding: 16px; line-height: 1.5;
     }
 
-    .tab.active {
-      background: var(--primary-color);
-      color: white;
-      border-color: var(--primary-color);
+    .drop-zone {
+      width: 100%; box-sizing: border-box; min-height: 96px;
+      border: 2px dashed var(--divider-color); border-radius: 16px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 8px; padding: 16px; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--secondary-background-color); text-align: center;
     }
+    .drop-zone.dragover {
+      border-color: var(--primary-color);
+      background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    }
+    .drop-zone.loading { opacity: 0.6; pointer-events: none; }
+
+    .drop-icon { font-size: 28px; line-height: 1; }
+    .drop-text { font-size: 13px; color: var(--primary-text-color); line-height: 1.4; }
+    .drop-sub  { font-size: 11px; color: var(--secondary-text-color); }
+
+    .drop-btn {
+      margin-top: 4px; padding: 6px 14px; border-radius: 8px;
+      border: 1px solid var(--primary-color); background: transparent;
+      color: var(--primary-color); font-size: 13px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .drop-btn:hover { background: color-mix(in srgb, var(--primary-color) 15%, transparent); }
+
+    .status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .status-row.success { color: var(--success-color, #43a047); }
+    .status-row.error   { color: var(--error-color, #db4437); }
+
+    .current-path {
+      display: flex; align-items: center; gap: 8px; font-size: 12px;
+      color: var(--secondary-text-color); background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color); border-radius: 10px;
+      padding: 8px 10px; box-sizing: border-box;
+    }
+    .current-path span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .path-clear {
+      width: 24px; height: 24px; border: none; border-radius: 6px;
+      background: transparent; color: var(--secondary-text-color);
+      cursor: pointer; font-size: 14px; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.15s;
+    }
+    .path-clear:hover { color: var(--error-color, #db4437); }
+
+    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
+    .img-hint code {
+      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
+      border-radius: 4px; padding: 1px 5px; font-size: 11px;
+    }
+
+    input[type="file"] { display: none; }
   `;
 
   constructor() {
     super();
     this._tab = 0;
+    this._uploadState = "idle"; // idle | loading | success | error
+    this._uploadError = "";
+    this._dragOver = false;
   }
 
-  setConfig(config) {
-    this._config = { ...config };
-  }
+  setConfig(config) { this._config = { ...config }; }
 
   render() {
     if (!this._config) return html``;
-
     return html`
       <div class="tabs">
-        ${["Объект", "Взаимодействия"].map((t, i) => html`
-          <div
-            class="tab ${this._tab === i ? "active" : ""}"
-            @click=${() => this._tab = i}
-          >
-            ${t}
-          </div>
+        ${["Объект", "Внешний вид", "Взаимодействия"].map((t, i) => html`
+          <div class="tab ${this._tab === i ? "active" : ""}" @click=${() => this._tab = i}>${t}</div>
         `)}
       </div>
-
       ${this._tab === 0 ? this._objectTab() : ""}
-      ${this._tab === 1 ? this._actionsTab() : ""}
+      ${this._tab === 1 ? this._appearanceTab() : ""}
+      ${this._tab === 2 ? this._actionsTab() : ""}
     `;
   }
 
   _objectTab() {
     return this._form([
-      { 
-        name: "entity", 
-        required: true, 
-        selector: { entity: { domain: ["switch", "fan"] } } 
-      },
-      { 
-        name: "mode_entity",
-        required: true, 
-        selector: { entity: { domain: ["select", "input_select"] } } 
-      },
-      { 
-        name: "base_path", 
-        selector: { text: {} } 
-      }
+      { name: "entity",      required: true, selector: { entity: { domain: ["switch", "fan"] } } },
+      { name: "mode_entity", required: true, selector: { entity: { domain: ["select", "input_select"] } } },
+      { name: "base_path",                   selector: { text: {} } }
     ]);
   }
 
   _actionsTab() {
     return this._form([
-      {
-        name: "tap_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
-        selector: { ui_action: {} }
-      },
-      {
-        name: "hold_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
-        selector: { ui_action: {} }
-      },
-      {
-        name: "double_tap_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
-        selector: { ui_action: {} }
-      }
+      { name: "tap_action",        label: "При нажатии",         selector: { ui_action: {} } },
+      { name: "hold_action",       label: "При удержании",       selector: { ui_action: {} } },
+      { name: "double_tap_action", label: "При двойном нажатии", selector: { ui_action: {} } }
     ]);
+  }
+
+  _appearanceTab() {
+    const src = this._config?.background_image;
+    return html`
+      <div class="img-field">
+        <div class="img-label">Фоновое изображение</div>
+
+        <div class="img-preview">
+          ${src ? html`
+            <img src=${src} alt="preview" @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }} />
+          ` : html`
+            <div class="img-preview-empty">Изображение не задано.<br>Будет использована картинка по умолчанию.</div>
+          `}
+        </div>
+
+        <div
+          class="drop-zone ${this._dragOver ? "dragover" : ""} ${this._uploadState === "loading" ? "loading" : ""}"
+          @dragover=${this._onDragOver}
+          @dragleave=${this._onDragLeave}
+          @drop=${this._onDrop}
+          @click=${this._onZoneClick}
+        >
+          <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
+          <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
+          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          ${this._uploadState !== "loading" ? html`
+            <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
+          ` : ""}
+        </div>
+
+        <input type="file" id="fileInput" accept="image/*" @change=${this._onFileInput} />
+
+        ${this._uploadState === "success" ? html`<div class="status-row success">✓ Изображение загружено</div>` : ""}
+        ${this._uploadState === "error"   ? html`<div class="status-row error">⚠ ${this._uploadError}</div>` : ""}
+
+        ${src ? html`
+          <div class="current-path">
+            <span title=${src}>${src}</span>
+            <button class="path-clear" @click=${this._clearImage}>✕</button>
+          </div>
+        ` : ""}
+
+        <div class="img-hint">
+          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
+        </div>
+      </div>
+    `;
+  }
+
+  /* ── Drag & Drop ── */
+
+  _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
+  _onDragLeave()  { this._dragOver = false; }
+
+  _onDrop(e) {
+    e.preventDefault();
+    this._dragOver = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (file) this._uploadFile(file);
+  }
+
+  _onZoneClick(e) {
+    e.stopPropagation();
+    this.shadowRoot?.getElementById("fileInput")?.click();
+  }
+
+  _onFileInput(e) {
+    const file = e.target?.files?.[0];
+    if (file) this._uploadFile(file);
+    e.target.value = "";
+  }
+
+  /* ── Загрузка файла ── */
+
+  async _uploadFile(file) {
+    if (!file.type.startsWith("image/")) {
+      this._uploadState = "error";
+      this._uploadError = "Файл не является изображением";
+      return;
+    }
+
+    this._uploadState = "loading";
+    this._uploadError = "";
+
+    try {
+      const token = this.hass?.auth?.data?.access_token;
+      const haUrl = window.location.origin;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // HA 2023.6+ поддерживает загрузку файлов через /api/config/core/upload
+      // Реальный рабочий эндпоинт для www — через fetchWithAuth + multipart
+      const resp = await this.hass.fetchWithAuth(
+        `/api/config/core/store_image`,
+        { method: "POST", body: formData }
+      );
+
+      if (resp.ok) {
+        const json = await resp.json();
+        this._setImage(json.url || `/local/${file.name}`);
+        this._uploadState = "success";
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback — пробуем прямой fetch
+    try {
+      const token = this.hass?.auth?.data?.access_token;
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const resp = await fetch(`${window.location.origin}/api/image/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      if (resp.ok) {
+        const json = await resp.json();
+        // /api/image/upload возвращает { id, ... }, URL формируем сами
+        const imgPath = `/api/image/serve/${json.id}/original`;
+        this._setImage(imgPath);
+        this._uploadState = "success";
+        return;
+      }
+
+      throw new Error(`HTTP ${resp.status}`);
+    } catch (err) {
+      this._uploadState = "error";
+      this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+    }
+  }
+
+  _setImage(path) {
+    this._config = { ...this._config, background_image: path };
+    this._fire();
+  }
+
+  _clearImage() {
+    this._uploadState = "idle";
+    this._uploadError = "";
+    const config = { ...this._config };
+    delete config.background_image;
+    this._config = config;
+    this._fire();
   }
 
   _form(schema) {
@@ -573,14 +750,14 @@ class EmelyaDryerCardEditor extends LitElement {
     `;
   }
 
-  _valueChanged = (e) => {
-    this._config = e.detail.value;
+  _valueChanged = (e) => { this._config = e.detail.value; this._fire(); };
+
+  _fire() {
     this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config: this._config },
-      bubbles: true,
-      composed: true
+      bubbles: true, composed: true
     }));
-  };
+  }
 }
 
 /* Регистрация */

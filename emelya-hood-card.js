@@ -435,7 +435,6 @@ class EmelyaHoodCardEditor extends LitElement {
 EmelyaHoodCard.getConfigElement = function () {
   return document.createElement("emelya-hood-card-editor");
 };
-
 EmelyaHoodCard.getStubConfig = function () {
   return {
     entity: "",

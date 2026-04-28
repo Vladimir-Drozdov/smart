@@ -4,7 +4,7 @@ import {
   hasAction
 } from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
 
-const DEFAULT_TILE_CARD_MOD = {
+const getDefaultTileCardMod = (base = "/local") => ({
   style: {
     ".": `
       ha-card {
@@ -64,7 +64,7 @@ const DEFAULT_TILE_CARD_MOD = {
         top:50% !important;
         left:50% !important;
         background: 
-          url("/local/images/container-images/light_button.png") center / 14px 20px no-repeat !important;
+          url("${base}/images/container-images/light_button.png") center / 14px 20px no-repeat !important;
         transform: translate(-50%, -50%) !important;
         width: 14px !important;
         height:20px !important;
@@ -80,7 +80,7 @@ const DEFAULT_TILE_CARD_MOD = {
         /* ← Вот сюда добавляем картинку */
         background: 
           linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%),
-          url("/local/images/container-images/light_button.png") center / 32px 32px no-repeat !important;
+          url("${base}/images/container-images/light_button.png") center / 32px 32px no-repeat !important;
 
         pointer-events: none !important;
 
@@ -221,9 +221,9 @@ const DEFAULT_TILE_CARD_MOD = {
       }
     }
   }
-};
+});
 
-const DEFAULT_TILE_CARD_MOD_TOGGLE = {
+const getDefaultTileCardModToggle = (base = "/local") => ({
   style: {
     ".": `
       ha-card {
@@ -282,7 +282,7 @@ const DEFAULT_TILE_CARD_MOD_TOGGLE = {
         position: absolute !important;
         top:50% !important;
         left:50% !important;
-        background: url("/local/images/container-images/light_button.png") center / 14px 20px no-repeat !important;
+        background: url("${base}/images/container-images/light_button.png") center / 14px 20px no-repeat !important;
         transform: translate(-50%, -50%) !important;
         width: 14px !important;
         height:20px !important;
@@ -296,7 +296,7 @@ const DEFAULT_TILE_CARD_MOD_TOGGLE = {
         border-radius: inherit !important;
         background: 
           linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%),
-          url("/local/images/container-images/light_button.png") center / 32px 32px no-repeat !important;
+          url("${base}/images/container-images/light_button.png") center / 32px 32px no-repeat !important;
         pointer-events: none !important;
         -webkit-mask:
           linear-gradient(#fff 0 0) content-box,
@@ -358,17 +358,17 @@ const DEFAULT_TILE_CARD_MOD_TOGGLE = {
       }
     }
   }
-};
+});
 
 
 function clone(value) {
   return structuredClone(value);
 }
 
-function getDefaultCardMod(mode) {
-  return mode === "toggle" 
-    ? clone(DEFAULT_TILE_CARD_MOD_TOGGLE) 
-    : clone(DEFAULT_TILE_CARD_MOD);
+function getDefaultCardMod(mode, base) {
+  return mode === "toggle"
+    ? getDefaultTileCardModToggle(base)
+    : getDefaultTileCardMod(base);
 }
 
 function normalizeTileType(type) {
@@ -390,24 +390,20 @@ function buildFeaturesByMode(mode) {
   return undefined;
 }
 
-function normalizeTileConfig(tile) {
+function normalizeTileConfig(tile, base) {
   const cfg = clone(tile || {});
   cfg.type = normalizeTileType(cfg.type);
-
   const mode = detectTileMode(cfg);
-  if (!cfg.card_mod) {
-    cfg.card_mod = getDefaultCardMod(mode);
-  }
-
+  cfg.card_mod = getDefaultCardMod(mode, base);
   return cfg;
 }
 
-function createDefaultTile(mode = "toggle") {
+function createDefaultTile(mode = "toggle", base = "/local") {
   const tile = {
     type: "tile",
     entity: "",
     name: "",
-    card_mod: getDefaultCardMod(mode),
+    card_mod: getDefaultCardMod(mode, base),
     features_position: mode === "toggle" ? "inline" : undefined
   };
 
@@ -561,10 +557,13 @@ class EmelyaLightPanelHui extends LitElement {
       tap_action: { action: "none" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
+      base_path: "/local",
       ...clone(config || {})
     };
+    console.log(config);
+    this.base = this.config.base_path || "/local";
 
-    this.config.tiles = (this.config.tiles || []).map((tile) => normalizeTileConfig(tile));
+    this.config.tiles = (this.config.tiles || []).map((tile) => normalizeTileConfig(tile, this.base));
     this._rebuildCards();
   }
 
@@ -601,7 +600,7 @@ class EmelyaLightPanelHui extends LitElement {
       const built = await Promise.all(
         validTiles.map(async (tile) => {
           try {
-            const cfg = normalizeTileConfig(tile);
+            const cfg = normalizeTileConfig(tile, this.base);
             const card = await helpers.createCardElement(cfg);
             if (this._hass) card.hass = this._hass;
             return card;
@@ -723,7 +722,7 @@ class EmelyaLightPanelHui extends LitElement {
             class="power-button ${this.power ? "on" : ""}"
             @click=${this.togglePower}
           >
-            <img src="/local/images/container-images/light_button.png" />
+            <img src="${this.base}/images/container-images/light_button.png" />
           </div>
 
           <div class="text-wrap">
@@ -755,6 +754,7 @@ class EmelyaLightPanelHui extends LitElement {
       title: "Освещение",
       subtitle: "Мастер-выключатель",
       tiles: [],
+      base_path: "/local",
       tap_action: { action: "none" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" }
@@ -883,11 +883,12 @@ class EmelyaLightPanelEditor extends LitElement {
       tap_action: { action: "none" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
+      base_path: "/local",
       ...clone(config || {})
     };
-    console.log(config);
-
-    this._config.tiles = (this._config.tiles || []).map((tile) => normalizeTileConfig(tile));
+    this._config.tiles = (this._config.tiles || []).map(
+      (tile) => normalizeTileConfig(tile, this._config.base_path)
+    );
 
     if (
       this._editingIndex !== null &&
@@ -925,7 +926,8 @@ class EmelyaLightPanelEditor extends LitElement {
     return this._form(
       [
         { name: "title", label: "Заголовок", selector: { text: {} } },
-        { name: "subtitle", label: "Подзаголовок", selector: { text: {} } }
+        { name: "subtitle", label: "Подзаголовок", selector: { text: {} } },
+        { name: "base_path", label: "Путь к ресурсам", selector: { text: {} } }
       ],
       this._config,
       this._valueChanged
@@ -1090,10 +1092,10 @@ class EmelyaLightPanelEditor extends LitElement {
     if (features) result.features = features;
     else delete result.features;
 
-    result.card_mod = getDefaultCardMod(editorTile.tile_type);
+    result.card_mod = getDefaultCardMod(editorTile.tile_type, this._config?.base_path);
     result.features_position = editorTile.tile_type === "toggle" ? "inline" : undefined;
 
-    return normalizeTileConfig(result);
+    return normalizeTileConfig(result, this._config?.base_path);
   }
 
   _tileTypeLabel(type) {
@@ -1103,7 +1105,7 @@ class EmelyaLightPanelEditor extends LitElement {
 
   _addTile(type) {
     const tiles = [...(this._config.tiles || [])];
-    tiles.push(createDefaultTile(type));
+    tiles.push(createDefaultTile(type, this._config.base_path));
     this._config = { ...this._config, tiles };
     this._editingIndex = tiles.length - 1;
     this._fire();
@@ -1126,8 +1128,14 @@ class EmelyaLightPanelEditor extends LitElement {
   }
 
   _fire() {
+    // Сохраняем тайлы БЕЗ card_mod — он всегда генерируется на лету при загрузке
+    const tilesForSave = (this._config.tiles || []).map((tile) => {
+      const { card_mod, ...rest } = tile;
+      return rest;
+    });
+
     this.dispatchEvent(new CustomEvent("config-changed", {
-      detail: { config: this._config },
+      detail: { config: { ...this._config, tiles: tilesForSave } },
       bubbles: true,
       composed: true
     }));
