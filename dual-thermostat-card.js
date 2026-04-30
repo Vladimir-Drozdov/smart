@@ -13,7 +13,8 @@ class DualThermostatCard extends LitElement {
     config: {},
     active: { type: Number },
     powerOn: { type: Boolean },
-    _cardReady: { state: true }
+    _cardReady: { state: true },
+    _visible: { state: true }
   };
 
   constructor() {
@@ -21,13 +22,13 @@ class DualThermostatCard extends LitElement {
     this.active = 0;
     this.powerOn = false;
     this._cardReady = false;
+    this._visible = false;
     this._holdTimer = null;
     this._lastTap = 0;
     this.card1 = null;
     this.card2 = null;
   }
 
-  // ==================== УТИЛИТЫ ====================
   clone(value) {
     return value == null ? value : structuredClone(value);
   }
@@ -45,7 +46,6 @@ class DualThermostatCard extends LitElement {
     return output;
   }
 
-  // ==================== CONFIG ====================
   setConfig(config) {
     this.config = {
       tap_action: { action: "more-info" },
@@ -61,13 +61,11 @@ class DualThermostatCard extends LitElement {
 
     this.base = this.config.base_path || "/local";
 
-    // Пересоздаём карточки при смене конфига
     this._buildCards();
   }
 
   set hass(hass) {
     this._hass = hass;
-    // Передаём hass в карточки, даже если они ещё строятся
     if (this.card1) this.card1.hass = hass;
     if (this.card2) this.card2.hass = hass;
     this.updatePowerState();
@@ -76,9 +74,15 @@ class DualThermostatCard extends LitElement {
 
   get hass() { return this._hass; }
 
-  // ==================== BUILD CARDS ====================
-  // Строим карточки сразу при setConfig, не ждём firstUpdated
   _buildCards() {
+    if (!this.config?.entity1 || !this.config?.entity2) {
+      this.card1 = null;
+      this.card2 = null;
+      this._cardReady = false;
+      this.requestUpdate();
+      return;
+    }
+
     const mergeCardMod = (common, specific) => {
       if (!specific) return common;
       if (!common) return specific;
@@ -94,31 +98,91 @@ class DualThermostatCard extends LitElement {
       return merged;
     };
 
-    const card1 = document.createElement("hui-thermostat-card");
-    card1.setConfig({
-      entity: this.config.entity1,
-      name: this.config.name1 || "Термостат 1",
-      card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod1)
-    });
-
-    const card2 = document.createElement("hui-thermostat-card");
-    card2.setConfig({
-      entity: this.config.entity2,
-      name: this.config.name2 || "Термостат 2",
-      card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod2)
-    });
-
-    // Если hass уже есть — сразу передаём
-    if (this._hass) {
-      card1.hass = this._hass;
-      card2.hass = this._hass;
+    // Offscreen контейнер — карточки греются здесь пока card-mod не отработает
+    if (!this._offscreen) {
+      this._offscreen = document.createElement("div");
+      this._offscreen.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:400px;visibility:hidden;pointer-events:none;";
+      document.body.appendChild(this._offscreen);
     }
 
-    this.card1 = card1;
-    this.card2 = card2;
-    this._cardReady = true;
-    this.updatePowerState();
-    this.requestUpdate();
+    try {
+      const card1 = document.createElement("hui-thermostat-card");
+      card1.setConfig({
+        entity: this.config.entity1,
+        name: this.config.name1 || "Термостат 1",
+        card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod1)
+      });
+
+      const card2 = document.createElement("hui-thermostat-card");
+      card2.setConfig({
+        entity: this.config.entity2,
+        name: this.config.name2 || "Термостат 2",
+        card_mod: mergeCardMod(this.config.card_mod, this.config.card_mod2)
+      });
+
+      if (this._hass) {
+        card1.hass = this._hass;
+        card2.hass = this._hass;
+      }
+
+      // Вставляем в offscreen — card-mod начинает работать
+      this._offscreen.appendChild(card1);
+      this._offscreen.appendChild(card2);
+
+      this.card1 = card1;
+      this.card2 = card2;
+      this._cardReady = false; // не показываем пока не готово
+      this._visible = false;
+      this.updatePowerState();
+
+      // Ждём пока card-mod отработает на обеих карточках
+      Promise.all([
+        this._waitForCardModReady(card1),
+        this._waitForCardModReady(card2),
+      ]).then(() => {
+        this._cardReady = true;
+        this.requestUpdate();
+        // После того как Lit вставит карточку в основной DOM — показываем
+        this.updateComplete.then(() => {
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            this._visible = true;
+          }));
+        });
+      });
+
+    } catch (e) {
+      console.warn("dual-thermostat-card: ошибка создания карточки", e);
+      this.card1 = null;
+      this.card2 = null;
+      this._cardReady = false;
+      this.requestUpdate();
+    }
+  }
+
+  _waitForCardModReady(card) {
+    return new Promise((resolve) => {
+      const deadline = Date.now() + 3000;
+
+      const check = () => {
+        if (Date.now() > deadline) { resolve(); return; }
+
+        const shadow = card.shadowRoot;
+        if (!shadow) { requestAnimationFrame(check); return; }
+
+        const haCard = shadow.querySelector("ha-card");
+        if (!haCard) { requestAnimationFrame(check); return; }
+
+        // card-mod меняет background на наш цвет #1C1B1F = rgb(28, 27, 31)
+        const bg = getComputedStyle(haCard).backgroundColor;
+        if (bg === "rgb(28, 27, 31)") {
+          resolve();
+        } else {
+          requestAnimationFrame(check);
+        }
+      };
+
+      requestAnimationFrame(check);
+    });
   }
 
   static styles = css`
@@ -144,14 +208,18 @@ class DualThermostatCard extends LitElement {
       border: 1px solid transparent;
       background-origin: border-box, border-box;
       background-clip: padding-box, border-box;
-      /* Убрали overflow:hidden и фиксированную высоту — они вызывали чёрную линию */
     }
 
     .thermo-wrapper {
-      /* Обрезаем только внутри термостата, не всю карточку */
       overflow: hidden;
       border-radius: 24px 24px 0 0;
       flex: 1;
+      opacity: 0;
+      /* Нет transition — появление мгновенное, без анимации поверх старых стилей */
+    }
+
+    .thermo-wrapper.visible {
+      opacity: 1;
     }
 
     .thermo-container {
@@ -162,12 +230,14 @@ class DualThermostatCard extends LitElement {
     .buttons {
       display: flex;
       justify-content: center;
+      align-items: center; 
       gap: 12px;
       padding: 12px 16px 16px;
       background: #1C1B1F;
       border-radius: 0 0 24px 24px;
-      /* Граница сверху чтобы не было артефакта стыка */
       border-top: 1px solid #1C1B1F;
+      height: 64px;         /* ← фиксируем высоту блока = высоте toggle */
+      box-sizing: border-box;
     }
 
     .btn {
@@ -181,6 +251,7 @@ class DualThermostatCard extends LitElement {
       cursor: pointer;
       transition: background 0.2s;
       position: relative;
+      flex-shrink: 0;       /* ← не сжимается */
     }
     .btn::before {
       content: "" !important;
@@ -304,7 +375,6 @@ class DualThermostatCard extends LitElement {
         --ha-card-border-width: 0 !important;
         --ha-card-border-style: none !important;
         --ha-card-border-color: transparent !important;
-        /* Убираем любые тени/отступы снизу карточки термостата */
         margin-bottom: 0 !important;
         padding-bottom: 0 !important;
       }
@@ -484,7 +554,6 @@ class DualThermostatCard extends LitElement {
       }
     };
   }
-
   firstUpdated() {
     const frame = this.shadowRoot.querySelector(".card");
     if (frame) {
@@ -492,6 +561,63 @@ class DualThermostatCard extends LitElement {
       frame.addEventListener("pointerup", this._onPointerUp.bind(this));
       frame.addEventListener("click", this._onClick.bind(this));
     }
+
+    this._waitForCardMod();
+  }
+
+  _waitForCardMod() {
+    const card = this.active === 0 ? this.card1 : this.card2;
+    if (!card) { this._visible = true; return; }
+
+    // card-mod добавляет <style> тег в shadowRoot карточки.
+    // Ждём его появления — это сигнал что стили применены.
+    const checkShadow = () => {
+      const shadow = card.shadowRoot;
+      if (!shadow) return false;
+      // card-mod вставляет style с непустым содержимым
+      const styles = shadow.querySelectorAll("style");
+      for (const s of styles) {
+        if (s.textContent && s.textContent.includes("#1C1B1F")) return true;
+      }
+      return false;
+    };
+
+    if (checkShadow()) {
+      requestAnimationFrame(() => requestAnimationFrame(() => { this._visible = true; }));
+      return;
+    }
+
+    const waitForShadow = (resolve) => {
+      const card = this.active === 0 ? this.card1 : this.card2;
+      if (!card) { resolve(); return; }
+      if (card.shadowRoot) { resolve(card.shadowRoot); return; }
+      // shadowRoot ещё не создан — ждём через customElements upgrade
+      setTimeout(() => waitForShadow(resolve), 20);
+    };
+
+    waitForShadow((shadow) => {
+      if (!shadow) { this._visible = true; return; }
+
+      if (checkShadow()) {
+        requestAnimationFrame(() => requestAnimationFrame(() => { this._visible = true; }));
+        return;
+      }
+
+      const mo = new MutationObserver(() => {
+        if (checkShadow()) {
+          mo.disconnect();
+          requestAnimationFrame(() => requestAnimationFrame(() => { this._visible = true; }));
+        }
+      });
+
+      mo.observe(shadow, { childList: true, subtree: true, characterData: true });
+
+      // Страховка
+      setTimeout(() => {
+        mo.disconnect();
+        if (!this._visible) this._visible = true;
+      }, 1000);
+    });
   }
 
   updatePowerState() {
@@ -539,7 +665,39 @@ class DualThermostatCard extends LitElement {
   setMode(index) {
     if (this.active === index) return;
     this.active = index;
+    this._visible = false;
+
+    // Карточки уже прогрелись в offscreen — card-mod уже применён
+    // Просто показываем
     this.requestUpdate();
+    this.updateComplete.then(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        this._visible = true;
+      }));
+    });
+  }
+
+  _waitForCardRender() {
+    const container = this.shadowRoot.querySelector(".thermo-container");
+    if (!container) { this._visible = true; return; }
+
+    // Текущая карточка могла уже иметь размер (кэш) — проверяем сразу
+    if (container.getBoundingClientRect().height > 0) {
+      requestAnimationFrame(() => requestAnimationFrame(() => { this._visible = true; }));
+      return;
+    }
+
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.height > 0) {
+          ro.disconnect();
+          requestAnimationFrame(() => requestAnimationFrame(() => { this._visible = true; }));
+          return;
+        }
+      }
+    });
+    ro.observe(container);
+    setTimeout(() => { if (!this._visible) { ro.disconnect(); this._visible = true; } }, 800);
   }
 
   togglePower(e) {
@@ -553,13 +711,20 @@ class DualThermostatCard extends LitElement {
   }
 
   render() {
-    const thermo = this.active === 0 ? this.card1 : this.card2;
+    const thermo = this._cardReady
+    ? (this.active === 0 ? this.card1 : this.card2)
+    : null;
 
     return html`
       <div class="card">
-        <div class="thermo-wrapper">
+        <div class="thermo-wrapper ${this._visible ? 'visible' : ''}">
           <div class="thermo-container">
-            ${thermo ?? html``}
+            ${thermo
+              ? thermo
+              : html`<div style="padding:32px;color:#8E8D8F;text-align:center">
+                  Выберите термостаты в настройках карточки
+                </div>`
+            }
           </div>
         </div>
 
@@ -572,12 +737,10 @@ class DualThermostatCard extends LitElement {
 
           <div class="toggle">
             <div class="slider ${this.active === 1 ? 'cool' : ''}"></div>
-
             <div class="toggle-btn heat-btn"
                 @click=${(e) => { e.stopPropagation(); this.setMode(0); }}>
               <img src="${this.config?.heat_icon || `${this.base}/images/heat.png`}">
             </div>
-
             <div class="toggle-btn cool-btn"
                 @click=${(e) => { e.stopPropagation(); this.setMode(1); }}>
               <img src="${this.config?.cool_icon || `${this.base}/images/cool.png`}">
@@ -704,9 +867,7 @@ class DualThermostatCardEditor extends LitElement {
   };
 }
 
-/* ══════════════════════════════════════════
-   Регистрация
-══════════════════════════════════════════ */
+
 DualThermostatCard.getConfigElement = () => document.createElement("dual-thermostat-card-editor");
 
 DualThermostatCard.getStubConfig = () => ({
@@ -720,13 +881,15 @@ DualThermostatCard.getStubConfig = () => ({
   base_path: "/local",
 });
 
-customElements.define("dual-thermostat-card-editor", DualThermostatCardEditor);
 customElements.define("dual-thermostat-card", DualThermostatCard);
+customElements.define("dual-thermostat-card-editor", DualThermostatCardEditor);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "custom:dual-thermostat-card",
   name: "Dual Thermostat Card",
   description: "Два термостата с переключателем режимов",
-  preview: true
+  preview: true,
+  // ── Ключевое поле: без него HA не знает какой элемент открывать в редакторе
+  documentationURL: "https://github.com/",
 });

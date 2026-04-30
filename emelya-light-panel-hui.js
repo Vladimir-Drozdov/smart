@@ -587,29 +587,24 @@ class EmelyaLightPanelHui extends LitElement {
   }
 
   set hass(hass) {
-    // 1. Сохраняем яркость из СТАРОГО hass — пока brightness ещё точно известен
     this._saveBrightness(this._hass);
-    // 2. Сохраняем из нового (если свет ещё on и brightness есть)
     this._saveBrightness(hass);
-
     this._hass = hass;
 
-    // 3. Строим патченный hass и сразу отдаём карточкам — без задержки
     const hassForCards = this._buildHassForCards(hass);
     this._cards?.forEach((card) => {
       card.hass = hassForCards;
     });
 
+    // Если карточки не построены (hass пришёл позже setConfig) — строим
+    if (this._hass && this._cards?.length === 0 && this.config?.tiles?.some(t => t?.entity)) {
+      this._rebuildCards();
+    }
+
     this._syncPowerState();
     this.requestUpdate();
   }
 
-  /**
-   * Строим подменённый hass для дочерних tile-карточек.
-   * Для каждой выключенной сущности из конфига подставляем состояние "on"
-   * с сохранённой яркостью — слайдер остаётся на последнем положении.
-   * Реальный hass (this._hass) не меняется, Jinja2 в card_mod видит истину.
-   */
   _buildHassForCards(hass) {
     if (!hass) return hass;
 
@@ -714,16 +709,36 @@ class EmelyaLightPanelHui extends LitElement {
   }
 
   async _rebuildCards() {
-    const token = ++this._buildToken;
-    const tiles = Array.isArray(this.config?.tiles) ? this.config.tiles : [];
+      const token = ++this._buildToken;
 
-    const validTiles = tiles.filter((tile) => tile?.entity);
+      // Ждём пока hass будет доступен (актуально при hard refresh)
+      if (!this._hass) {
+        await new Promise((resolve) => {
+          const check = () => {
+            if (this._hass) { resolve(); return; }
+            setTimeout(check, 50);
+          };
+          check();
+        });
+        if (token !== this._buildToken) return;
+      }
 
-    if (!validTiles.length) {
-      this._cards = [];
-      this._syncPowerState();
-      this.requestUpdate();
-      return;
+      const tiles = Array.isArray(this.config?.tiles) ? this.config.tiles : [];
+      const validTiles = tiles.filter((tile) => tile?.entity);
+
+      if (!validTiles.length) {
+        this._cards = [];
+        this._syncPowerState();
+        this.requestUpdate();
+        return;
+      }
+
+    // Offscreen контейнер — card-mod прогревается здесь до показа
+    if (!this._offscreen) {
+      this._offscreen = document.createElement("div");
+      this._offscreen.style.cssText =
+        "position:fixed;left:-9999px;top:-9999px;width:400px;visibility:hidden;pointer-events:none;";
+      document.body.appendChild(this._offscreen);
     }
 
     try {
@@ -736,8 +751,11 @@ class EmelyaLightPanelHui extends LitElement {
             const cfg = normalizeTileConfig(tile, this.base);
             const card = await helpers.createCardElement(cfg);
             if (this._hass) card.hass = this._buildHassForCards(this._hass);
-            // Force show-handle class so slider width stays consistent on/off
             this._forceShowHandle(card);
+
+            // Вставляем в offscreen — card-mod начинает работать
+            this._offscreen.appendChild(card);
+
             return card;
           } catch (err) {
             console.error("emelya-light-panel-hui: tile build error", tile, err);
@@ -748,14 +766,55 @@ class EmelyaLightPanelHui extends LitElement {
 
       if (token !== this._buildToken) return;
 
-      this._cards = built.filter(Boolean);
+      const validCards = built.filter(Boolean);
+
+      // Ждём пока card-mod отработает на всех карточках
+      await Promise.all(validCards.map((card) => this._waitForCardModReady(card)));
+
+      if (token !== this._buildToken) return;
+
+      this._cards = validCards;
       this._syncPowerState();
       this.requestUpdate();
+
     } catch (err) {
       console.error("emelya-light-panel-hui: rebuild error", err);
       this._cards = [];
       this.requestUpdate();
     }
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._offscreen) {
+      this._offscreen.remove();
+      this._offscreen = null;
+    }
+  }
+
+  _waitForCardModReady(card) {
+    return new Promise((resolve) => {
+      const deadline = Date.now() + 3000;
+
+      const check = () => {
+        if (Date.now() > deadline) { resolve(); return; }
+
+        const shadow = card.shadowRoot;
+        if (!shadow) { requestAnimationFrame(check); return; }
+
+        const haCard = shadow.querySelector("ha-card");
+        if (!haCard) { requestAnimationFrame(check); return; }
+
+        // card-mod меняет background на наш rgba(28, 27, 31, 1)
+        const bg = getComputedStyle(haCard).backgroundColor;
+        if (bg === "rgb(28, 27, 31)") {
+          resolve();
+        } else {
+          requestAnimationFrame(check);
+        }
+      };
+
+      requestAnimationFrame(check);
+    });
   }
 
   _syncPowerState() {

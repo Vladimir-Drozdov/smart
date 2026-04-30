@@ -139,6 +139,7 @@ class EmelyaKettleCard extends LitElement {
     handleAction(this, this.hass, this.config, actionType);
   }
 
+  // Единственный firstUpdated — слушатели + индикатор
   firstUpdated() {
     const card = this.shadowRoot?.querySelector(".card");
     if (!card) return;
@@ -146,6 +147,9 @@ class EmelyaKettleCard extends LitElement {
     card.addEventListener("pointerdown", this._onPointerDown.bind(this));
     card.addEventListener("pointerup", this._onPointerUp.bind(this));
     card.addEventListener("click", this._onClick.bind(this));
+
+    // Позиционируем индикатор после того как браузер посчитал layout
+    requestAnimationFrame(() => this._updateIndicator());
   }
 
   disconnectedCallback() {
@@ -304,15 +308,6 @@ class EmelyaKettleCard extends LitElement {
     }
   `;
 
-  firstUpdated() {
-    const card = this.shadowRoot?.querySelector(".card");
-    if (!card) return;
-
-    card.addEventListener("pointerdown", this._onPointerDown.bind(this));
-    card.addEventListener("pointerup", this._onPointerUp.bind(this));
-    card.addEventListener("click", this._onClick.bind(this));
-  }
-
   updated() {
     this._updateIndicator();
   }
@@ -398,10 +393,10 @@ class EmelyaKettleCardEditor extends LitElement {
       background: var(--secondary-background-color);
       cursor: pointer; font-size: 14px;
     }
-    .tab.active { 
-      background: var(--primary-color); 
-      color: white; 
-      border-color: var(--primary-color); 
+    .tab.active {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
     }
 
     .img-field { display: flex; flex-direction: column; gap: 12px; }
@@ -504,13 +499,13 @@ class EmelyaKettleCardEditor extends LitElement {
         .hass=${this.hass}
         .data=${this._config}
         .schema=${[
-          { name: "title", selector: { text: {} }, label: "Заголовок" },
-          { name: "entity", selector: { entity: {} }, label: "Основная entity (опционально)" },
-          { name: "power_entity", required: true, selector: { entity: { domain: ["switch", "climate", "input_boolean"] } }, label: "Power Entity" },
-          { name: "temp_entity", required: true, selector: { entity: { domain: ["climate", "number", "input_number"] } }, label: "Temperature Entity" },
-          { name: "base_path", selector: { text: {} }, label: "Base Path" },
-          { name: "preheat_temp", selector: { number: { min: 30, max: 100, step: 1 } }, label: "Температура Подогрева (°C)" },
-          { name: "boil_temp", selector: { number: { min: 90, max: 100, step: 1 } }, label: "Температура Кипятка (°C)" }
+          { name: "title",        label: "Заголовок",                  selector: { text: {} } },
+          { name: "entity",       label: "Основная entity (опционально)", selector: { entity: {} } },
+          { name: "power_entity", label: "Power Entity",  required: true, selector: { entity: { domain: ["switch", "climate", "input_boolean"] } } },
+          { name: "temp_entity",  label: "Temperature Entity", required: true, selector: { entity: { domain: ["climate", "number", "input_number"] } } },
+          { name: "base_path",    label: "Base Path",          selector: { text: {} } },
+          { name: "preheat_temp", label: "Температура Подогрева (°C)", selector: { number: { min: 30, max: 100, step: 1 } } },
+          { name: "boil_temp",    label: "Температура Кипятка (°C)",  selector: { number: { min: 90, max: 100, step: 1 } } }
         ]}
         @value-changed=${this._valueChanged}
       ></ha-form>
@@ -540,7 +535,9 @@ class EmelyaKettleCardEditor extends LitElement {
 
         <div class="img-preview">
           ${src ? html`
-            <img src=${src} alt="preview" @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }} />
+            <img src=${src} alt="preview"
+              @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }}
+            />
           ` : html`
             <div class="img-preview-empty">Изображение не задано.<br>Будет использована картинка по умолчанию.</div>
           `}
@@ -580,7 +577,7 @@ class EmelyaKettleCardEditor extends LitElement {
     `;
   }
 
-  /* === Drag & Drop и загрузка === */
+  /* ── Drag & Drop ── */
   _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
   _onDragLeave() { this._dragOver = false; }
 
@@ -643,11 +640,12 @@ class EmelyaKettleCardEditor extends LitElement {
 
       if (resp.ok) {
         const json = await resp.json();
-        const imgPath = `/api/image/serve/${json.id}/original`;
-        this._setImage(imgPath);
+        this._setImage(`/api/image/serve/${json.id}/original`);
         this._uploadState = "success";
         return;
       }
+
+      throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
       this._uploadState = "error";
       this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите вручную в config/www/.`;
@@ -682,14 +680,40 @@ class EmelyaKettleCardEditor extends LitElement {
   }
 }
 
-/* Регистрация */
-customElements.define("emelya-kettle-card-editor", EmelyaKettleCardEditor);
-customElements.define("emelya-kettle", EmelyaKettleCard);
+/* ── Регистрация ── */
+
+EmelyaKettleCard.getConfigElement = function () {
+  return document.createElement("emelya-kettle-card-editor");
+};
+
+EmelyaKettleCard.getStubConfig = function () {
+  return {
+    title: "Чайник",
+    power_entity: "",
+    temp_entity: "",
+    base_path: "/local",
+    preheat_temp: 80,
+    boil_temp: 100,
+    tap_action: { action: "more-info" },
+    hold_action: { action: "none" },
+    double_tap_action: { action: "none" },
+  };
+};
+
+if (!customElements.get("emelya-kettle-card-editor")) {
+  customElements.define("emelya-kettle-card-editor", EmelyaKettleCardEditor);
+}
+
+if (!customElements.get("emelya-kettle")) {
+  customElements.define("emelya-kettle", EmelyaKettleCard);
+}
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "custom:emelya-kettle",
-  name: "Emelya Kettle Card",
-  description: "Управление чайником",
-  preview: true
-});
+if (!window.customCards.find(c => c.type === "custom:emelya-kettle")) {
+  window.customCards.push({
+    type: "custom:emelya-kettle",
+    name: "Emelya Kettle Card",
+    description: "Управление чайником",
+    preview: true
+  });
+}

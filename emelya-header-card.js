@@ -138,8 +138,6 @@ class EmelyaHeaderCard extends LitElement {
       overflow: hidden;
     }
 
-    /* Dark gradient overlay rendered as a pseudo-element so it never
-       conflicts with the user-supplied background image. */
     .wrapper::before {
       content: "";
       position: absolute;
@@ -152,11 +150,11 @@ class EmelyaHeaderCard extends LitElement {
         linear-gradient(#fff 0 0);
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
-      pointer-events: none;                /* чтобы не мешал кликам */
+      pointer-events: none;
     }
 
     .row {
-      position: relative; /* above ::before */
+      position: relative;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -169,7 +167,6 @@ class EmelyaHeaderCard extends LitElement {
       gap: 16px;
     }
 
-    /* ── Avatars ── */
     .avatars {
       display: flex;
       flex-direction: row;
@@ -203,7 +200,6 @@ class EmelyaHeaderCard extends LitElement {
       background: #7FB800;
     }
 
-    /* ── Text ── */
     .text-block {
       align-items: start;
       display: flex;
@@ -227,7 +223,6 @@ class EmelyaHeaderCard extends LitElement {
       text-align: left;
     }
 
-    /* ── Right ── */
     .right {
       display: flex;
       align-items: center;
@@ -255,7 +250,6 @@ class EmelyaHeaderCard extends LitElement {
 
     .weather-icon-wrap img { display: block; }
 
-    /* ── Responsive ── */
     @container (max-width: 480px) {
       .left {
         margin-top: -2px;
@@ -308,7 +302,6 @@ class EmelyaHeaderCard extends LitElement {
     return map[this._mode] || "";
   }
 
-  /* ── Tap / Hold handling for the card itself ── */
   _onPointerDown(e) {
     this._holdTimer = setTimeout(() => {
       this._holdTimer = null;
@@ -317,7 +310,7 @@ class EmelyaHeaderCard extends LitElement {
   }
 
   _onPointerUp(e) {
-    if (!this._holdTimer) return; // hold already fired
+    if (!this._holdTimer) return;
     clearTimeout(this._holdTimer);
     this._holdTimer = null;
 
@@ -339,7 +332,6 @@ class EmelyaHeaderCard extends LitElement {
     this._holdTimer = null;
   }
 
-  /* ── Avatar click → more-info ── */
   _onAvatarClick(e, entityId) {
     e.stopPropagation();
     if (entityId && entityId !== "__offline__") {
@@ -347,14 +339,12 @@ class EmelyaHeaderCard extends LitElement {
     }
   }
 
-  /* ── Weather click → more-info ── */
   _onWeatherClick(e) {
     e.stopPropagation();
     const weatherEntity = this.config?.weather_entity;
     if (weatherEntity) fireMoreInfo(this, weatherEntity);
   }
 
-  /* ── Render ── */
   _renderAvatar(entityId, isOnline) {
     const personImg = `${this.base}/images/person.png`;
     return html`
@@ -370,7 +360,6 @@ class EmelyaHeaderCard extends LitElement {
   }
 
   render() {
-    // Fix: set background-image directly on .wrapper via style attribute
     const bgUrl = this.config?.background_image || `${this.base}/images/header-bg.png`;
 
     const showOnline = this._onlinePersons.length > 0;
@@ -425,9 +414,12 @@ class EmelyaHeaderCard extends LitElement {
 ───────────────────────────────────────── */
 class EmelyaHeaderCardEditor extends LitElement {
   static properties = {
-    hass:    {},
-    _config: { state: true },
-    _tab:    { state: true },
+    hass:          {},
+    _config:       { state: true },
+    _tab:          { state: true },
+    _uploadState:  { state: true },
+    _uploadError:  { state: true },
+    _dragOver:     { state: true },
   };
 
   static styles = css`
@@ -437,6 +429,7 @@ class EmelyaHeaderCardEditor extends LitElement {
       display: flex;
       gap: 8px;
       margin-bottom: 16px;
+      flex-wrap: wrap;
     }
 
     .tab {
@@ -509,12 +502,83 @@ class EmelyaHeaderCardEditor extends LitElement {
       color: var(--secondary-text-color);
       margin-bottom: 4px;
     }
+
+    /* ── Appearance tab ── */
+    .img-field { display: flex; flex-direction: column; gap: 12px; }
+    .img-label { font-size: 13px; font-weight: 600; color: var(--primary-text-color); }
+
+    .img-preview {
+      width: 100%; height: 160px; border-radius: 20px; overflow: hidden;
+      background: #1C1B1F; border: 1px solid rgba(101,101,101,0.3);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .img-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .img-preview-empty {
+      font-size: 12px; color: var(--secondary-text-color);
+      text-align: center; padding: 16px; line-height: 1.5;
+    }
+
+    .drop-zone {
+      width: 100%; box-sizing: border-box; min-height: 96px;
+      border: 2px dashed var(--divider-color); border-radius: 16px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 8px; padding: 16px; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--secondary-background-color); text-align: center;
+    }
+    .drop-zone.dragover {
+      border-color: var(--primary-color);
+      background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    }
+    .drop-zone.loading { opacity: 0.6; pointer-events: none; }
+
+    .drop-icon { font-size: 28px; line-height: 1; }
+    .drop-text { font-size: 13px; color: var(--primary-text-color); line-height: 1.4; }
+    .drop-sub  { font-size: 11px; color: var(--secondary-text-color); }
+
+    .drop-btn {
+      margin-top: 4px; padding: 6px 14px; border-radius: 8px;
+      border: 1px solid var(--primary-color); background: transparent;
+      color: var(--primary-color); font-size: 13px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .drop-btn:hover { background: color-mix(in srgb, var(--primary-color) 15%, transparent); }
+
+    .status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .status-row.success { color: var(--success-color, #43a047); }
+    .status-row.error   { color: var(--error-color, #db4437); }
+
+    .current-path {
+      display: flex; align-items: center; gap: 8px; font-size: 12px;
+      color: var(--secondary-text-color); background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color); border-radius: 10px;
+      padding: 8px 10px; box-sizing: border-box;
+    }
+    .current-path span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .path-clear {
+      width: 24px; height: 24px; border: none; border-radius: 6px;
+      background: transparent; color: var(--secondary-text-color);
+      cursor: pointer; font-size: 14px; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.15s;
+    }
+    .path-clear:hover { color: var(--error-color, #db4437); }
+
+    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
+    .img-hint code {
+      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
+      border-radius: 4px; padding: 1px 5px; font-size: 11px;
+    }
+
+    input[type="file"] { display: none; }
   `;
 
   constructor() {
     super();
     this._tab = 0;
     this._config = {};
+    this._uploadState = "idle"; // idle | loading | success | error
+    this._uploadError = "";
+    this._dragOver = false;
   }
 
   setConfig(config) {
@@ -567,7 +631,7 @@ class EmelyaHeaderCardEditor extends LitElement {
 
   /* ── Tabs ── */
   _renderTabs() {
-    const tabs = ["Объект", "Взаимодействия"];
+    const tabs = ["Объект", "Внешний вид", "Взаимодействия"];
     return html`
       <div class="tabs">
         ${tabs.map((t, i) => html`
@@ -630,18 +694,72 @@ class EmelyaHeaderCardEditor extends LitElement {
             label: "Base path",
             selector: { text: {} },
           },
-          {
-            name: "background_image",
-            label: "Фоновое изображение (URL или /local/...)",
-            selector: { text: {} },
-          },
         ]}
         @value-changed=${this._valueChanged}
       ></ha-form>
     `;
   }
 
-  /* ── Tab 1: Actions ── */
+  /* ── Tab 1: Appearance ── */
+  _appearanceTab() {
+    const src = this._config?.background_image;
+    return html`
+      <div class="img-field">
+        <div class="img-label">Фоновое изображение</div>
+
+        <div class="img-preview">
+          ${src ? html`
+            <img
+              src=${src}
+              alt="preview"
+              @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }}
+            />
+          ` : html`
+            <div class="img-preview-empty">
+              Изображение не задано.<br>Будет использована картинка по умолчанию.
+            </div>
+          `}
+        </div>
+
+        <div
+          class="drop-zone ${this._dragOver ? "dragover" : ""} ${this._uploadState === "loading" ? "loading" : ""}"
+          @dragover=${this._onDragOver}
+          @dragleave=${this._onDragLeave}
+          @drop=${this._onDrop}
+          @click=${this._onZoneClick}
+        >
+          <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
+          <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
+          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          ${this._uploadState !== "loading" ? html`
+            <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
+          ` : ""}
+        </div>
+
+        <input type="file" id="fileInput" accept="image/*" @change=${this._onFileInput} />
+
+        ${this._uploadState === "success" ? html`
+          <div class="status-row success">✓ Изображение загружено</div>
+        ` : ""}
+        ${this._uploadState === "error" ? html`
+          <div class="status-row error">⚠ ${this._uploadError}</div>
+        ` : ""}
+
+        ${src ? html`
+          <div class="current-path">
+            <span title=${src}>${src}</span>
+            <button class="path-clear" @click=${this._clearImage}>✕</button>
+          </div>
+        ` : ""}
+
+        <div class="img-hint">
+          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
+        </div>
+      </div>
+    `;
+  }
+
+  /* ── Tab 2: Actions ── */
   _actionsTab() {
     return html`
       <ha-form
@@ -669,12 +787,106 @@ class EmelyaHeaderCardEditor extends LitElement {
     `;
   }
 
+  /* ── Drag & Drop ── */
+
+  _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
+  _onDragLeave()  { this._dragOver = false; }
+
+  _onDrop(e) {
+    e.preventDefault();
+    this._dragOver = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (file) this._uploadFile(file);
+  }
+
+  _onZoneClick(e) {
+    e.stopPropagation();
+    this.shadowRoot?.getElementById("fileInput")?.click();
+  }
+
+  _onFileInput(e) {
+    const file = e.target?.files?.[0];
+    if (file) this._uploadFile(file);
+    e.target.value = "";
+  }
+
+  /* ── File upload ── */
+
+  async _uploadFile(file) {
+    if (!file.type.startsWith("image/")) {
+      this._uploadState = "error";
+      this._uploadError = "Файл не является изображением";
+      return;
+    }
+
+    this._uploadState = "loading";
+    this._uploadError = "";
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const resp = await this.hass.fetchWithAuth(
+        `/api/config/core/store_image`,
+        { method: "POST", body: formData }
+      );
+
+      if (resp.ok) {
+        const json = await resp.json();
+        this._setImage(json.url || `/local/${file.name}`);
+        this._uploadState = "success";
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback — /api/image/upload
+    try {
+      const token = this.hass?.auth?.data?.access_token;
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const resp = await fetch(`${window.location.origin}/api/image/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      if (resp.ok) {
+        const json = await resp.json();
+        const imgPath = `/api/image/serve/${json.id}/original`;
+        this._setImage(imgPath);
+        this._uploadState = "success";
+        return;
+      }
+
+      throw new Error(`HTTP ${resp.status}`);
+    } catch (err) {
+      this._uploadState = "error";
+      this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+    }
+  }
+
+  _setImage(path) {
+    this._config = { ...this._config, background_image: path };
+    this._emit();
+  }
+
+  _clearImage() {
+    this._uploadState = "idle";
+    this._uploadError = "";
+    const config = { ...this._config };
+    delete config.background_image;
+    this._config = config;
+    this._emit();
+  }
+
   render() {
     if (!this._config) return html``;
     return html`
       ${this._renderTabs()}
       ${this._tab === 0 ? this._objectTab() : ""}
-      ${this._tab === 1 ? this._actionsTab() : ""}
+      ${this._tab === 1 ? this._appearanceTab() : ""}
+      ${this._tab === 2 ? this._actionsTab() : ""}
     `;
   }
 }
