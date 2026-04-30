@@ -13,13 +13,15 @@ class EmelyaHoodCard extends LitElement {
     hass: {}, 
     config: {},
     level: { type:Number },
-    power: { type:Boolean }
+    power: { type:Boolean },
+    _selectedSlot: { state: true }
   };
 
   constructor(){
     super();
     this.level = 0;
     this.power = false;
+    this._selectedSlot = 0;
     this._expectedPower = null;
     this._expectedLevel = null;
     this._holdTimer = null;
@@ -75,7 +77,16 @@ class EmelyaHoodCard extends LitElement {
 
   static styles = css`
     :host { display:block; max-width:450px; min-width:320px; font-family:Roboto; color:white; }
-    .frame { display:flex; flex-direction:column; justify-content:space-between; padding:16px; height:264px; border-radius:24px; position: relative;}
+
+    .frame {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+      height: 264px;
+      border-radius: 24px;
+      position: relative;
+    }
     .frame::before {
       content: "";
       position: absolute;
@@ -88,11 +99,21 @@ class EmelyaHoodCard extends LitElement {
         linear-gradient(#fff 0 0);
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
-      pointer-events: none;                /* чтобы не мешал кликам */
+      pointer-events: none;
+    }
+
+    /* ── шапка ── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 1;
     }
     .title { font-weight:600; font-size:16px; }
+    .state { font-size:15px; color: rgba(255,255,255,0.6); }
+
     .controls {
-      position:relative;
+      position: relative;
       display: flex;
       height: 56px;
       padding-right: 4px;
@@ -110,7 +131,7 @@ class EmelyaHoodCard extends LitElement {
       inset: 0 !important;
       padding: 1px !important;
       border-radius: inherit !important;
-      background: linear-gradient(165deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      background: linear-gradient(165deg, rgba(101,101,101,0) 0%, #656565 50%, rgba(101,101,101,0) 100%) !important;
       pointer-events: none !important;
       -webkit-mask:
         linear-gradient(#fff 0 0) content-box,
@@ -118,22 +139,20 @@ class EmelyaHoodCard extends LitElement {
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
     }
-    .btn { flex:1; display:flex; justify-content:center; align-items:center; height:48px; border-radius:12px; cursor:pointer; }
-    .btn.power{
-      background: rgba(255, 255, 255, 0.10);
-      border: none;
-      border-width: 1px; flex-grow: 1; flex-shrink: 0;
-      display: flex;
-      padding: 16px;
-      justify-content: center;
-      align-items: center;
-      box-sizing:border-box;
-      width:64px;
-      max-width:64px;
-      height:48px;
-      position: relative;
+
+    /* ── заливка-индикатор ── */
+    .indicator {
+      position: absolute;
+      top: 4px;
+      height: calc(100% - 8px);
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 12px;
+      pointer-events: none;
+      z-index: 0;
+      transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                  width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .btn.power::before {
+    .indicator::before {
       content: "" !important;
       position: absolute !important;
       inset: 0 !important;
@@ -147,38 +166,57 @@ class EmelyaHoodCard extends LitElement {
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
     }
-    .btn.power.active { background: #4D4A54; }
-    .circle { border:2px solid white; border-radius:50%; opacity:0.25; }
-    .circle.small{ width:10px; height:10px; }
-    .circle.medium{ width:14px; height:14px; }
-    .circle.big{ width:18px; height:18px; }
-    .btn .circle { opacity:1; border-color: white; }
-    .btn.active .circle { opacity:1; border-color:#4D4A54; }
-  `;
 
-  _togglePower(e){
-    e.stopPropagation();
-
-    const entity = this.config?.entity;
-    const newPower = !this.power;
-
-    this.power = newPower;
-    this._expectedPower = newPower;
-
-    if(!newPower){
-      this.level = 0;
-      this._expectedLevel = null;
+    .btn {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 48px;
+      border-radius: 12px;
+      cursor: pointer;
+      position: relative;
+      z-index: 1;
     }
 
-    if(!this.hass || !entity) return;
+    .btn.power {
+      border: none;
+      flex-grow: 1;
+      flex-shrink: 0;
+      padding: 16px;
+      box-sizing: border-box;
+      width: 64px;
+      max-width: 64px;
+    }
 
-    this.hass.callService("fan", newPower ? "turn_on" : "turn_off", {
-      entity_id: entity
-    });
+    .circle { border:2px solid white; border-radius:50%; }
+    .circle.small  { width:10px; height:10px; }
+    .circle.medium { width:14px; height:14px; }
+    .circle.big    { width:18px; height:18px; }
+  `;
+
+  get _activeSlot() {
+    return this._selectedSlot ?? 0;
   }
 
-  _stopPropagation(e){
-    e.stopPropagation();
+  _updateIndicator() {
+    const root = this.shadowRoot;
+    if (!root) return;
+
+    const controls      = root.querySelector(".controls");
+    const indicator     = root.getElementById("indicator");
+    const activeBtn     = root.getElementById(`btn-${this._activeSlot}`);
+
+    if (!controls || !indicator || !activeBtn) return;
+
+    const cRect = controls.getBoundingClientRect();
+    const bRect = activeBtn.getBoundingClientRect();
+
+    const left  = `${bRect.left - cRect.left}px`;
+    const width = `${bRect.width}px`;
+
+    indicator.style.left  = left;
+    indicator.style.width = width;
   }
 
   firstUpdated() {
@@ -186,8 +224,14 @@ class EmelyaHoodCard extends LitElement {
     if (!frame) return;
 
     frame.addEventListener("pointerdown", this._onPointerDown.bind(this));
-    frame.addEventListener("pointerup", this._onPointerUp.bind(this));
-    frame.addEventListener("click", this._onClick.bind(this));
+    frame.addEventListener("pointerup",   this._onPointerUp.bind(this));
+    frame.addEventListener("click",       this._onClick.bind(this));
+
+    requestAnimationFrame(() => this._updateIndicator());
+  }
+
+  updated() {
+    this._updateIndicator();
   }
 
   disconnectedCallback() {
@@ -200,15 +244,12 @@ class EmelyaHoodCard extends LitElement {
 
   _onPointerDown(e) {
     if (e.target.closest('.btn')) return;
-
     if (hasAction(this.config, 'hold_action')) {
-      this._holdTimer = setTimeout(() => {
-        this._performAction('hold');
-      }, 500);
+      this._holdTimer = setTimeout(() => this._performAction('hold'), 500);
     }
   }
 
-  _onPointerUp(e) {
+  _onPointerUp() {
     if (this._holdTimer) {
       clearTimeout(this._holdTimer);
       this._holdTimer = null;
@@ -230,23 +271,39 @@ class EmelyaHoodCard extends LitElement {
     }
 
     this._lastTap = now;
-
     setTimeout(() => {
-      if (this._lastTap === now) {
-        this._performAction('tap');
-      }
+      if (this._lastTap === now) this._performAction('tap');
     }, 320);
   }
 
   _performAction(actionType) {
-    console.log(`Action performed: ${actionType}`);
-
     if (!this.hass || !this.config) return;
-
     handleAction(this, this.hass, this.config, actionType);
   }
 
+  _togglePower(e){
+    e.stopPropagation();
+    this._selectedSlot = 0;
+
+    const entity = this.config?.entity;
+    const newPower = !this.power;
+
+    this.power = newPower;
+    this._expectedPower = newPower;
+
+    if(!newPower){
+      this.level = 0;
+      this._expectedLevel = null;
+    }
+
+    if(!this.hass || !entity) return;
+    this.hass.callService("fan", newPower ? "turn_on" : "turn_off", { entity_id: entity });
+  }
+
+  _stopPropagation(e){ e.stopPropagation(); }
+
   _setLevel(level){
+    this._selectedSlot = level;
     this.level = level;
 
     if(!this.power){
@@ -259,48 +316,57 @@ class EmelyaHoodCard extends LitElement {
     const entity = this.config?.entity;
     if(!this.hass || !entity) return;
 
-    this.hass.callService("fan","set_percentage",{
+    this.hass.callService("fan", "set_percentage", {
       entity_id: entity,
       percentage: LEVEL_MAP[level]
     });
   }
 
   render(){
-    const bg = `${this.base}/images/container-images/kitchen-hood.png`;
+    const bg = this.config.background_image
+      ? this.config.background_image
+      : `${this.base}/images/container-images/kitchen-hood.png`;
 
     return html`
       <div
         class="frame"
         tabindex="0"
         style='
-          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%), url("${bg}") 52.763px -213.194px / 135.625% 164.394% no-repeat, #1C1B1F;
+          background: linear-gradient(180deg, rgba(28,27,31,0.00) 77.78%, #1C1B1F 100%),
+                      url("${bg}") 52.763px -213.194px / 135.625% 164.394% no-repeat,
+                      #1C1B1F;
           background-blend-mode: normal, luminosity, normal;
           border: none;
           border-radius: 24px !important;
         '
       >
-        <div class="title">Вытяжка</div>
+        <div class="header">
+          <div class="title">Вытяжка</div>
+          <div class="state">${this.power ? "Включено" : "Выключено"}</div>
+        </div>
 
-        <div class="controls ${this.power ? "enabled":""}">
-          <div class="btn power ${this.power ? "active":""}"
+        <div class="controls">
+          <div class="indicator" id="indicator"></div>
+
+          <div class="btn power" id="btn-0"
               @pointerdown=${this._stopPropagation}
               @click=${this._togglePower}>
             <img class="icon" src="${this.base}/images/container-images/power_button.png">
           </div>
-          
-          <div class="btn ${this.level===1?"active":""}"
+
+          <div class="btn" id="btn-1"
               @pointerdown=${this._stopPropagation}
               @click=${()=>this._setLevel(1)}>
             <div class="circle small"></div>
           </div>
 
-          <div class="btn ${this.level===2?"active":""}"
+          <div class="btn" id="btn-2"
               @pointerdown=${this._stopPropagation}
               @click=${()=>this._setLevel(2)}>
             <div class="circle medium"></div>
           </div>
 
-          <div class="btn ${this.level===3?"active":""}"
+          <div class="btn" id="btn-3"
               @pointerdown=${this._stopPropagation}
               @click=${()=>this._setLevel(3)}>
             <div class="circle big"></div>
@@ -316,131 +382,292 @@ class EmelyaHoodCard extends LitElement {
 class EmelyaHoodCardEditor extends LitElement {
   static properties = {
     hass: {},
-    _config: {},
-    _tab: { state: true }
+    _config: { state: true },
+    _tab: { state: true },
+    _uploadState: { state: true },
+    _uploadError: { state: true },
+    _dragOver: { state: true }
   };
 
   static styles = css`
-    :host {
-      display: block;
-      box-sizing: border-box;
-    }
+    :host { display: block; box-sizing: border-box; }
 
-    .tabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
     .tab {
-      padding: 8px 12px;
-      border-radius: 10px;
+      padding: 8px 12px; border-radius: 10px;
       border: 1px solid var(--divider-color);
       background: var(--secondary-background-color);
-      cursor: pointer;
+      cursor: pointer; font-size: 14px;
+    }
+    .tab.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+    .img-field { display: flex; flex-direction: column; gap: 12px; }
+    .img-label { font-size: 13px; font-weight: 600; color: var(--primary-text-color); }
+
+    .img-preview {
+      width: 100%; height: 160px; border-radius: 20px; overflow: hidden;
+      background: #1C1B1F; border: 1px solid rgba(101,101,101,0.3);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .img-preview img { width: 120px; height: 120px; object-fit: contain; display: block; }
+    .img-preview-empty {
+      font-size: 12px; color: var(--secondary-text-color);
+      text-align: center; padding: 16px; line-height: 1.5;
     }
 
-    .tab.active {
-      background: var(--primary-color);
-      color: white;
-      border-color: var(--primary-color);
+    .drop-zone {
+      width: 100%; box-sizing: border-box; min-height: 96px;
+      border: 2px dashed var(--divider-color); border-radius: 16px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 8px; padding: 16px; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--secondary-background-color); text-align: center;
     }
+    .drop-zone.dragover {
+      border-color: var(--primary-color);
+      background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    }
+    .drop-zone.loading { opacity: 0.6; pointer-events: none; }
+
+    .drop-icon { font-size: 28px; line-height: 1; }
+    .drop-text { font-size: 13px; color: var(--primary-text-color); line-height: 1.4; }
+    .drop-sub  { font-size: 11px; color: var(--secondary-text-color); }
+
+    .drop-btn {
+      margin-top: 4px; padding: 6px 14px; border-radius: 8px;
+      border: 1px solid var(--primary-color); background: transparent;
+      color: var(--primary-color); font-size: 13px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .drop-btn:hover { background: color-mix(in srgb, var(--primary-color) 15%, transparent); }
+
+    .status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .status-row.success { color: var(--success-color, #43a047); }
+    .status-row.error   { color: var(--error-color, #db4437); }
+
+    .current-path {
+      display: flex; align-items: center; gap: 8px; font-size: 12px;
+      color: var(--secondary-text-color); background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color); border-radius: 10px;
+      padding: 8px 10px; box-sizing: border-box;
+    }
+    .current-path span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .path-clear {
+      width: 24px; height: 24px; border: none; border-radius: 6px;
+      background: transparent; color: var(--secondary-text-color);
+      cursor: pointer; font-size: 14px; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.15s;
+    }
+    .path-clear:hover { color: var(--error-color, #db4437); }
+
+    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
+    .img-hint code {
+      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
+      border-radius: 4px; padding: 1px 5px; font-size: 11px;
+    }
+
+    input[type="file"] { display: none; }
   `;
 
   constructor() {
     super();
     this._tab = 0;
+    this._uploadState = "idle"; // idle | loading | success | error
+    this._uploadError = "";
+    this._dragOver = false;
   }
 
-  setConfig(config) {
-    this._config = { ...config };
-  }
+  setConfig(config) { this._config = { ...config }; }
 
   render() {
     if (!this._config) return html``;
-
     return html`
       <div class="tabs">
-        ${["Объект", "Взаимодействия"].map((t, i) => html`
-          <div
-            class="tab ${this._tab === i ? "active" : ""}"
-            @click=${() => this._tab = i}
-          >
-            ${t}
-          </div>
+        ${["Объект", "Внешний вид", "Взаимодействия"].map((t, i) => html`
+          <div class="tab ${this._tab === i ? "active" : ""}" @click=${() => this._tab = i}>${t}</div>
         `)}
       </div>
-
       ${this._tab === 0 ? this._objectTab() : ""}
-      ${this._tab === 1 ? this._actionsTab() : ""}
+      ${this._tab === 1 ? this._appearanceTab() : ""}
+      ${this._tab === 2 ? this._actionsTab() : ""}
     `;
   }
 
   _objectTab() {
     return this._form([
-      { 
-        name: "entity", 
-        required: true, 
-        selector: { entity: { domain: "fan" } } //только fan 
-      },
-      { 
-        name: "base_path", 
-        selector: { text: {} } 
-      }
+      { name: "entity",    required: true, selector: { entity: { domain: "fan" } } },
+      { name: "base_path",                selector: { text: {} } }
     ]);
   }
 
   _actionsTab() {
     return this._form([
-      {
-        name: "tap_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
-        selector: { ui_action: {} }
-      },
-      {
-        name: "hold_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
-        selector: { ui_action: {} }
-      },
-      {
-        name: "double_tap_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
-        selector: { ui_action: {} }
-      }
+      { name: "tap_action",        label: "При нажатии",         selector: { ui_action: {} } },
+      { name: "hold_action",       label: "При удержании",       selector: { ui_action: {} } },
+      { name: "double_tap_action", label: "При двойном нажатии", selector: { ui_action: {} } }
     ]);
+  }
+
+  _appearanceTab() {
+    const src = this._config?.background_image;
+    return html`
+      <div class="img-field">
+        <div class="img-label">Фоновое изображение</div>
+
+        <div class="img-preview">
+          ${src ? html`
+            <img src=${src} alt="preview" @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }} />
+          ` : html`
+            <div class="img-preview-empty">Изображение не задано.<br>Будет использована картинка по умолчанию.</div>
+          `}
+        </div>
+
+        <div
+          class="drop-zone ${this._dragOver ? "dragover" : ""} ${this._uploadState === "loading" ? "loading" : ""}"
+          @dragover=${this._onDragOver}
+          @dragleave=${this._onDragLeave}
+          @drop=${this._onDrop}
+          @click=${this._onZoneClick}
+        >
+          <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
+          <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
+          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          ${this._uploadState !== "loading" ? html`
+            <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
+          ` : ""}
+        </div>
+
+        <input type="file" id="fileInput" accept="image/*" @change=${this._onFileInput} />
+
+        ${this._uploadState === "success" ? html`<div class="status-row success">✓ Изображение загружено</div>` : ""}
+        ${this._uploadState === "error"   ? html`<div class="status-row error">⚠ ${this._uploadError}</div>` : ""}
+
+        ${src ? html`
+          <div class="current-path">
+            <span title=${src}>${src}</span>
+            <button class="path-clear" @click=${this._clearImage}>✕</button>
+          </div>
+        ` : ""}
+
+        <div class="img-hint">
+          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
+        </div>
+      </div>
+    `;
+  }
+
+  /* ── Drag & Drop ── */
+
+  _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
+  _onDragLeave()  { this._dragOver = false; }
+
+  _onDrop(e) {
+    e.preventDefault();
+    this._dragOver = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (file) this._uploadFile(file);
+  }
+
+  _onZoneClick(e) {
+    e.stopPropagation();
+    this.shadowRoot?.getElementById("fileInput")?.click();
+  }
+
+  _onFileInput(e) {
+    const file = e.target?.files?.[0];
+    if (file) this._uploadFile(file);
+    e.target.value = "";
+  }
+
+  /* ── Загрузка файла ── */
+
+  async _uploadFile(file) {
+    if (!file.type.startsWith("image/")) {
+      this._uploadState = "error";
+      this._uploadError = "Файл не является изображением";
+      return;
+    }
+
+    this._uploadState = "loading";
+    this._uploadError = "";
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const resp = await this.hass.fetchWithAuth(
+        `/api/config/core/store_image`,
+        { method: "POST", body: formData }
+      );
+
+      if (resp.ok) {
+        const json = await resp.json();
+        this._setImage(json.url || `/local/${file.name}`);
+        this._uploadState = "success";
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback — пробуем прямой fetch
+    try {
+      const token = this.hass?.auth?.data?.access_token;
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const resp = await fetch(`${window.location.origin}/api/image/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      if (resp.ok) {
+        const json = await resp.json();
+        const imgPath = `/api/image/serve/${json.id}/original`;
+        this._setImage(imgPath);
+        this._uploadState = "success";
+        return;
+      }
+
+      throw new Error(`HTTP ${resp.status}`);
+    } catch (err) {
+      this._uploadState = "error";
+      this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+    }
+  }
+
+  _setImage(path) {
+    this._config = { ...this._config, background_image: path };
+    this._fire();
+  }
+
+  _clearImage() {
+    this._uploadState = "idle";
+    this._uploadError = "";
+    const config = { ...this._config };
+    delete config.background_image;
+    this._config = config;
+    this._fire();
   }
 
   _form(schema) {
     return html`
-      <ha-form
-        .hass=${this.hass}
-        .data=${this._config}
-        .schema=${schema}
-        @value-changed=${this._valueChanged}
-      ></ha-form>
+      <ha-form .hass=${this.hass} .data=${this._config} .schema=${schema} @value-changed=${this._valueChanged}></ha-form>
     `;
   }
 
-  _valueChanged = (e) => {
-    this._config = e.detail.value;
+  _valueChanged = (e) => { this._config = e.detail.value; this._fire(); };
+
+  _fire() {
     this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config: this._config },
       bubbles: true,
       composed: true
     }));
-  };
+  }
 }
 
-/* Регистрация */
-EmelyaHoodCard.getConfigElement = function () {
-  return document.createElement("emelya-hood-card-editor");
-};
-EmelyaHoodCard.getStubConfig = function () {
-  return {
-    entity: "",
-    base_path: this.config.base_path,
-  };
-};
+EmelyaHoodCard.getConfigElement = function () { return document.createElement("emelya-hood-card-editor"); };
+EmelyaHoodCard.getStubConfig = function () { return { entity: "", base_path: "/local" }; };
 
 customElements.define("emelya-hood-card-editor", EmelyaHoodCardEditor);
 customElements.define("emelya-hood-card", EmelyaHoodCard);

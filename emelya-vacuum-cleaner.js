@@ -14,84 +14,68 @@ class EmelyaVacuumCleaner extends LitElement {
     cleaning: { state: true },
     battery: { state: true }
   };
+
   DEFAULT_VACUUM_CARD_MOD = {
-      // Стили для корневого элемента (.)
-      ".": `
-        :host {
-          border-radius: 24px !important;
-          border: none !important;
-        }
-        
-        ha-card {
-          font-size: 16px !important;
-          border-radius: 24px !important;
-          border: none !important;
-        }
-        
-        ha-card ha-select { 
+    ".": `
+      :host {
+        border-radius: 24px !important;
+        border: none !important;
+      }
+      
+      ha-card {
+        font-size: 16px !important;
+        border-radius: 24px !important;
+        border: none !important;
+      }
+      
+      ha-card ha-select { 
+        --mdc-select-fill-color: rgba(255, 255, 255, 0.10);
+        --mdc-theme-surface: #1C1B1F;
+        background-color: rgba(255, 255, 255, 0.10) !important;
+        border-radius: 16px !important;
+        box-sizing: border-box !important;                    
+      }
+    `,
+
+    "ha-select": {
+      "$": `
+        .mdc-select {
           border-radius: 16px !important;
-          --restore-card-border-radius: 16px !important;
-          --ha-card-border-radius: 16px !important;
-          box-sizing: border-box !important;                    
+          background-color: transparent !important;
+        }  
+
+        .mdc-select__anchor {
+          border-radius: 16px !important;
+          background-color: transparent !important;
+          align-items: center !important;
         }
-      `,
 
-      // Стили для ha-select и его внутренних элементов
-      "ha-select": {
-        "$": `
-          .mdc-select {
-            border-radius: 16px !important;
-            background-color: transparent !important;
-          }  
+        .mdc-select__anchor .mdc-select__selected-text-container .mdc-select__selected-text {
+          line-height: 100%;
+          display: flex;
+          align-items: center;
+        }
 
-          .mdc-select__anchor {
-            border-radius: 16px !important;
-            background-color: transparent !important;
-            align-items: center !important;
-          }
+        .mdc-select__anchor .mdc-line-ripple {
+          display: none !important;
+        }  
 
-          .mdc-select__anchor .mdc-select__selected-text-container .mdc-select__selected-text {
-            line-height: 100%;
-            display: flex;
-            align-items: center;
-          }
+        .mdc-select__anchor .mdc-floating-label {
+          display: none !important;
+        }  
 
-          .mdc-select__anchor .mdc-line-ripple {
-            display: none !important;
-            opacity: 0 !important;
-            visibility: hidden !important;
-          }  
+        .mdc-select__anchor .mdc-select__dropdown-icon {
+          width: 8px !important;
+          height: 8px !important;
+          border-right: 1px solid white !important; 
+          border-bottom: 1px solid white !important;
+          transform: translateY(-50%) rotate(45deg) !important;
+        }   
 
-          .mdc-select__anchor .mdc-floating-label {
-            display: none !important;
-            opacity: 0 !important;
-            visibility: hidden !important;
-          }  
-
-          .mdc-select__anchor .mdc-select__dropdown-icon {
-            width: 8px !important;
-            height: 8px !important;
-            border-right: 1px solid white !important; 
-            border-bottom: 1px solid white !important;
-            transform: translateY(-50%) rotate(45deg) !important;
-          }   
-
-          .mdc-select__anchor[aria-expanded="true"] .mdc-select__dropdown-icon {
-            transform: translateY(0%) rotate(225deg) !important;
-          }  
-
-          .mdc-select__dropdown-icon-graphic polyline {
-            stroke: white !important;
-            stroke-width: 1px !important;
-          }  
-
-          .mdc-select__anchor .mdc-select__dropdown-icon svg {
-            display: none !important;
-            opacity: 0 !important;
-            visibility: hidden !important;
-          }
-        `
-
+        .mdc-select__anchor[aria-expanded="true"] .mdc-select__dropdown-icon {
+          transform: translateY(0%) rotate(225deg) !important;
+        }  
+      `
     }
   };
 
@@ -102,7 +86,6 @@ class EmelyaVacuumCleaner extends LitElement {
     this.battery = 0;
     this._expectedCleaning = null;
     this._expectedFan = null;
-    this.initialFanList = ["standard", "turbo", "quiet"];
     this._holdTimer = null;
     this._lastTap = 0;
   }
@@ -113,7 +96,7 @@ class EmelyaVacuumCleaner extends LitElement {
     const stateObj = hass.states?.[entity];
     if(!stateObj) return;
 
-    // CLEANING
+    // CLEANING STATE
     const newCleaning = stateObj.state === "cleaning";
 
     if(this._expectedCleaning !== null){
@@ -126,10 +109,9 @@ class EmelyaVacuumCleaner extends LitElement {
     }
 
     // BATTERY
-    const battery = stateObj.attributes?.battery_level;
-    this.battery = battery !== undefined ? battery : 0;
+    this.battery = stateObj.attributes?.battery_level ?? 0;
 
-    // FAN MODE
+    // FAN MODE (режим уборки)
     const fan = stateObj.attributes?.fan_speed;
     const reverseModeMap = {
       standard: "Ежедневная уборка",
@@ -168,14 +150,15 @@ class EmelyaVacuumCleaner extends LitElement {
 
   static styles = css`
     :host { 
-      display:block; 
+      display: block; 
       min-width:320px;
-      width:100%; 
-      font-family:Roboto; 
-      color:white;
+      width: 100%; 
+      font-family: Roboto; 
+      color: white;
       border-radius: 24px !important;
       border: none !important;
     }
+
     .frame{
       display:flex;
       flex-direction:column;
@@ -183,14 +166,13 @@ class EmelyaVacuumCleaner extends LitElement {
       padding:16px;
       gap:24px;
       height:368px;
-      background-size:cover;
-      background-position:center;
-      background-blend-mode:luminosity, normal;
       border-radius:24px;
       color:white;
       cursor: pointer;
       user-select: none;
+      position: relative;
     }
+
     .frame::before {
       content: "";
       position: absolute;
@@ -203,7 +185,7 @@ class EmelyaVacuumCleaner extends LitElement {
         linear-gradient(#fff 0 0);
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
-      pointer-events: none;                /* чтобы не мешал кликам */
+      pointer-events: none;
     }
 
     .type{
@@ -227,11 +209,13 @@ class EmelyaVacuumCleaner extends LitElement {
       flex-direction:column;
       gap:8px;
     }
+
     ha-select {
       width: 100%;
       position: relative !important;
-      background: rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.10) !important;
     }
+
     ha-select::before {
       content: "" !important;
       position: absolute !important;
@@ -253,15 +237,14 @@ class EmelyaVacuumCleaner extends LitElement {
       align-items:center;
       padding:8px 14px;
       height:36px;
-      background:#343239;
+      background: rgba(255, 255, 255, 0.10);
       border-radius:12px;
       font-weight:600;
       font-size:14px;
       cursor:pointer;
-      transition:0.2s;
       position: relative;
-      background:rgba(255, 255, 255, 0.10);
     }
+
     .start::before {
       content: "" !important;
       position: absolute !important;
@@ -288,11 +271,9 @@ class EmelyaVacuumCleaner extends LitElement {
     if(!this.hass?.states?.[entity]) return;
 
     const service = this.cleaning ? "stop" : "start";
-    this._expectedCleaning = service === "start" ? true : false;
+    this._expectedCleaning = !this.cleaning;
 
-    this.hass.callService("vacuum", service, {
-      entity_id: entity
-    });
+    this.hass.callService("vacuum", service, { entity_id: entity });
   }
 
   _stopPropagation(e){
@@ -310,23 +291,17 @@ class EmelyaVacuumCleaner extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._holdTimer) {
-      clearTimeout(this._holdTimer);
-      this._holdTimer = null;
-    }
+    if (this._holdTimer) clearTimeout(this._holdTimer);
   }
 
   _onPointerDown(e) {
     if (e.target.closest('ha-select') || e.target.closest('.start')) return;
-
     if (hasAction(this.config, 'hold_action')) {
-      this._holdTimer = setTimeout(() => {
-        this._performAction('hold');
-      }, 500);
+      this._holdTimer = setTimeout(() => this._performAction('hold'), 500);
     }
   }
 
-  _onPointerUp(e) {
+  _onPointerUp() {
     if (this._holdTimer) {
       clearTimeout(this._holdTimer);
       this._holdTimer = null;
@@ -337,10 +312,8 @@ class EmelyaVacuumCleaner extends LitElement {
     if (e.target.closest('ha-select') || e.target.closest('.start')) return;
 
     const now = Date.now();
-
     if (this._lastTap && now - this._lastTap < 300) {
       if (hasAction(this.config, 'double_tap_action')) {
-        e.stopImmediatePropagation();
         this._performAction('double_tap');
         this._lastTap = 0;
         return;
@@ -350,30 +323,31 @@ class EmelyaVacuumCleaner extends LitElement {
     this._lastTap = now;
 
     setTimeout(() => {
-      if (this._lastTap === now) {
-        this._performAction('tap');
-      }
+      if (this._lastTap === now) this._performAction('tap');
     }, 320);
   }
 
   _performAction(actionType) {
-    console.log(`Action performed: ${actionType}`);
     if (!this.hass || !this.config) return;
     handleAction(this, this.hass, this.config, actionType);
   }
 
   render(){
-    const bg = `${this.base}/images/container-images/vacuum-cleaner.png`;
+    const bg = this.config.background_image 
+      ? this.config.background_image 
+      : `${this.base}/images/container-images/vacuum-cleaner.png`;
+
     const stateObj = this.hass?.states?.[this.config?.entity];
-    const fanList = stateObj?.attributes?.fan_speed_list || this.initialFanList;
+    const fanList = stateObj?.attributes?.fan_speed_list || ["standard", "turbo", "quiet"];
 
     return html`
     <ha-card>
       <div
         class="frame"
-        tabindex="0"
         style='
-          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%), url("${bg}") 9.86px -113.795px / 134.876% 110.996% no-repeat, var(--Background-Surface-2, #1C1B1F);
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%), 
+                      url("${bg}") 9.86px -113.795px / 134.876% 110.996% no-repeat, 
+                      var(--Background-Surface-2, #1C1B1F);
           background-blend-mode: normal, luminosity, normal;
           border: none;
           border-radius: 24px !important;
@@ -382,7 +356,7 @@ class EmelyaVacuumCleaner extends LitElement {
         <div class="type">
           <div class="title">Робот пылесос</div>
           <div class="subtitle">
-            ${this.battery !== null && this.battery !== 0 ? `${this.battery}% заряда` : ""}
+            ${this.battery ? `${this.battery}% заряда` : ""}
           </div>
         </div>
 
@@ -394,23 +368,22 @@ class EmelyaVacuumCleaner extends LitElement {
               @pointerdown=${this._stopPropagation}
               @change=${(e) => {
                 e.stopPropagation();
-                const mode = e.target.value;
-                this.selectedMode = mode;
-                this._expectedFan = mode;
+                const modeName = e.target.value;
+                this.selectedMode = modeName;
+                this._expectedFan = modeName;
 
-                const entity = this.config?.entity;
                 const modeMap = {
                   "Ежедневная уборка": "standard",
                   "Тщательная уборка": "turbo",
                   "Быстрая уборка": "quiet"
                 };
-                const fan = modeMap[mode] || mode;
-                if(this.hass?.states?.[entity]){
-                  this.hass.callService("vacuum","set_fan_speed",{
-                    entity_id: entity,
-                    fan_speed: fan
-                  });
-                }
+
+                const fanSpeed = modeMap[modeName] || modeName;
+
+                this.hass.callService("vacuum", "set_fan_speed", {
+                  entity_id: this.config.entity,
+                  fan_speed: fanSpeed
+                });
               }}
             >
               ${fanList.map(f => {
@@ -429,7 +402,7 @@ class EmelyaVacuumCleaner extends LitElement {
             @pointerdown=${this._stopPropagation}
             @click=${this._toggleCleaning}
           >
-            ${this.cleaning ? "Остановить уборку" : "Начать уборку в гостиной"}
+            ${this.cleaning ? "Остановить уборку" : "Начать уборку"}
           </div>
         </div>
       </div>
@@ -438,49 +411,113 @@ class EmelyaVacuumCleaner extends LitElement {
   }
 }
 
-/* EDITOR */
+/* ==================== EDITOR ==================== */
 
 class EmelyaVacuumCleanerEditor extends LitElement {
   static properties = {
     hass: {},
-    _config: {},
-    _tab: { state: true }
+    _config: { state: true },
+    _tab: { state: true },
+    _uploadState: { state: true },
+    _uploadError: { state: true },
+    _dragOver: { state: true }
   };
 
   static styles = css`
-    :host {
-      display: block;
-      box-sizing: border-box;
-    }
+    :host { display: block; box-sizing: border-box; }
 
-    .tabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
     .tab {
-      padding: 8px 12px;
-      border-radius: 10px;
+      padding: 8px 12px; border-radius: 10px;
       border: 1px solid var(--divider-color);
       background: var(--secondary-background-color);
-      cursor: pointer;
+      cursor: pointer; font-size: 14px;
+    }
+    .tab.active { 
+      background: var(--primary-color); 
+      color: white; 
+      border-color: var(--primary-color); 
     }
 
-    .tab.active {
-      background: var(--primary-color);
-      color: white;
-      border-color: var(--primary-color);
+    .img-field { display: flex; flex-direction: column; gap: 12px; }
+    .img-label { font-size: 13px; font-weight: 600; color: var(--primary-text-color); }
+
+    .img-preview {
+      width: 100%; height: 160px; border-radius: 20px; overflow: hidden;
+      background: #1C1B1F; border: 1px solid rgba(101,101,101,0.3);
+      display: flex; align-items: center; justify-content: center;
     }
+    .img-preview img { width: 120px; height: 120px; object-fit: contain; }
+    .img-preview-empty {
+      font-size: 12px; color: var(--secondary-text-color);
+      text-align: center; padding: 16px; line-height: 1.5;
+    }
+
+    .drop-zone {
+      width: 100%; min-height: 96px; box-sizing: border-box;
+      border: 2px dashed var(--divider-color); border-radius: 16px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 8px; padding: 16px; cursor: pointer;
+      background: var(--secondary-background-color); text-align: center;
+    }
+    .drop-zone.dragover {
+      border-color: var(--primary-color);
+      background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    }
+    .drop-zone.loading { opacity: 0.6; pointer-events: none; }
+
+    .drop-icon { font-size: 28px; line-height: 1; }
+    .drop-text { font-size: 13px; color: var(--primary-text-color); }
+    .drop-sub  { font-size: 11px; color: var(--secondary-text-color); }
+
+    .drop-btn {
+      margin-top: 4px; padding: 6px 14px; border-radius: 8px;
+      border: 1px solid var(--primary-color); background: transparent;
+      color: var(--primary-color); font-size: 13px; cursor: pointer;
+    }
+
+    .status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .status-row.success { color: var(--success-color, #43a047); }
+    .status-row.error   { color: var(--error-color, #db4437); }
+
+    .current-path {
+      display: flex; align-items: center; gap: 8px; font-size: 12px;
+      color: var(--secondary-text-color); background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color); border-radius: 10px;
+      padding: 8px 10px;
+    }
+    .current-path span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .path-clear {
+      width: 24px; height: 24px; border: none; border-radius: 6px;
+      background: transparent; color: var(--secondary-text-color);
+      cursor: pointer; font-size: 14px;
+    }
+    .path-clear:hover { color: var(--error-color, #db4437); }
+
+    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
+    .img-hint code {
+      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
+      border-radius: 4px; padding: 1px 5px; font-size: 11px;
+    }
+
+    input[type="file"] { display: none; }
   `;
 
   constructor() {
     super();
     this._tab = 0;
+    this._uploadState = "idle";
+    this._uploadError = "";
+    this._dragOver = false;
   }
 
   setConfig(config) {
-    this._config = { ...config };
+    this._config = { 
+      tap_action: { action: "more-info" },
+      hold_action: { action: "none" },
+      double_tap_action: { action: "none" },
+      ...config 
+    };
   }
 
   render() {
@@ -488,74 +525,192 @@ class EmelyaVacuumCleanerEditor extends LitElement {
 
     return html`
       <div class="tabs">
-        ${["Объект", "Взаимодействия"].map((t, i) => html`
-          <div
-            class="tab ${this._tab === i ? "active" : ""}"
-            @click=${() => this._tab = i}
-          >
-            ${t}
-          </div>
+        ${["Объект", "Внешний вид", "Взаимодействия"].map((t, i) => html`
+          <div class="tab ${this._tab === i ? "active" : ""}" @click=${() => this._tab = i}>${t}</div>
         `)}
       </div>
 
       ${this._tab === 0 ? this._objectTab() : ""}
-      ${this._tab === 1 ? this._actionsTab() : ""}
+      ${this._tab === 1 ? this._appearanceTab() : ""}
+      ${this._tab === 2 ? this._actionsTab() : ""}
     `;
   }
 
   _objectTab() {
-    return this._form([
-      { 
-        name: "entity", 
-        required: true, 
-        selector: { entity: { domain: "vacuum" } } //только vacuum
-      },
-      { 
-        name: "base_path", 
-        selector: { text: {} } 
-      },
-    ]);
-  }
-
-  _actionsTab() {
-    return this._form([
-      {
-        name: "tap_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
-        selector: { ui_action: {} }
-      },
-      {
-        name: "hold_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
-        selector: { ui_action: {} }
-      },
-      {
-        name: "double_tap_action",
-        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
-        selector: { ui_action: {} }
-      }
-    ]);
-  }
-
-  _form(schema) {
     return html`
       <ha-form
         .hass=${this.hass}
         .data=${this._config}
-        .schema=${schema}
+        .schema=${[
+          { name: "entity", required: true, selector: { entity: { domain: "vacuum" } } },
+          { name: "base_path", selector: { text: {} } }
+        ]}
         @value-changed=${this._valueChanged}
       ></ha-form>
     `;
   }
 
+  _actionsTab() {
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${this._config}
+        .schema=${[
+          { name: "tap_action",        label: "При нажатии",         selector: { ui_action: {} } },
+          { name: "hold_action",       label: "При удержании",       selector: { ui_action: {} } },
+          { name: "double_tap_action", label: "При двойном нажатии", selector: { ui_action: {} } }
+        ]}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
+    `;
+  }
+
+  _appearanceTab() {
+    const src = this._config?.background_image;
+    return html`
+      <div class="img-field">
+        <div class="img-label">Фоновое изображение</div>
+
+        <div class="img-preview">
+          ${src ? html`
+            <img src=${src} alt="preview" @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }} />
+          ` : html`
+            <div class="img-preview-empty">Изображение не задано.<br>Будет использована картинка по умолчанию.</div>
+          `}
+        </div>
+
+        <div
+          class="drop-zone ${this._dragOver ? "dragover" : ""} ${this._uploadState === "loading" ? "loading" : ""}"
+          @dragover=${this._onDragOver}
+          @dragleave=${this._onDragLeave}
+          @drop=${this._onDrop}
+          @click=${this._onZoneClick}
+        >
+          <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
+          <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
+          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          ${this._uploadState !== "loading" ? html`
+            <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
+          ` : ""}
+        </div>
+
+        <input type="file" id="fileInput" accept="image/*" @change=${this._onFileInput} />
+
+        ${this._uploadState === "success" ? html`<div class="status-row success">✓ Изображение загружено</div>` : ""}
+        ${this._uploadState === "error"   ? html`<div class="status-row error">⚠ ${this._uploadError}</div>` : ""}
+
+        ${src ? html`
+          <div class="current-path">
+            <span title=${src}>${src}</span>
+            <button class="path-clear" @click=${this._clearImage}>✕</button>
+          </div>
+        ` : ""}
+
+        <div class="img-hint">
+          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
+        </div>
+      </div>
+    `;
+  }
+
+  /* Drag & Drop и загрузка файла */
+  _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
+  _onDragLeave() { this._dragOver = false; }
+
+  _onDrop(e) {
+    e.preventDefault();
+    this._dragOver = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (file) this._uploadFile(file);
+  }
+
+  _onZoneClick(e) {
+    e.stopPropagation();
+    this.shadowRoot?.getElementById("fileInput")?.click();
+  }
+
+  _onFileInput(e) {
+    const file = e.target?.files?.[0];
+    if (file) this._uploadFile(file);
+    e.target.value = "";
+  }
+
+  async _uploadFile(file) {
+    if (!file.type.startsWith("image/")) {
+      this._uploadState = "error";
+      this._uploadError = "Файл не является изображением";
+      return;
+    }
+
+    this._uploadState = "loading";
+    this._uploadError = "";
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const resp = await this.hass.fetchWithAuth("/api/config/core/store_image", {
+        method: "POST", body: formData
+      });
+
+      if (resp.ok) {
+        const json = await resp.json();
+        this._setImage(json.url || `/local/${file.name}`);
+        this._uploadState = "success";
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback
+    try {
+      const token = this.hass?.auth?.data?.access_token;
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const resp = await fetch(`${window.location.origin}/api/image/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      if (resp.ok) {
+        const json = await resp.json();
+        this._setImage(`/api/image/serve/${json.id}/original`);
+        this._uploadState = "success";
+        return;
+      }
+    } catch (err) {
+      this._uploadState = "error";
+      this._uploadError = `Не удалось загрузить файл. Поместите вручную в config/www/.`;
+    }
+  }
+
+  _setImage(path) {
+    this._config = { ...this._config, background_image: path };
+    this._fire();
+  }
+
+  _clearImage() {
+    this._uploadState = "idle";
+    this._uploadError = "";
+    const config = { ...this._config };
+    delete config.background_image;
+    this._config = config;
+    this._fire();
+  }
+
   _valueChanged = (e) => {
     this._config = e.detail.value;
+    this._fire();
+  };
+
+  _fire() {
     this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config: this._config },
       bubbles: true,
       composed: true
     }));
-  };
+  }
 }
 
 /* Регистрация */
@@ -566,7 +721,7 @@ EmelyaVacuumCleaner.getConfigElement = function () {
 EmelyaVacuumCleaner.getStubConfig = function () {
   return {
     entity: "",
-    base_path: "/local",
+    base_path: "/local"
   };
 };
 

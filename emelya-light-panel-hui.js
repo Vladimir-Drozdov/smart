@@ -4,11 +4,13 @@ import {
   hasAction
 } from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
 
-const getDefaultTileCardMod = (base = "/local") => ({
+// entity передаётся сюда, чтобы Jinja2-шаблоны card_mod
+// реагировали на реальное состояние объекта в HA
+const getDefaultTileCardMod = (base = "/local", entity = "") => ({
   style: {
     ".": `
       ha-card {
-        --tile-color: #4D4A54 !important;
+        --tile-color: #343239 !important;
         background: rgba(28, 27, 31, 1) !important;
         border: none !important;
         box-shadow: none !important;
@@ -76,14 +78,10 @@ const getDefaultTileCardMod = (base = "/local") => ({
         inset: 0 !important;
         padding: 1px !important;
         border-radius: inherit !important;
-
-        /* ← Вот сюда добавляем картинку */
         background: 
           linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%),
           url("${base}/images/container-images/light_button.png") center / 32px 32px no-repeat !important;
-
         pointer-events: none !important;
-
         -webkit-mask:
           linear-gradient(#fff 0 0) content-box,
           linear-gradient(#fff 0 0) !important;
@@ -144,15 +142,30 @@ const getDefaultTileCardMod = (base = "/local") => ({
         `
       },
 
-      /* Толстый слайдер 64px + белая полоска с отступом 16px от конца */
       "hui-card-features $": {
         "hui-card-feature $": {
           "hui-light-brightness-card-feature $":{
+            // Jinja2 работает и во вложенных shadow-root строках card_mod
             "ha-control-slider $":`
               .slider{
                 height: 64px !important;
                 border-radius: 20px !important;
-                background: linear-gradient(90deg, #343239 50%, #1C1B1F 100%);
+                background: #1C1B1F !important;
+                position: relative !important;
+              }
+              .slider::before {
+                content: "" !important;
+                position: absolute !important;
+                inset: 0 !important;
+                padding: 1px !important;
+                border-radius: inherit !important;
+                background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+                pointer-events: none !important;
+                -webkit-mask:
+                  linear-gradient(#fff 0 0) content-box,
+                  linear-gradient(#fff 0 0);
+                -webkit-mask-composite: xor !important;
+                mask-composite: exclude !important;
               }
               .slider .slider-track-bar::after{
                 right: 16px !important;
@@ -162,6 +175,7 @@ const getDefaultTileCardMod = (base = "/local") => ({
                 right: 16px !important;
                 --handle-margin: 16px !important;
               }
+
               .container {
                 height: 64px !important;
                 border-radius: 20px !important;
@@ -169,6 +183,7 @@ const getDefaultTileCardMod = (base = "/local") => ({
               .slider .slider-track-bar{
                 height: 64px !important;
                 border-radius: 20px !important;
+                background: #343239 !important;
               }
             `,
             "." : `
@@ -223,11 +238,11 @@ const getDefaultTileCardMod = (base = "/local") => ({
   }
 });
 
-const getDefaultTileCardModToggle = (base = "/local") => ({
+const getDefaultTileCardModToggle = (base = "/local", entity = "") => ({
   style: {
     ".": `
       ha-card {
-        --tile-color: #4D4A54 !important;
+        --tile-color: #343239 !important;
         background: rgba(28, 27, 31, 1) !important;
         border: none !important;
         box-shadow: none !important;
@@ -255,7 +270,6 @@ const getDefaultTileCardModToggle = (base = "/local") => ({
         box-sizing: content-box !important;
       }
 
-      /* === Иконка лампочки (точно как во втором типе) === */
       ha-card ha-tile-container ha-tile-icon{
         width: 64px !important;
         height: 64px !important;
@@ -305,7 +319,6 @@ const getDefaultTileCardModToggle = (base = "/local") => ({
         mask-composite: exclude !important;
       }
 
-      /* Текст */
       ha-card ha-tile-container ha-tile-info span:nth-child(2) {
         text-align: left !important;
         font-family: Roboto;
@@ -323,13 +336,12 @@ const getDefaultTileCardModToggle = (base = "/local") => ({
       }
 
       ha-card ha-tile-container hui-card-features {
-        display: none !important; /* убираем любой feature справа */
+        display: none !important;
         opacity:0 !important;
         visibility:hidden !important;
       }
     `,
 
-    /* Скрываем стандартный фон иконки HA */
     "ha-tile-container ha-tile-icon":{
       "$":`
         .container.background,
@@ -365,10 +377,11 @@ function clone(value) {
   return structuredClone(value);
 }
 
-function getDefaultCardMod(mode, base) {
+// entity теперь передаётся во все варианты card_mod
+function getDefaultCardMod(mode, base, entity = "") {
   return mode === "toggle"
-    ? getDefaultTileCardModToggle(base)
-    : getDefaultTileCardMod(base);
+    ? getDefaultTileCardModToggle(base, entity)
+    : getDefaultTileCardMod(base, entity);
 }
 
 function normalizeTileType(type) {
@@ -394,16 +407,17 @@ function normalizeTileConfig(tile, base) {
   const cfg = clone(tile || {});
   cfg.type = normalizeTileType(cfg.type);
   const mode = detectTileMode(cfg);
-  cfg.card_mod = getDefaultCardMod(mode, base);
+  // Передаём entity — Jinja2-шаблоны card_mod будут реагировать на его состояние
+  cfg.card_mod = getDefaultCardMod(mode, base, cfg.entity || "");
   return cfg;
 }
 
-function createDefaultTile(mode = "toggle", base = "/local") {
+function createDefaultTile(mode = "toggle", base = "/local", entity = "") {
   const tile = {
     type: "tile",
-    entity: "",
+    entity,
     name: "",
-    card_mod: getDefaultCardMod(mode, base),
+    card_mod: getDefaultCardMod(mode, base, entity),
     features_position: mode === "toggle" ? "inline" : undefined
   };
 
@@ -528,7 +542,6 @@ class EmelyaLightPanelHui extends LitElement {
 
     .disabled {
       opacity: 0.4;
-      pointer-events: none;
     }
 
     .empty {
@@ -547,6 +560,8 @@ class EmelyaLightPanelHui extends LitElement {
     this._buildToken = 0;
     this._holdTimer = null;
     this._lastTap = 0;
+    // Хранилище последней яркости каждого объекта (entity_id -> brightness 0..255)
+    this._lastBrightness = {};
   }
 
   setConfig(config) {
@@ -572,12 +587,130 @@ class EmelyaLightPanelHui extends LitElement {
   }
 
   set hass(hass) {
+    // 1. Сохраняем яркость из СТАРОГО hass — пока brightness ещё точно известен
+    this._saveBrightness(this._hass);
+    // 2. Сохраняем из нового (если свет ещё on и brightness есть)
+    this._saveBrightness(hass);
+
     this._hass = hass;
+
+    // 3. Строим патченный hass и сразу отдаём карточкам — без задержки
+    const hassForCards = this._buildHassForCards(hass);
     this._cards?.forEach((card) => {
-      card.hass = hass;
+      card.hass = hassForCards;
     });
+
     this._syncPowerState();
     this.requestUpdate();
+  }
+
+  /**
+   * Строим подменённый hass для дочерних tile-карточек.
+   * Для каждой выключенной сущности из конфига подставляем состояние "on"
+   * с сохранённой яркостью — слайдер остаётся на последнем положении.
+   * Реальный hass (this._hass) не меняется, Jinja2 в card_mod видит истину.
+   */
+  _buildHassForCards(hass) {
+    if (!hass) return hass;
+
+    const entities = (this.config?.tiles || [])
+      .map((t) => t?.entity)
+      .filter(Boolean);
+
+    if (!entities.length) return hass;
+
+    // Проверяем, нужна ли вообще подмена
+    const needsPatch = entities.some((entityId) => {
+      const stateObj = hass.states[entityId];
+      if (!stateObj || this._lastBrightness[entityId] == null) return false;
+      // Patch needed if off, OR if on but brightness missing (transitional state)
+      return stateObj.state === "off" ||
+        (stateObj.state === "on" && !(stateObj.attributes?.brightness > 0));
+    });
+
+    if (!needsPatch) return hass;
+
+    // Создаём новый объект states только с нужными патчами
+    const patchedStates = { ...hass.states };
+
+    entities.forEach((entityId) => {
+      const stateObj = hass.states[entityId];
+      if (!stateObj) return;
+
+      const savedBrightness = this._lastBrightness[entityId];
+      if (savedBrightness == null) return;
+
+      const currentBrightness = stateObj.attributes?.brightness;
+
+      // Inject saved brightness when:
+      // - light is off (brightness becomes null)
+      // - light is on but brightness missing (transitional HA update)
+      const needsInject =
+        stateObj.state === "off" ||
+        (stateObj.state === "on" && !(currentBrightness > 0));
+
+      if (!needsInject) return;
+
+      patchedStates[entityId] = {
+        ...stateObj,
+        attributes: {
+          ...stateObj.attributes,
+          brightness: savedBrightness
+        }
+      };
+    });
+
+    return { ...hass, states: patchedStates };
+  }
+
+  /**
+   * Intercept clicks on tile icon when the light is off.
+   * Since tile is in state "off", clicking the icon would normally call turn_off again.
+   * We catch the icon click and call turn_on with the saved brightness instead.
+   */
+  _onTileClick(e, entityId) {
+    if (!entityId || !this._hass) return;
+
+    const stateObj = this._hass.states[entityId];
+    if (!stateObj || stateObj.state !== "off") return;
+
+    // Walk composedPath to detect click on ha-tile-icon (pierces shadow DOM)
+    const path = e.composedPath();
+    const isIconClick = path.some((el) => {
+      if (!el || !el.tagName) return false;
+      const tag = el.tagName.toLowerCase();
+      return tag === "ha-tile-icon" || tag === "ha-icon-button";
+    });
+
+    if (!isIconClick) return;
+
+    // Icon was clicked — turn on with last saved brightness
+    e.stopPropagation();
+    const brightness = this._lastBrightness[entityId];
+    const serviceData = { entity_id: entityId };
+    if (brightness != null) serviceData.brightness = brightness;
+    this._hass.callService("light", "turn_on", serviceData);
+  }
+
+  /**
+   * Сохраняем последнюю ненулевую яркость каждого объекта.
+   * Правило: ТОЛЬКО увеличиваем или обновляем реальным положительным значением.
+   * Никогда не затираем сохранённое значение нулём или null —
+   * HA может прислать промежуточный апдейт без brightness в момент выключения.
+   */
+  _saveBrightness(hass) {
+    if (!hass) return;
+    (this.config?.tiles || []).forEach(({ entity }) => {
+      if (!entity) return;
+      const stateObj = hass.states[entity];
+      if (!stateObj) return;
+      const brightness = stateObj.attributes?.brightness;
+      // Обновляем ТОЛЬКО если пришло реальное положительное значение
+      if (typeof brightness === "number" && brightness > 0) {
+        this._lastBrightness[entity] = brightness;
+      }
+      // Если brightness null/0/undefined — оставляем _lastBrightness как есть
+    });
   }
 
   async _rebuildCards() {
@@ -602,7 +735,9 @@ class EmelyaLightPanelHui extends LitElement {
           try {
             const cfg = normalizeTileConfig(tile, this.base);
             const card = await helpers.createCardElement(cfg);
-            if (this._hass) card.hass = this._hass;
+            if (this._hass) card.hass = this._buildHassForCards(this._hass);
+            // Force show-handle class so slider width stays consistent on/off
+            this._forceShowHandle(card);
             return card;
           } catch (err) {
             console.error("emelya-light-panel-hui: tile build error", tile, err);
@@ -635,6 +770,7 @@ class EmelyaLightPanelHui extends LitElement {
       return;
     }
 
+    // Используем реальный hass для определения состояния питания
     this.power = entityIds.some((entityId) => {
       const stateObj = this._hass.states[entityId];
       return stateObj && stateObj.state !== "off";
@@ -658,9 +794,26 @@ class EmelyaLightPanelHui extends LitElement {
     const shouldTurnOn = !this.power;
     this.power = shouldTurnOn;
 
-    this._hass.callService("light", shouldTurnOn ? "turn_on" : "turn_off", {
-      entity_id: entities
-    });
+    if (shouldTurnOn) {
+      // При включении восстанавливаем сохранённую яркость для каждого объекта
+      entities.forEach((entityId) => {
+        const brightness = this._lastBrightness[entityId];
+        const serviceData = { entity_id: entityId };
+        if (brightness != null) serviceData.brightness = brightness;
+        this._hass.callService("light", "turn_on", serviceData);
+      });
+    } else {
+      // Принудительно сохраняем текущую яркость прямо сейчас,
+      // до того как HA успеет прислать state:"off" с brightness:null
+      entities.forEach((entityId) => {
+        const stateObj = this._hass.states[entityId];
+        const brightness = stateObj?.attributes?.brightness;
+        if (typeof brightness === "number" && brightness > 0) {
+          this._lastBrightness[entityId] = brightness;
+        }
+      });
+      this._hass.callService("light", "turn_off", { entity_id: entities });
+    }
   }
 
   firstUpdated() {
@@ -671,6 +824,77 @@ class EmelyaLightPanelHui extends LitElement {
     frame.addEventListener("pointerup", this._onPointerUp.bind(this));
     frame.addEventListener("click", this._onClick.bind(this));
   }
+
+  /**
+   * Принудительно добавляем класс show-handle на slider-track-bar.
+   * HA убирает этот класс когда state:"off", что меняет padding трека
+   * и визуально сдвигает ползунок. Вешаем MutationObserver на каждую
+   * карточку чтобы мгновенно возвращать класс при любом изменении DOM.
+   */
+  _forceShowHandle(card) {
+  const applyClass = (root) => {
+    if (!root) return;
+    root.querySelectorAll(".slider-track-bar").forEach((el) => {
+      if (!el.classList.contains("show-handle")) {
+        el.classList.add("show-handle");
+      }
+    });
+  };
+
+  // Один глобальный observer на карточку, не рекурсивный
+  const observeCard = (shadowRoot) => {
+    applyClass(shadowRoot);
+    const mo = new MutationObserver((mutations) => {
+      let needsApply = false;
+      for (const m of mutations) {
+        if (
+          m.type === "attributes" &&
+          m.attributeName === "class" &&
+          m.target.classList.contains("slider-track-bar") &&
+          !m.target.classList.contains("show-handle")
+        ) {
+          needsApply = true;
+          break;
+        }
+      }
+      if (needsApply) applyClass(shadowRoot);
+    });
+    mo.observe(shadowRoot, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ["class"]
+    });
+  };
+
+  // Ищем ha-control-slider без рекурсии через shadowRoot
+  const findSliders = (root, depth = 0) => {
+    if (!root || depth > 8) return;
+    root.querySelectorAll("ha-control-slider").forEach((slider) => {
+      const waitForShadow = () => {
+        if (slider.shadowRoot) {
+          observeCard(slider.shadowRoot);
+        } else {
+          requestAnimationFrame(waitForShadow);
+        }
+      };
+      waitForShadow();
+    });
+
+    // Уходим в shadow roots дочерних элементов только через querySelectorAll — без ручной рекурсии
+    root.querySelectorAll("*").forEach((el) => {
+      if (el.shadowRoot) findSliders(el.shadowRoot, depth + 1);
+    });
+  };
+
+  const waitForCard = () => {
+    if (card.shadowRoot) {
+      findSliders(card.shadowRoot);
+    } else {
+      requestAnimationFrame(waitForCard);
+    }
+  };
+  requestAnimationFrame(waitForCard);
+}
 
   _onPointerDown(e) {
     if (e.target.closest(".power-button")) return;
@@ -733,11 +957,17 @@ class EmelyaLightPanelHui extends LitElement {
 
         <div class="tile-container">
           ${this._cards.length
-            ? this._cards.map((card) => html`
-                <div class=${this.power ? "" : "disabled"}>
-                  ${card}
-                </div>
-              `)
+            ? this._cards.map((card, i) => {
+                const entityId = this.config?.tiles?.[i]?.entity;
+                return html`
+                  <div
+                    class=${this.power ? "" : "disabled"}
+                    @click=${(e) => this._onTileClick(e, entityId)}
+                  >
+                    ${card}
+                  </div>
+                `;
+              })
             : html`<div class="empty">Добавь светильники в визуальном редакторе</div>`}
         </div>
       </ha-card>
@@ -1092,7 +1322,8 @@ class EmelyaLightPanelEditor extends LitElement {
     if (features) result.features = features;
     else delete result.features;
 
-    result.card_mod = getDefaultCardMod(editorTile.tile_type, this._config?.base_path);
+    // Передаём entity, чтобы Jinja2-шаблоны в card_mod знали, за каким объектом следить
+    result.card_mod = getDefaultCardMod(editorTile.tile_type, this._config?.base_path, editorTile.entity || "");
     result.features_position = editorTile.tile_type === "toggle" ? "inline" : undefined;
 
     return normalizeTileConfig(result, this._config?.base_path);
