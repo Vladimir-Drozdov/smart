@@ -32,6 +32,7 @@ class EmelyaWasherCard extends LitElement {
         --restore-card-border-radius: 16px !important;
         --ha-card-border-radius: 16px !important;
         box-sizing: border-box !important;
+        backdrop-filter: blur(12px) !important;
       }
     `,
     "ha-select": {

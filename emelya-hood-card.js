@@ -124,6 +124,7 @@ class EmelyaHoodCard extends LitElement {
       align-self: stretch;
       border-radius: 16px;
       background: rgba(255, 255, 255, 0.10);
+      backdrop-filter: blur(12px);
     }
     .controls::before {
       content: "" !important;

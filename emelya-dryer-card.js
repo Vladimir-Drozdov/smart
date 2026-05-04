@@ -32,7 +32,8 @@ class EmelyaDryerCard extends LitElement {
         border-radius: 16px !important;
         --restore-card-border-radius: 16px !important;
         --ha-card-border-radius: 16px !important;
-        box-sizing: border-box !important;                    
+        box-sizing: border-box !important;
+        backdrop-filter: blur(12px) !important;
       }
     `,
 

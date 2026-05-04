@@ -811,6 +811,7 @@ class MyElementEditor extends LitElement {
       { label: "Emelya Humidifier",        type: "custom:emelya-humidifier-card",  config: { base_path: "/local" } },
       { label: "Emelya Oven",              type: "custom:emelya-oven-card",        config: { base_path: "/local" } },
       { label: "Emelya Light Panel",       type: "custom:emelya-light-panel-hui",  config: {} },
+      { label: "Emelya Lamp",       type: "custom:emelya-lamp-card",  config: { base_path: "/local"} },
       { label: "Emelya Vacuum Cleaner",    type: "custom:emelya-vacuum-cleaner",   config: { base_path: "/local"} },
       { label: "Emelya Hood",              type: "custom:emelya-hood-card",        config: { base_path: "/local" } },
       { label: "Emelya Dishwasher",        type: "custom:emelya-dishwasher",       config: { base_path: "/local" } },

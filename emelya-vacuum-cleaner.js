@@ -33,7 +33,8 @@ class EmelyaVacuumCleaner extends LitElement {
         --mdc-theme-surface: #1C1B1F;
         background-color: rgba(255, 255, 255, 0.10) !important;
         border-radius: 16px !important;
-        box-sizing: border-box !important;                    
+        box-sizing: border-box !important;
+        backdrop-filter: blur(12px) !important;
       }
     `,
 
@@ -243,6 +244,7 @@ class EmelyaVacuumCleaner extends LitElement {
       font-size:14px;
       cursor:pointer;
       position: relative;
+      backdrop-filter: blur(12px);
     }
 
     .start::before {

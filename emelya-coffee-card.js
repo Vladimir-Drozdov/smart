@@ -11,7 +11,7 @@ class EmelyaCoffeeCard extends LitElement {
     selectedCoffee: { state: true },
     power: { type: Boolean },
     coffeeTypes: { state: true }
-  };
+  }; 
   DEFAULT_COFFEE_CARD_MOD = {
     // Стили для корневого элемента (.)
     ".": `
@@ -30,7 +30,8 @@ class EmelyaCoffeeCard extends LitElement {
         border-radius: 16px !important;
         --restore-card-border-radius: 16px !important;
         --ha-card-border-radius: 16px !important;
-        box-sizing: border-box !important;                    
+        box-sizing: border-box !important;
+        backdrop-filter: blur(12px) !important;
       }
     `,
 

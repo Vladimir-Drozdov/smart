@@ -156,6 +156,7 @@ class EmelyaMediaColumns extends LitElement {
       cursor: pointer;
       transition: background 0.2s ease;
       background: rgba(255, 255, 255, 0.10);
+      backdrop-filter: blur(12px);
     }
 
     .control::before {

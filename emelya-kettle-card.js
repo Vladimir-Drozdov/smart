@@ -256,6 +256,7 @@ class EmelyaKettleCard extends LitElement {
       cursor: pointer;
       box-sizing: border-box;
       position: relative;
+      backdrop-filter: blur(12px);
     }
 
     .mode-btn {

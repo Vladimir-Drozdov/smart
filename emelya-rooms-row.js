@@ -64,6 +64,7 @@ class EmelyaRoomsRow extends LitElement {
       align-items: center;
       position: relative;
       justify-content: center;
+      backdrop-filter: blur(12px);
     }
     .icon::before {
       content: "";
