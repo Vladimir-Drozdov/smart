@@ -393,7 +393,7 @@ class EmelyaWasherCard extends LitElement {
       <div
         class="card"
         style='
-          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%), url("${bg}") 46.698px 62.07px / 112.282% 112.282% no-repeat, var(--Background-Surface-2, #1C1B1F);
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 80%, #1C1B1F 100%), url("${bg}") 46.698px 62.07px / 112.282% 112.282% no-repeat, var(--Background-Surface-2, #1C1B1F);
           background-blend-mode: normal, luminosity, normal;
           border: none;
           border-radius: 24px !important;

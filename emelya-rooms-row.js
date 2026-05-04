@@ -235,6 +235,29 @@ class EmelyaRoomsRow extends LitElement {
 /* ─────────────────────────────────────────
    EDITOR
 ───────────────────────────────────────── */
+const ICON_OPTIONS = [
+  { label: "Спальня",        value: "/local/images/icons/bedroom.svg" },
+  { label: "Гостиная",       value: "/local/images/icons/living_room.svg" },
+  { label: "Душ, ванная",    value: "/local/images/icons/bathroom.svg" },
+  { label: "Детская",        value: "/local/images/icons/kids_room.svg" },
+  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" },
+  { label: "Кухня",          value: "/local/images/icons/kitchen.svg" },
+  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" },
+  { label: "Кабинет",        value: "/local/images/icons/office.svg" },
+  { label: "Постирочная",    value: "/local/images/icons/laundry.svg" },
+  { label: "Туалет",         value: "/local/images/icons/toilet.svg" },
+  { label: "Холл",           value: "/local/images/icons/hall.svg" },
+  { label: "Кладовая",       value: "/local/images/icons/storage.svg" },
+  { label: "Коридор",        value: "/local/images/icons/corridor.svg" },
+  { label: "Двор",           value: "/local/images/icons/yard.svg" },
+  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" },
+  { label: "Столовая",       value: "/local/images/icons/dining_room.svg" },
+  { label: "Кинотеатр",      value: "/local/images/icons/home_cinema.svg" },
+  { label: "Бассейн",        value: "/local/images/icons/pool.svg" },
+  { label: "Гараж",          value: "/local/images/icons/garage.svg" },
+  { label: "Комната няни",   value: "/local/images/icons/nanny_room.svg" },
+  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" },
+];
 class EmelyaRoomsRowEditor extends LitElement {
   static properties = {
     hass:           {},
@@ -483,7 +506,6 @@ class EmelyaRoomsRowEditor extends LitElement {
     return [
       { name: "name",   label: "Название",           selector: { text: {} } },
       { name: "entity", label: "Entity температуры", selector: { entity: { domain: ["sensor", "climate", "input_number"] } } },
-      { name: "icon",   label: "Иконка (путь к файлу)", selector: { text: {} } },
     ];
   }
 
@@ -681,10 +703,37 @@ class EmelyaRoomsRowEditor extends LitElement {
 
             <ha-form
               .hass=${this.hass}
-              .data=${{ name: selected.name || "", entity: selected.entity || "", icon: selected.icon || "" }}
+              .data=${{ name: selected.name || "", entity: selected.entity || "" }}
               .schema=${this._getRoomSchema()}
               @value-changed=${this._onRoomFormChanged}
             ></ha-form>
+
+            <div class="field">
+              <label>Иконка</label>
+              <div style="display:flex; align-items:center; gap:10px;">
+                ${selected.icon ? html`
+                  <div style="
+                    width:40px; height:40px; border-radius:12px;
+                    background:#28272C; border:1px solid #4D4A54;
+                    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+                  ">
+                    <img src=${selected.icon} style="width:20px;height:20px;filter:brightness(0) invert(1);object-fit:contain;" />
+                  </div>
+                ` : ''}
+                <select
+                  style="flex:1;"
+                  .value=${selected.icon || ""}
+                  @change=${(e) => this._onIconChange(e)}
+                >
+                  <option value="">— Выберите иконку —</option>
+                  ${ICON_OPTIONS.map(opt => html`
+                    <option value=${opt.value} ?selected=${selected.icon === opt.value}>
+                      ${opt.label}
+                    </option>
+                  `)}
+                </select>
+              </div>
+            </div>
 
             <div class="section-title">Фон карточки</div>
             ${this._renderBgUpload(selected)}
@@ -804,7 +853,13 @@ class EmelyaRoomsRowEditor extends LitElement {
     this._selectedIndex = newIndex;
     this._emitConfig();
   }
-
+  _onIconChange = (e) => {
+    const value = e.target.value;
+    const rooms = [...(this._config.rooms || [])];
+    rooms[this._selectedIndex] = { ...rooms[this._selectedIndex], icon: value };
+    this._config = { ...this._config, rooms };
+    this._emitConfig();
+  };
   _onRoomFormChanged = (e) => {
     const updated = e.detail.value;
     const rooms = [...(this._config.rooms || [])];

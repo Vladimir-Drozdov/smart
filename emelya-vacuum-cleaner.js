@@ -347,7 +347,7 @@ class EmelyaVacuumCleaner extends LitElement {
       <div
         class="frame"
         style='
-          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%), 
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 79.67%, #1C1B1F 100%), 
                       url("${bg}") 9.86px -113.795px / 134.876% 110.996% no-repeat, 
                       var(--Background-Surface-2, #1C1B1F);
           background-blend-mode: normal, luminosity, normal;

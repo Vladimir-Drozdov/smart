@@ -610,6 +610,29 @@ customElements.define("emelya-quick-actions", EmelyaQuickActions);
 // ─────────────────────────────────────────────
 //  VISUAL EDITOR
 // ─────────────────────────────────────────────
+const ICON_OPTIONS = [
+  { label: "Спальня",        value: "/local/images/icons/bedroom.svg" },
+  { label: "Гостиная",       value: "/local/images/icons/living_room.svg" },
+  { label: "Душ, ванная",    value: "/local/images/icons/bathroom.svg" },
+  { label: "Детская",        value: "/local/images/icons/kids_room.svg" }, //
+  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" }, //
+  { label: "Кухня",          value: "/local/images/icons/kitchen.svg" },
+  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" }, //
+  { label: "Кабинет",        value: "/local/images/icons/office.svg" },
+  { label: "Постирочная",    value: "/local/images/icons/laundry.svg" },
+  { label: "Туалет",         value: "/local/images/icons/toilet.svg" },
+  { label: "Холл",           value: "/local/images/icons/hall.svg" },
+  { label: "Кладовая",       value: "/local/images/icons/storage.svg" }, //
+  { label: "Коридор",        value: "/local/images/icons/corridor.svg" },
+  { label: "Двор",           value: "/local/images/icons/yard.svg" },
+  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" }, //
+  { label: "Столовая",       value: "/local/images/icons/dining_room.svg" },
+  { label: "Кинотеатр",      value: "/local/images/icons/home_cinema.svg" },
+  { label: "Бассейн",        value: "/local/images/icons/pool.svg" },
+  { label: "Гараж",          value: "/local/images/icons/garage.svg" }, //
+  { label: "Комната няни",   value: "/local/images/icons/nanny_room.svg" },
+  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" }, //
+];
 class EmelyaQuickActionsEditor extends LitElement {
 
   static properties = {
@@ -944,10 +967,6 @@ class EmelyaQuickActionsEditor extends LitElement {
         selector: { text: {} }
       },
       {
-        name: "icon",
-        selector: { text: {} }
-      },
-      {
         name: "entity",
         selector: { entity: {} }
       }
@@ -966,9 +985,31 @@ class EmelyaQuickActionsEditor extends LitElement {
 
         ${this._form(schema, action)}
 
-        <div class="section-label" style="margin-top:16px">
-          ── Взаимодействие ──
+        <div class="section-label">Иконка</div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          ${action.icon ? html`
+            <div style="
+              width:40px; height:40px; border-radius:12px;
+              background:#28272C; border:1px solid #4D4A54;
+              display:flex; align-items:center; justify-content:center; flex-shrink:0;
+            ">
+              <img src=${action.icon} style="width:20px;height:20px;filter:brightness(0) invert(1);object-fit:contain;" />
+            </div>
+          ` : ''}
+          <select
+            style="flex:1; border:1px solid var(--divider-color); border-radius:10px; padding:10px 12px; background:var(--secondary-background-color); color:var(--primary-text-color); font:inherit; box-sizing:border-box; width:100%;"
+            @change=${(e) => this._updateField(index, 'icon', e.target.value)}
+          >
+            <option value="">— Выберите иконку —</option>
+            ${ICON_OPTIONS.map(opt => html`
+              <option value=${opt.value} ?selected=${action.icon === opt.value}>
+                ${opt.label}
+              </option>
+            `)}
+          </select>
         </div>
+
+        <div class="section-label" style="margin-top:16px">── Взаимодействие ──</div>
 
         ${this._renderActionSelect(index, 'tap_action', '👆 Tap')}
         ${this._renderActionSelect(index, 'hold_action', '✋ Hold')}

@@ -149,6 +149,7 @@ class EmelyaOvenCard extends LitElement {
       font-weight:600;
       position: relative;
       background: rgba(255, 255, 255, 0.10);
+      backdrop-filter: blur(12px);
     }
     .box::before {
       content: "" !important;

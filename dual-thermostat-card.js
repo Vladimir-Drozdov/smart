@@ -208,6 +208,7 @@ class DualThermostatCard extends LitElement {
       border: 1px solid transparent;
       background-origin: border-box, border-box;
       background-clip: padding-box, border-box;
+      padding-bottom: 24px;
     }
 
     .thermo-wrapper {
@@ -755,6 +756,29 @@ class DualThermostatCard extends LitElement {
 /* ══════════════════════════════════════════
    EDITOR
 ══════════════════════════════════════════ */
+const ICON_OPTIONS = [
+  { label: "Спальня",        value: "/local/images/icons/bedroom.svg" },
+  { label: "Гостиная",       value: "/local/images/icons/living_room.svg" },
+  { label: "Душ, ванная",    value: "/local/images/icons/bathroom.svg" },
+  { label: "Детская",        value: "/local/images/icons/kids_room.svg" },
+  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" },
+  { label: "Кухня",          value: "/local/images/icons/kitchen.svg" },
+  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" },
+  { label: "Кабинет",        value: "/local/images/icons/office.svg" },
+  { label: "Постирочная",    value: "/local/images/icons/laundry.svg" },
+  { label: "Туалет",         value: "/local/images/icons/toilet.svg" },
+  { label: "Холл",           value: "/local/images/icons/hall.svg" },
+  { label: "Кладовая",       value: "/local/images/icons/storage.svg" },
+  { label: "Коридор",        value: "/local/images/icons/corridor.svg" },
+  { label: "Двор",           value: "/local/images/icons/yard.svg" },
+  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" },
+  { label: "Столовая",       value: "/local/images/icons/dining_room.svg" },
+  { label: "Кинотеатр",      value: "/local/images/icons/home_cinema.svg" },
+  { label: "Бассейн",        value: "/local/images/icons/pool.svg" },
+  { label: "Гараж",          value: "/local/images/icons/garage.svg" },
+  { label: "Комната няни",   value: "/local/images/icons/nanny_room.svg" },
+  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" },
+];
 class DualThermostatCardEditor extends LitElement {
   static properties = {
     hass: {},
@@ -814,16 +838,47 @@ class DualThermostatCardEditor extends LitElement {
   }
 
   _objectTab() {
-    return this._form([
-      { name: "entity1", required: true, selector: { entity: { domain: "climate" } } },
-      { name: "name1", selector: { text: {} } },
-      { name: "entity2", required: true, selector: { entity: { domain: "climate" } } },
-      { name: "name2", selector: { text: {} } },
-      { name: "power_icon", selector: { icon: {} } },
-      { name: "heat_icon", selector: { icon: {} } },
-      { name: "cool_icon", selector: { icon: {} } },
-      { name: "base_path", selector: { text: {} } }
-    ]);
+    const iconSelect = (label, key) => html`
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <div style="font-size:13px; font-weight:600; color:var(--primary-text-color); width:120px; flex-shrink:0;">${label}</div>
+        ${this._config?.[key] ? html`
+          <div style="
+            width:40px; height:40px; border-radius:12px;
+            background:#28272C; border:1px solid #4D4A54;
+            display:flex; align-items:center; justify-content:center; flex-shrink:0;
+          ">
+            <img src=${this._config[key]} style="width:20px;height:20px;filter:brightness(0) invert(1);object-fit:contain;" />
+          </div>
+        ` : ''}
+        <select
+          style="flex:1; border:1px solid var(--divider-color); border-radius:10px; padding:10px 12px; background:var(--secondary-background-color); color:var(--primary-text-color); font:inherit; box-sizing:border-box;"
+          @change=${(e) => this._setIcon(key, e.target.value)}
+        >
+          <option value="">— Выберите иконку —</option>
+          ${ICON_OPTIONS.map(opt => html`
+            <option value=${opt.value} ?selected=${this._config?.[key] === opt.value}>
+              ${opt.label}
+            </option>
+          `)}
+        </select>
+      </div>
+    `;
+
+    return html`
+      ${this._form([
+        { name: "entity1", required: true, selector: { entity: { domain: "climate" } } },
+        { name: "name1", selector: { text: {} } },
+        { name: "entity2", required: true, selector: { entity: { domain: "climate" } } },
+        { name: "name2", selector: { text: {} } },
+        { name: "base_path", selector: { text: {} } }
+      ])}
+
+      <div style="margin-top:8px;">
+        ${iconSelect("Иконка питания", "power_icon")}
+        ${iconSelect("Иконка тепла", "heat_icon")}
+        ${iconSelect("Иконка холода", "cool_icon")}
+      </div>
+    `;
   }
 
   _actionsTab() {
@@ -856,7 +911,14 @@ class DualThermostatCardEditor extends LitElement {
       ></ha-form>
     `;
   }
-
+  _setIcon = (key, value) => {
+    this._config = { ...this._config, [key]: value };
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config: this._config },
+      bubbles: true,
+      composed: true
+    }));
+  };
   _valueChanged = (e) => {
     this._config = e.detail.value;
     this.dispatchEvent(new CustomEvent("config-changed", {

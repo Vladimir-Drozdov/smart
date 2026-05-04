@@ -333,7 +333,7 @@ class EmelyaHoodCard extends LitElement {
         class="frame"
         tabindex="0"
         style='
-          background: linear-gradient(180deg, rgba(28,27,31,0.00) 77.78%, #1C1B1F 100%),
+          background: linear-gradient(180deg, rgba(28,27,31,0.00) 80%, #1C1B1F 100%),
                       url("${bg}") 52.763px -213.194px / 135.625% 164.394% no-repeat,
                       #1C1B1F;
           background-blend-mode: normal, luminosity, normal;

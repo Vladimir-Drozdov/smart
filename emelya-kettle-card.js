@@ -340,7 +340,7 @@ class EmelyaKettleCard extends LitElement {
         <div
           class="card"
           style="
-            background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 56.97%, #1C1B1F 88.4%),
+            background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 60%, #1C1B1F 88.4%),
                         url('${bg}') 53.318px 57.809px / 81.463% 82.494% no-repeat,
                         #1C1B1F;
             background-blend-mode: normal, luminosity, normal;

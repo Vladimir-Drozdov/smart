@@ -443,7 +443,7 @@ class EmelyaCoffeeCard extends LitElement {
           class="card"
           style='
             background:
-              linear-gradient(180deg, rgba(28, 27, 31, 0.00) 69.34%, #1C1B1F 100%),
+              linear-gradient(180deg, rgba(28, 27, 31, 0.00) 70%, #1C1B1F 100%),
               url("${bg}") 88px 53.12px / 74.782% 76.117% no-repeat,
               #1C1B1F;
             background-blend-mode: normal, luminosity, normal;

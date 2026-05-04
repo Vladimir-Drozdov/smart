@@ -8,7 +8,9 @@ function clone(value) {
   return structuredClone(value);
 }
 
-const getCardMod = (base = "/local") => ({
+// entity передаётся сюда, чтобы Jinja2-шаблоны card_mod
+// реагировали на реальное состояние объекта в HA
+const getCardMod = (base = "/local", entity = "") => ({
   style: {
     ".": `
       ha-card {
@@ -19,6 +21,20 @@ const getCardMod = (base = "/local") => ({
         border-radius: 24px !important;
       }
       ha-card:hover { background: transparent !important; }
+      ha-card::before {
+        content: "" !important;
+        position: absolute !important;
+        inset: 0 !important;
+        padding: 1px !important;
+        border-radius: inherit !important;
+        background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+        pointer-events: none !important;
+        -webkit-mask:
+          linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor !important;
+        mask-composite: exclude !important;
+      }
 
       ha-card ha-tile-container ha-tile-info {
         opacity:0 !important;
@@ -137,7 +153,7 @@ const getCardMod = (base = "/local") => ({
               .slider .slider-track-bar{
                 height: 64px !important;
                 border-radius: 20px !important;
-                background: #343239 !important;
+                /* background управляется через JS динамически */
               }
             `,
             "." : `
@@ -165,39 +181,99 @@ const getCardMod = (base = "/local") => ({
               }`,
           },
 
-          "hui-light-color-temp-card-feature $": `
-            ha-control-slider {
-              --control-slider-thickness: 64px !important;
-              height: 64px !important;
-              min-height: 64px !important;
-            }
-            ha-control-slider .container,
-            ha-control-slider .slider,
-            ha-control-slider .slider .slider-track-bar {
-              height: 64px !important;
-              border-radius: 20px !important;
-            }
-
-            ha-control-slider .slider .slider-track-bar::after,
-            ha-control-slider .slider .slider-track-cursor::after {
-              right: 16px !important;
-              width: 4px !important;
-              background: rgba(255,255,255,0.7) !important;
-              opacity: 1 !important;
-            }
-          `
+          "hui-light-color-temp-card-feature $": {
+            "ha-control-slider $": `
+              .slider{
+                height: 64px !important;
+                border-radius: 20px !important;
+                position: relative !important;
+              }
+              .slider::before {
+                content: "" !important;
+                position: absolute !important;
+                inset: 0 !important;
+                padding: 1px !important;
+                border-radius: inherit !important;
+                background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+                pointer-events: none !important;
+                -webkit-mask:
+                  linear-gradient(#fff 0 0) content-box,
+                  linear-gradient(#fff 0 0);
+                -webkit-mask-composite: xor !important;
+                mask-composite: exclude !important;
+              }
+              .slider .slider-track-bar::after{
+                right: 16px !important;
+                --handle-margin: 16px !important;
+              }
+              .slider .slider-track-cursor::after{
+                right: 16px !important;
+                --handle-margin: 16px !important;
+              }
+              .container {
+                height: 64px !important;
+                border-radius: 20px !important;
+              }
+              .slider .slider-track-bar{
+                height: 64px !important;
+                border-radius: 20px !important;
+              }
+            `,
+            ".": `
+              ha-control-slider {
+                --control-slider-thickness: 64px !important;
+                height: 64px !important;
+                min-height: 64px !important;
+                border-radius: 20px !important;
+                --feature-border-radius: 20px !important;
+                --control-slider-border-radius: 20px !important;
+              }
+              ha-control-slider::before {
+                content: "" !important;
+                position: absolute !important;
+                inset: 0 !important;
+                padding: 1px !important;
+                border-radius: inherit !important;
+                background: linear-gradient(292deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+                pointer-events: none !important;
+                -webkit-mask:
+                  linear-gradient(#fff 0 0) content-box,
+                  linear-gradient(#fff 0 0);
+                -webkit-mask-composite: xor !important;
+                mask-composite: exclude !important;
+              }
+            `
+          }
         }
       }
     }
   }
 });
 
-function normalizeTileConfig(entity, base = "/local") {
+// entity передаётся в getCardMod — Jinja2-шаблоны знают за каким объектом следить
+// supportedColorModes определяет какой слайдер показывать:
+// - если лампа поддерживает brightness → только light-brightness
+// - если нет brightness, но есть color_temp → только light-color-temp
+function normalizeTileConfig(entity, base = "/local", hass = null) {
+  let features = [{ type: "light-brightness" }];
+
+  if (hass) {
+    const stateObj = hass.states[entity];
+    const modes = stateObj?.attributes?.supported_color_modes ?? [];
+    // brightness доступна если есть хотя бы один режим кроме "onoff" и "unknown"
+    const hasBrightness = modes.some(m => !["onoff", "unknown"].includes(m));
+    if (!hasBrightness) {
+      // нет brightness — пробуем color_temp
+      const hasColorTemp = modes.includes("color_temp");
+      features = hasColorTemp ? [{ type: "light-color-temp" }] : [];
+    }
+  }
+
   return {
     type: "tile",
     entity: entity,
-    card_mod: getCardMod(base),
-    features: [{ type: "light-brightness" }]
+    card_mod: getCardMod(base, entity),
+    features
   };
 }
 
@@ -214,24 +290,34 @@ class EmelyaLampCard extends LitElement {
   static styles = css`
     :host {
       display: block;
-      max-width: 450px;
-      min-width: 320px;
+      max-width:450px; min-width:320px;
       width: 100%;
+      border-radius:24px;
     }
-
-    .card {
-      position: relative;
+    ha-card{
+      border-radius:24px !important;
       width: 100%;
-      border-radius: 24px;
-      overflow: hidden;
       background: #1C1B1F;
       box-sizing: border-box;
-      background-image:
-        linear-gradient(#1C1B1F, #1C1B1F),
-        linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-      border: 1px solid transparent;
-      background-origin: border-box, border-box;
-      background-clip: padding-box, border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+    ha-card::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
     }
 
     /* ── Header ── */
@@ -242,6 +328,20 @@ class EmelyaLampCard extends LitElement {
       padding: 16px 16px 0;
       position: relative;
       z-index: 2;
+    }
+    .card{
+      width:100%;
+      box-sizing:border-box;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      height:320px;
+      border-radius:24px;
+      color:white;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      overflow: hidden;
     }
 
     .name {
@@ -262,42 +362,21 @@ class EmelyaLampCard extends LitElement {
       color: rgba(255,255,255,0.85);
     }
 
-    /* ── Image area ── */
-    .image-area {
-      position: relative;
-      width: 100%;
-      height: 180px;
-      overflow: hidden;
-    }
-
-    .device-image {
-      position: absolute;
-      right: -10px;
-      bottom: -10px;
-      width: 75%;
-      height: 100%;
-      object-fit: contain;
-      object-position: right bottom;
-      pointer-events: none;
-      user-select: none;
-    }
-
     /* ── Footer ── */
     .footer {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 12px 16px 16px;
-      background: #1C1B1F;
+      padding: 0px 16px 16px 16px;
       position: relative;
       z-index: 2;
     }
 
-    /* ── Power button (стиль из файла 2) ── */
+    /* ── Power button ── */
     .power-btn {
       width: 64px;
       height: 64px;
-      border-radius: 16px;
+      border-radius: 50%;
       background: #1C1B1F;
       display: flex;
       align-items: center;
@@ -330,7 +409,7 @@ class EmelyaLampCard extends LitElement {
     /* ── Slider wrapper ── */
     .slider-wrap {
       flex: 1;
-      height: 64px;
+      min-height: 64px;
       overflow: hidden;
       border-radius: 20px;
       opacity: 0;
@@ -343,7 +422,6 @@ class EmelyaLampCard extends LitElement {
 
     .slider-wrap ::slotted(ha-card) {
       width: 100% !important;
-      height: 64px !important;
       display: block !important;
     }
   `;
@@ -354,9 +432,10 @@ class EmelyaLampCard extends LitElement {
     this._sliderCard = null;
     this._buildToken = 0;
     this._lastBrightness = {};
-    this._offscreen = null;
     this._holdTimer = null;
     this._lastTap = 0;
+    // Храним последнее известное состояние для обновления слайдера
+    this._lastIsOn = null;
   }
 
   setConfig(config) {
@@ -376,16 +455,31 @@ class EmelyaLampCard extends LitElement {
   get hass() { return this._hass; }
 
   set hass(hass) {
+    // Сначала сохраняем brightness из СТАРОГО hass (пока свет ещё "on")
+    // Это критично: когда приходит новый hass с state:"off", brightness уже null
     this._saveBrightness(this._hass);
+    // Из нового hass тоже сохраняем — если свет включён и brightness положительный
     this._saveBrightness(hass);
     this._hass = hass;
 
     if (this._sliderCard) {
+      // Карточка находится в shadow root — обновляем hass прямо там.
+      // _buildHassForCard патчит brightness когда свет выключен,
+      // чтобы слайдер визуально не сбрасывался.
       this._sliderCard.hass = this._buildHassForCard(hass);
     }
 
     if (this._hass && !this._sliderCard && this.config?.entity) {
       this._buildSliderCard();
+    }
+
+    // Обновляем цвет slider-track-bar при смене состояния
+    if (hass && this.config?.entity) {
+      const isOn = hass.states[this.config.entity]?.state === "on";
+      if (isOn !== this._lastIsOn) {
+        this._lastIsOn = isOn;
+        this._updateSliderTrackBarColor(isOn);
+      }
     }
 
     this.requestUpdate();
@@ -427,9 +521,44 @@ class EmelyaLampCard extends LitElement {
     }
   }
 
+  /**
+   * Обновляем background у .slider-track-bar напрямую в shadow DOM.
+   * ON  → #343239  (светлее, заметный бар как на картинке 1)
+   * OFF → #1C1B1F  (темнее, почти незаметный как на картинке 2)
+   */
+  _updateSliderTrackBarColor(isOn) {
+    const trackColor = isOn ? "#4D4A54" : "linear-gradient(270deg, #343239 0%, #1C1B1F 100%)";
+    const sliderBg  = isOn ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)" : "#1C1B1F";
+    this._applyTrackBarColor(this._sliderCard, trackColor);
+    this._applySliderBgColor(this._sliderCard, sliderBg);
+  }
+
+  _applyTrackBarColor(root, color, depth = 0) {
+    if (!root || depth > 10) return;
+    const sr = root.shadowRoot || root;
+    sr.querySelectorAll(".slider-track-bar").forEach((el) => {
+      el.style.setProperty("background", color, "important");
+    });
+    const children = sr.querySelectorAll ? sr.querySelectorAll("*") : [];
+    children.forEach((el) => {
+      if (el.shadowRoot) this._applyTrackBarColor(el, color, depth + 1);
+    });
+  }
+  _applySliderBgColor(root, color, depth = 0) {
+    if (!root || depth > 10) return;
+    const sr = root.shadowRoot || root;
+    sr.querySelectorAll(".slider").forEach((el) => {
+      el.style.setProperty("background", color, "important");
+    });
+    sr.querySelectorAll("*").forEach((el) => {
+      if (el.shadowRoot) this._applySliderBgColor(el, color, depth + 1);
+    });
+  }
+
   async _buildSliderCard() {
     const token = ++this._buildToken;
     this._sliderReady = false;
+    this._sliderCard = null;
 
     if (!this._hass) {
       await new Promise((resolve) => {
@@ -441,38 +570,115 @@ class EmelyaLampCard extends LitElement {
 
     if (!this.config?.entity) return;
 
-    if (!this._offscreen) {
-      this._offscreen = document.createElement("div");
-      this._offscreen.style.cssText =
-        "position:fixed;left:-9999px;top:-9999px;width:400px;visibility:hidden;pointer-events:none;";
-      document.body.appendChild(this._offscreen);
-    }
+    // Ждём первого рендера чтобы shadow root и [data-slider-mount] существовали
+    await this.updateComplete;
+    if (token !== this._buildToken) return;
+
+    const wrap = this.shadowRoot?.querySelector("[data-slider-mount]");
+    if (!wrap) return;
+
+    // Очищаем старую карточку
+    wrap.innerHTML = "";
 
     try {
       const helpers = await window.loadCardHelpers();
       if (token !== this._buildToken) return;
 
-      const cfg = normalizeTileConfig(this.config.entity, this.base);
+      const cfg = normalizeTileConfig(this.config.entity, this.base, this._hass);
       const card = await helpers.createCardElement(cfg);
       if (this._hass) card.hass = this._buildHassForCard(this._hass);
 
-      this._offscreen.appendChild(card);
+      // Вставляем СРАЗУ в финальный контейнер внутри shadow root.
+      // card-mod работает здесь и элемент никуда не перемещается.
+      wrap.appendChild(card);
       this._forceShowHandle(card);
 
       await this._waitForCardModReady(card);
       if (token !== this._buildToken) return;
 
       this._sliderCard = card;
-      this.requestUpdate();
 
-      await this.updateComplete;
+      // Применяем начальный цвет трека сразу после построения карточки
+      const isOn = this._hass?.states?.[this.config.entity]?.state === "on";
+      this._lastIsOn = isOn;
+      // Даём card_mod полностью отработать (двойной rAF + setTimeout),
+      // затем принудительно ставим нужный цвет поверх
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        this._sliderReady = true;
+        setTimeout(() => {
+          this._updateSliderTrackBarColor(isOn);
+          this._watchTrackBarColor(card);
+          this._sliderReady = true;
+          this.requestUpdate();
+        }, 50);
       }));
 
     } catch (err) {
       console.error("emelya-lamp-card: build error", err);
     }
+  }
+
+  /**
+   * Вешаем MutationObserver на shadow-root каждого ha-control-slider.
+   * При любом изменении атрибутов или дочерних узлов — принудительно
+   * восстанавливаем нужный background через setProperty("background", color, "important").
+   * Это гарантирует что ни card_mod, ни HA не смогут перезаписать цвет.
+   */
+  _watchTrackBarColor(card) {
+    const getColor = () =>
+      this._hass?.states?.[this.config?.entity]?.state === "on"
+        ? "#4D4A54"
+        : "linear-gradient(270deg, #343239 0%, #1C1B1F 100%)";
+
+    const getSliderBg = () =>
+        this._hass?.states?.[this.config?.entity]?.state === "on"
+          ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)"
+          : "#1C1B1F";
+
+    const applyToEl = (el) => {
+      const color = getColor();
+      el.style.setProperty("background", color, "important");
+    };
+
+    const applySliderBg = (el) => {
+      el.style.setProperty("background", getSliderBg(), "important");
+    };
+
+    const observeShadow = (shadowRoot) => {
+      shadowRoot.querySelectorAll(".slider-track-bar").forEach(applyToEl);
+      shadowRoot.querySelectorAll(".slider").forEach(applySliderBg);
+
+      const mo = new MutationObserver(() => {
+        shadowRoot.querySelectorAll(".slider-track-bar").forEach(applyToEl);
+        shadowRoot.querySelectorAll(".slider").forEach(applySliderBg);
+      });
+      mo.observe(shadowRoot, {
+        attributes: true,
+        subtree: true,
+        attributeFilter: ["style", "class"],
+        childList: true
+      });
+    };
+
+    const findAndObserve = (root, depth = 0) => {
+      if (!root || depth > 10) return;
+      const sr = root.shadowRoot || root;
+      sr.querySelectorAll?.("ha-control-slider").forEach((slider) => {
+        const attach = () => {
+          if (slider.shadowRoot) observeShadow(slider.shadowRoot);
+          else requestAnimationFrame(attach);
+        };
+        attach();
+      });
+      sr.querySelectorAll?.("*").forEach((el) => {
+        if (el.shadowRoot) findAndObserve(el, depth + 1);
+      });
+    };
+
+    const waitCard = () => {
+      if (card.shadowRoot) findAndObserve(card.shadowRoot);
+      else requestAnimationFrame(waitCard);
+    };
+    requestAnimationFrame(waitCard);
   }
 
   _waitForCardModReady(card) {
@@ -492,6 +698,12 @@ class EmelyaLampCard extends LitElement {
     });
   }
 
+  /**
+   * Принудительно добавляем класс show-handle на slider-track-bar.
+   * HA убирает этот класс когда state:"off", что меняет padding трека
+   * и визуально сдвигает ползунок. Вешаем MutationObserver на каждый
+   * ha-control-slider чтобы мгновенно возвращать класс при любом изменении DOM.
+   */
   _forceShowHandle(card) {
     const applyClass = (root) => {
       if (!root) return;
@@ -499,21 +711,31 @@ class EmelyaLampCard extends LitElement {
         if (!el.classList.contains("show-handle")) el.classList.add("show-handle");
       });
     };
+
     const observeCard = (shadowRoot) => {
       applyClass(shadowRoot);
       const mo = new MutationObserver((mutations) => {
         let needs = false;
         for (const m of mutations) {
-          if (m.type === "attributes" && m.attributeName === "class" &&
+          if (
+            m.type === "attributes" &&
+            m.attributeName === "class" &&
             m.target.classList.contains("slider-track-bar") &&
-            !m.target.classList.contains("show-handle")) {
-            needs = true; break;
+            !m.target.classList.contains("show-handle")
+          ) {
+            needs = true;
+            break;
           }
         }
         if (needs) applyClass(shadowRoot);
       });
-      mo.observe(shadowRoot, { attributes: true, subtree: true, attributeFilter: ["class"] });
+      mo.observe(shadowRoot, {
+        attributes: true,
+        subtree: true,
+        attributeFilter: ["class"]
+      });
     };
+
     const findSliders = (root, depth = 0) => {
       if (!root || depth > 8) return;
       root.querySelectorAll("ha-control-slider").forEach((slider) => {
@@ -527,6 +749,7 @@ class EmelyaLampCard extends LitElement {
         if (el.shadowRoot) findSliders(el.shadowRoot, depth + 1);
       });
     };
+
     const waitCard = () => {
       if (card.shadowRoot) findSliders(card.shadowRoot);
       else requestAnimationFrame(waitCard);
@@ -536,7 +759,6 @@ class EmelyaLampCard extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._offscreen) { this._offscreen.remove(); this._offscreen = null; }
   }
 
   _togglePower(e) {
@@ -602,18 +824,23 @@ class EmelyaLampCard extends LitElement {
     const isOn = stateObj?.state === "on";
     const name = this.config?.name || stateObj?.attributes?.friendly_name || "Лампа";
     const statusText = isOn ? "Включено" : "Выключено";
-    const image = this.config?.image || "";
     const base = this.base || "/local";
+    const bgImage = this.config?.background_image || "";
 
     return html`
-      <div class="card">
+    <ha-card>
+      <div class="card"
+        style='
+          border-radius: 24px !important;
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.30) 76.38%, #1C1B1F 95.8%), url("${bgImage}") lightgray 77.756px 45.781px / 104.026% 85.591% no-repeat;
+          background-color: #1C1B1F;
+          background-blend-mode: normal, luminosity, normal;
+        '
+      >
+
         <div class="header">
           <div class="name">${name}</div>
           <div class="status ${isOn ? 'on' : ''}">${statusText}</div>
-        </div>
-
-        <div class="image-area">
-          ${image ? html`<img class="device-image" src="${image}" alt="${name}" />` : html``}
         </div>
 
         <div class="footer">
@@ -621,11 +848,13 @@ class EmelyaLampCard extends LitElement {
             <img src="${base}/images/container-images/light_button.png" alt="power" />
           </div>
 
-          <div class="slider-wrap ${this._sliderReady ? 'ready' : ''}">
-            ${this._sliderCard ?? html``}
-          </div>
+          <div
+            class="slider-wrap ${this._sliderReady ? 'ready' : ''}"
+            data-slider-mount
+          ></div>
         </div>
       </div>
+    </ha-card>
     `;
   }
 
@@ -639,6 +868,7 @@ class EmelyaLampCard extends LitElement {
       entity: "",
       name: "Лампа",
       image: "",
+      background_image: "",
       base_path: "/local",
       tap_action: { action: "none" },
       hold_action: { action: "none" },
@@ -655,9 +885,9 @@ class EmelyaLampCardEditor extends LitElement {
     hass: {},
     _config: { state: true },
     _tab: { state: true },
-    _uploadState: { state: true },
-    _uploadError: { state: true },
-    _dragOver: { state: true }
+    _bgUploadState: { state: true },
+    _bgUploadError: { state: true },
+    _bgDragOver: { state: true }
   };
 
   static styles = css`
@@ -743,9 +973,9 @@ class EmelyaLampCardEditor extends LitElement {
   constructor() {
     super();
     this._tab = 0;
-    this._uploadState = "idle";
-    this._uploadError = "";
-    this._dragOver = false;
+    this._bgUploadState = "idle";
+    this._bgUploadError = "";
+    this._bgDragOver = false;
   }
 
   setConfig(config) {
@@ -793,47 +1023,47 @@ class EmelyaLampCardEditor extends LitElement {
   }
 
   _appearanceTab() {
-    const src = this._config?.image;
+    const bgSrc = this._config?.background_image;
     return html`
       <div class="img-field">
-        <div class="img-label">Изображение устройства</div>
+        <div class="img-label">Фоновое изображение карточки</div>
 
         <div class="img-preview">
-          ${src ? html`
+          ${bgSrc ? html`
             <img
-              src=${src}
-              alt="preview"
-              @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }}
+              src=${bgSrc}
+              alt="bg preview"
+              @error=${() => { this._bgUploadState = "error"; this._bgUploadError = "Файл не найден"; }}
             />
           ` : html`
-            <div class="img-preview-empty">Изображение не задано.<br>Карточка будет без картинки.</div>
+            <div class="img-preview-empty">Фон не задан.<br>Будет использован однотонный фон.</div>
           `}
         </div>
 
         <div
-          class="drop-zone ${this._dragOver ? "dragover" : ""} ${this._uploadState === "loading" ? "loading" : ""}"
-          @dragover=${this._onDragOver}
-          @dragleave=${this._onDragLeave}
-          @drop=${this._onDrop}
-          @click=${this._onZoneClick}
+          class="drop-zone ${this._bgDragOver ? "dragover" : ""} ${this._bgUploadState === "loading" ? "loading" : ""}"
+          @dragover=${this._onBgDragOver}
+          @dragleave=${this._onBgDragLeave}
+          @drop=${this._onBgDrop}
+          @click=${this._onBgZoneClick}
         >
-          <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
-          <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
+          <div class="drop-icon">${this._bgUploadState === "loading" ? "⏳" : "🌄"}</div>
+          <div class="drop-text">${this._bgUploadState === "loading" ? "Загрузка..." : "Перетащите фон сюда"}</div>
           <div class="drop-sub">PNG, JPG, WebP, SVG</div>
-          ${this._uploadState !== "loading" ? html`
-            <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
+          ${this._bgUploadState !== "loading" ? html`
+            <button class="drop-btn" @click=${this._onBgZoneClick}>Выбрать файл</button>
           ` : ""}
         </div>
 
-        <input type="file" id="fileInput" accept="image/*" @change=${this._onFileInput} />
+        <input type="file" id="bgFileInput" accept="image/*" @change=${this._onBgFileInput} />
 
-        ${this._uploadState === "success" ? html`<div class="status-row success">✓ Изображение загружено</div>` : ""}
-        ${this._uploadState === "error"   ? html`<div class="status-row error">⚠ ${this._uploadError}</div>` : ""}
+        ${this._bgUploadState === "success" ? html`<div class="status-row success">✓ Фон загружен</div>` : ""}
+        ${this._bgUploadState === "error"   ? html`<div class="status-row error">⚠ ${this._bgUploadError}</div>` : ""}
 
-        ${src ? html`
+        ${bgSrc ? html`
           <div class="current-path">
-            <span title=${src}>${src}</span>
-            <button class="path-clear" @click=${this._clearImage}>✕</button>
+            <span title=${bgSrc}>${bgSrc}</span>
+            <button class="path-clear" @click=${this._clearBgImage}>✕</button>
           </div>
         ` : ""}
 
@@ -859,36 +1089,38 @@ class EmelyaLampCardEditor extends LitElement {
     `;
   }
 
-  _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
-  _onDragLeave()  { this._dragOver = false; }
+  /* ── Drag & Drop для фона ── */
 
-  _onDrop(e) {
+  _onBgDragOver(e) { e.preventDefault(); this._bgDragOver = true; }
+  _onBgDragLeave()  { this._bgDragOver = false; }
+
+  _onBgDrop(e) {
     e.preventDefault();
-    this._dragOver = false;
+    this._bgDragOver = false;
     const file = e.dataTransfer?.files?.[0];
-    if (file) this._uploadFile(file);
+    if (file) this._uploadBgFile(file);
   }
 
-  _onZoneClick(e) {
+  _onBgZoneClick(e) {
     e.stopPropagation();
-    this.shadowRoot?.getElementById("fileInput")?.click();
+    this.shadowRoot?.getElementById("bgFileInput")?.click();
   }
 
-  _onFileInput(e) {
+  _onBgFileInput(e) {
     const file = e.target?.files?.[0];
-    if (file) this._uploadFile(file);
+    if (file) this._uploadBgFile(file);
     e.target.value = "";
   }
 
-  async _uploadFile(file) {
+  async _uploadBgFile(file) {
     if (!file.type.startsWith("image/")) {
-      this._uploadState = "error";
-      this._uploadError = "Файл не является изображением";
+      this._bgUploadState = "error";
+      this._bgUploadError = "Файл не является изображением";
       return;
     }
 
-    this._uploadState = "loading";
-    this._uploadError = "";
+    this._bgUploadState = "loading";
+    this._bgUploadError = "";
 
     try {
       const formData = new FormData();
@@ -901,8 +1133,8 @@ class EmelyaLampCardEditor extends LitElement {
 
       if (resp.ok) {
         const json = await resp.json();
-        this._setImage(json.url || `/local/${file.name}`);
-        this._uploadState = "success";
+        this._setBackgroundImage(json.url || `/local/${file.name}`);
+        this._bgUploadState = "success";
         return;
       }
     } catch (_) {}
@@ -921,28 +1153,28 @@ class EmelyaLampCardEditor extends LitElement {
       if (resp.ok) {
         const json = await resp.json();
         const imgPath = `/api/image/serve/${json.id}/original`;
-        this._setImage(imgPath);
-        this._uploadState = "success";
+        this._setBackgroundImage(imgPath);
+        this._bgUploadState = "success";
         return;
       }
 
       throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
-      this._uploadState = "error";
-      this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+      this._bgUploadState = "error";
+      this._bgUploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
     }
   }
 
-  _setImage(path) {
-    this._config = { ...this._config, image: path };
+  _setBackgroundImage(path) {
+    this._config = { ...this._config, background_image: path };
     this._fire();
   }
 
-  _clearImage() {
-    this._uploadState = "idle";
-    this._uploadError = "";
+  _clearBgImage() {
+    this._bgUploadState = "idle";
+    this._bgUploadError = "";
     const config = { ...this._config };
-    delete config.image;
+    delete config.background_image;
     this._config = config;
     this._fire();
   }

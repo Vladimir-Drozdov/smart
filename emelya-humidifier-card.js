@@ -403,7 +403,7 @@ class EmelyaHumidifierCard extends LitElement {
       <div
         class="card"
         style='
-          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%), 
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 80%, #1C1B1F 100%), 
                       url("${bg}") -22.849px 67.463px / 141.697% 141.697% no-repeat, 
                       var(--Background-Surface-2, #1C1B1F);
           background-blend-mode: normal, luminosity, normal;

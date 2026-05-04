@@ -183,7 +183,6 @@ const getDefaultTileCardMod = (base = "/local", entity = "") => ({
               .slider .slider-track-bar{
                 height: 64px !important;
                 border-radius: 20px !important;
-                background: #343239 !important;
               }
             `,
             "." : `
@@ -442,9 +441,13 @@ class EmelyaLightPanelHui extends LitElement {
       width: 100%;
       border-radius:24px;
       border:none !important;
+      border-width: 0px !important;
+      border-style: none !important;
+      border-color:none !important;
     }
     ha-card{
       border-radius:24px !important;
+      border: none !important;
       width: 100%;
       background: #1C1B1F;
       padding: 16px;
@@ -540,10 +543,6 @@ class EmelyaLightPanelHui extends LitElement {
       gap: 12px;
     }
 
-    .disabled {
-      opacity: 0.4;
-    }
-
     .empty {
       color: rgba(255, 255, 255, 0.55);
       text-align: center;
@@ -562,6 +561,7 @@ class EmelyaLightPanelHui extends LitElement {
     this._lastTap = 0;
     // Хранилище последней яркости каждого объекта (entity_id -> brightness 0..255)
     this._lastBrightness = {};
+    this._lastIsOn = {};
   }
 
   setConfig(config) {
@@ -587,24 +587,37 @@ class EmelyaLightPanelHui extends LitElement {
   }
 
   set hass(hass) {
+    // 1. Сохраняем яркость из СТАРОГО hass — пока brightness ещё точно известен
     this._saveBrightness(this._hass);
+    // 2. Сохраняем из нового (если свет ещё on и brightness есть)
     this._saveBrightness(hass);
+
     this._hass = hass;
 
+    // 3. Строим патченный hass и сразу отдаём карточкам — без задержки
     const hassForCards = this._buildHassForCards(hass);
     this._cards?.forEach((card) => {
       card.hass = hassForCards;
     });
-
-    // Если карточки не построены (hass пришёл позже setConfig) — строим
-    if (this._hass && this._cards?.length === 0 && this.config?.tiles?.some(t => t?.entity)) {
-      this._rebuildCards();
-    }
-
+    this._cards?.forEach((card, i) => {
+      const entityId = this.config?.tiles?.[i]?.entity;
+      if (!entityId) return;
+      const isOn = hass?.states?.[entityId]?.state === "on";
+      if (isOn !== this._lastIsOn[entityId]) {
+        this._lastIsOn[entityId] = isOn;
+        this._updateSliderColors(card, isOn);
+      }
+    });
     this._syncPowerState();
     this.requestUpdate();
   }
 
+  /**
+   * Строим подменённый hass для дочерних tile-карточек.
+   * Для каждой выключенной сущности из конфига подставляем состояние "on"
+   * с сохранённой яркостью — слайдер остаётся на последнем положении.
+   * Реальный hass (this._hass) не меняется, Jinja2 в card_mod видит истину.
+   */
   _buildHassForCards(hass) {
     if (!hass) return hass;
 
@@ -709,36 +722,16 @@ class EmelyaLightPanelHui extends LitElement {
   }
 
   async _rebuildCards() {
-      const token = ++this._buildToken;
+    const token = ++this._buildToken;
+    const tiles = Array.isArray(this.config?.tiles) ? this.config.tiles : [];
 
-      // Ждём пока hass будет доступен (актуально при hard refresh)
-      if (!this._hass) {
-        await new Promise((resolve) => {
-          const check = () => {
-            if (this._hass) { resolve(); return; }
-            setTimeout(check, 50);
-          };
-          check();
-        });
-        if (token !== this._buildToken) return;
-      }
+    const validTiles = tiles.filter((tile) => tile?.entity);
 
-      const tiles = Array.isArray(this.config?.tiles) ? this.config.tiles : [];
-      const validTiles = tiles.filter((tile) => tile?.entity);
-
-      if (!validTiles.length) {
-        this._cards = [];
-        this._syncPowerState();
-        this.requestUpdate();
-        return;
-      }
-
-    // Offscreen контейнер — card-mod прогревается здесь до показа
-    if (!this._offscreen) {
-      this._offscreen = document.createElement("div");
-      this._offscreen.style.cssText =
-        "position:fixed;left:-9999px;top:-9999px;width:400px;visibility:hidden;pointer-events:none;";
-      document.body.appendChild(this._offscreen);
+    if (!validTiles.length) {
+      this._cards = [];
+      this._syncPowerState();
+      this.requestUpdate();
+      return;
     }
 
     try {
@@ -751,11 +744,16 @@ class EmelyaLightPanelHui extends LitElement {
             const cfg = normalizeTileConfig(tile, this.base);
             const card = await helpers.createCardElement(cfg);
             if (this._hass) card.hass = this._buildHassForCards(this._hass);
+            // Force show-handle class so slider width stays consistent on/off
             this._forceShowHandle(card);
-
-            // Вставляем в offscreen — card-mod начинает работать
-            this._offscreen.appendChild(card);
-
+            const isOn = this._hass?.states?.[tile.entity]?.state === "on";
+            this._lastIsOn[tile.entity] = isOn;
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              setTimeout(() => {
+                this._updateSliderColors(card, isOn);
+                this._watchSliderColors(card, tile.entity);
+              }, 50);
+            }));
             return card;
           } catch (err) {
             console.error("emelya-light-panel-hui: tile build error", tile, err);
@@ -766,55 +764,14 @@ class EmelyaLightPanelHui extends LitElement {
 
       if (token !== this._buildToken) return;
 
-      const validCards = built.filter(Boolean);
-
-      // Ждём пока card-mod отработает на всех карточках
-      await Promise.all(validCards.map((card) => this._waitForCardModReady(card)));
-
-      if (token !== this._buildToken) return;
-
-      this._cards = validCards;
+      this._cards = built.filter(Boolean);
       this._syncPowerState();
       this.requestUpdate();
-
     } catch (err) {
       console.error("emelya-light-panel-hui: rebuild error", err);
       this._cards = [];
       this.requestUpdate();
     }
-  }
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    if (this._offscreen) {
-      this._offscreen.remove();
-      this._offscreen = null;
-    }
-  }
-
-  _waitForCardModReady(card) {
-    return new Promise((resolve) => {
-      const deadline = Date.now() + 3000;
-
-      const check = () => {
-        if (Date.now() > deadline) { resolve(); return; }
-
-        const shadow = card.shadowRoot;
-        if (!shadow) { requestAnimationFrame(check); return; }
-
-        const haCard = shadow.querySelector("ha-card");
-        if (!haCard) { requestAnimationFrame(check); return; }
-
-        // card-mod меняет background на наш rgba(28, 27, 31, 1)
-        const bg = getComputedStyle(haCard).backgroundColor;
-        if (bg === "rgb(28, 27, 31)") {
-          resolve();
-        } else {
-          requestAnimationFrame(check);
-        }
-      };
-
-      requestAnimationFrame(check);
-    });
   }
 
   _syncPowerState() {
@@ -891,69 +848,154 @@ class EmelyaLightPanelHui extends LitElement {
    * карточку чтобы мгновенно возвращать класс при любом изменении DOM.
    */
   _forceShowHandle(card) {
-  const applyClass = (root) => {
-    if (!root) return;
-    root.querySelectorAll(".slider-track-bar").forEach((el) => {
-      if (!el.classList.contains("show-handle")) {
-        el.classList.add("show-handle");
-      }
-    });
-  };
-
-  // Один глобальный observer на карточку, не рекурсивный
-  const observeCard = (shadowRoot) => {
-    applyClass(shadowRoot);
-    const mo = new MutationObserver((mutations) => {
-      let needsApply = false;
-      for (const m of mutations) {
-        if (
-          m.type === "attributes" &&
-          m.attributeName === "class" &&
-          m.target.classList.contains("slider-track-bar") &&
-          !m.target.classList.contains("show-handle")
-        ) {
-          needsApply = true;
-          break;
+    const applyClass = (root) => {
+      if (!root) return;
+      root.querySelectorAll(".slider-track-bar").forEach((el) => {
+        if (!el.classList.contains("show-handle")) {
+          el.classList.add("show-handle");
         }
-      }
-      if (needsApply) applyClass(shadowRoot);
-    });
-    mo.observe(shadowRoot, {
-      attributes: true,
-      subtree: true,
-      attributeFilter: ["class"]
-    });
-  };
+      });
+    };
 
-  // Ищем ha-control-slider без рекурсии через shadowRoot
-  const findSliders = (root, depth = 0) => {
-    if (!root || depth > 8) return;
-    root.querySelectorAll("ha-control-slider").forEach((slider) => {
-      const waitForShadow = () => {
-        if (slider.shadowRoot) {
-          observeCard(slider.shadowRoot);
-        } else {
-          requestAnimationFrame(waitForShadow);
+    // Один глобальный observer на карточку, не рекурсивный
+    const observeCard = (shadowRoot) => {
+      applyClass(shadowRoot);
+      const mo = new MutationObserver((mutations) => {
+        let needsApply = false;
+        for (const m of mutations) {
+          if (
+            m.type === "attributes" &&
+            m.attributeName === "class" &&
+            m.target.classList.contains("slider-track-bar") &&
+            !m.target.classList.contains("show-handle")
+          ) {
+            needsApply = true;
+            break;
+          }
         }
-      };
-      waitForShadow();
-    });
+        if (needsApply) applyClass(shadowRoot);
+      });
+      mo.observe(shadowRoot, {
+        attributes: true,
+        subtree: true,
+        attributeFilter: ["class"]
+      });
+    };
 
-    // Уходим в shadow roots дочерних элементов только через querySelectorAll — без ручной рекурсии
-    root.querySelectorAll("*").forEach((el) => {
-      if (el.shadowRoot) findSliders(el.shadowRoot, depth + 1);
-    });
-  };
+    // Ищем ha-control-slider без рекурсии через shadowRoot
+    const findSliders = (root, depth = 0) => {
+      if (!root || depth > 8) return;
+      root.querySelectorAll("ha-control-slider").forEach((slider) => {
+        const waitForShadow = () => {
+          if (slider.shadowRoot) {
+            observeCard(slider.shadowRoot);
+          } else {
+            requestAnimationFrame(waitForShadow);
+          }
+        };
+        waitForShadow();
+      });
 
-  const waitForCard = () => {
-    if (card.shadowRoot) {
-      findSliders(card.shadowRoot);
-    } else {
-      requestAnimationFrame(waitForCard);
-    }
-  };
-  requestAnimationFrame(waitForCard);
-}
+      // Уходим в shadow roots дочерних элементов только через querySelectorAll — без ручной рекурсии
+      root.querySelectorAll("*").forEach((el) => {
+        if (el.shadowRoot) findSliders(el.shadowRoot, depth + 1);
+      });
+    };
+
+    const waitForCard = () => {
+      if (card.shadowRoot) {
+        findSliders(card.shadowRoot);
+      } else {
+        requestAnimationFrame(waitForCard);
+      }
+    };
+    requestAnimationFrame(waitForCard);
+  }
+  _applyTrackBarColor(root, color, depth = 0) {
+    if (!root || depth > 10) return;
+    const sr = root.shadowRoot || root;
+    sr.querySelectorAll(".slider-track-bar").forEach((el) => {
+      el.style.setProperty("background", color, "important");
+    });
+    sr.querySelectorAll("*").forEach((el) => {
+      if (el.shadowRoot) this._applyTrackBarColor(el, color, depth + 1);
+    });
+  }
+
+  _applySliderBgColor(root, color, depth = 0) {
+    if (!root || depth > 10) return;
+    const sr = root.shadowRoot || root;
+    sr.querySelectorAll(".slider").forEach((el) => {
+      el.style.setProperty("background", color, "important");
+    });
+    sr.querySelectorAll("*").forEach((el) => {
+      if (el.shadowRoot) this._applySliderBgColor(el, color, depth + 1);
+    });
+  }
+
+  _updateSliderColors(card, isOn) {
+    const trackColor = isOn ? "#4D4A54" : "linear-gradient(270deg, #343239 0%, #1C1B1F 100%)";
+    const sliderBg   = isOn ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)" : "#1C1B1F";
+    this._applyTrackBarColor(card, trackColor);
+    this._applySliderBgColor(card, sliderBg);
+  }
+
+  _watchSliderColors(card, entityId) {
+    const getTrackColor = () =>
+      this._hass?.states?.[entityId]?.state === "on"
+        ? "#4D4A54"
+        : "linear-gradient(270deg, #343239 0%, #1C1B1F 100%)";
+
+    const getSliderBg = () =>
+      this._hass?.states?.[entityId]?.state === "on"
+        ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)"
+        : "#1C1B1F";
+
+    const observeShadow = (shadowRoot) => {
+      shadowRoot.querySelectorAll(".slider-track-bar").forEach((el) => {
+        el.style.setProperty("background", getTrackColor(), "important");
+      });
+      shadowRoot.querySelectorAll(".slider").forEach((el) => {
+        el.style.setProperty("background", getSliderBg(), "important");
+      });
+
+      const mo = new MutationObserver(() => {
+        shadowRoot.querySelectorAll(".slider-track-bar").forEach((el) => {
+          el.style.setProperty("background", getTrackColor(), "important");
+        });
+        shadowRoot.querySelectorAll(".slider").forEach((el) => {
+          el.style.setProperty("background", getSliderBg(), "important");
+        });
+      });
+      mo.observe(shadowRoot, {
+        attributes: true,
+        subtree: true,
+        attributeFilter: ["style", "class"],
+        childList: true
+      });
+    };
+
+    const findAndObserve = (root, depth = 0) => {
+      if (!root || depth > 10) return;
+      const sr = root.shadowRoot || root;
+      sr.querySelectorAll?.("ha-control-slider").forEach((slider) => {
+        const attach = () => {
+          if (slider.shadowRoot) observeShadow(slider.shadowRoot);
+          else requestAnimationFrame(attach);
+        };
+        attach();
+      });
+      sr.querySelectorAll?.("*").forEach((el) => {
+        if (el.shadowRoot) findAndObserve(el, depth + 1);
+      });
+    };
+
+    const waitCard = () => {
+      if (card.shadowRoot) findAndObserve(card.shadowRoot);
+      else requestAnimationFrame(waitCard);
+    };
+    requestAnimationFrame(waitCard);
+  }
 
   _onPointerDown(e) {
     if (e.target.closest(".power-button")) return;
@@ -1020,7 +1062,6 @@ class EmelyaLightPanelHui extends LitElement {
                 const entityId = this.config?.tiles?.[i]?.entity;
                 return html`
                   <div
-                    class=${this.power ? "" : "disabled"}
                     @click=${(e) => this._onTileClick(e, entityId)}
                   >
                     ${card}

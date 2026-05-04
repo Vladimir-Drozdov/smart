@@ -408,7 +408,7 @@ class EmelyaBreezerCard extends LitElement {
       <div
         class="card"
         style='
-          background: linear-gradient(180deg, rgba(28, 27, 31, 0.20) 74.79%, #1C1B1F 100%), url("${bg}") 105.316px 49.164px / 70.472% 98.523% no-repeat, #1C1B1F;
+          background: linear-gradient(180deg, rgba(28, 27, 31, 0.20) 80%, #1C1B1F 100%), url("${bg}") 105.316px 49.164px / 70.472% 98.523% no-repeat, #1C1B1F;
           background-blend-mode: normal, luminosity, normal;
           border: none;
           border-radius: 24px !important;
