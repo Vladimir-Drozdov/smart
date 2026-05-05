@@ -24,7 +24,7 @@ class EmelyaWasherCard extends LitElement {
         font-size: 16px !important;
       } 
       
-      ha-card ha-select { 
+      ha-card ha-select {
         --mdc-select-fill-color: rgba(255, 255, 255, 0.10);
         --mdc-theme-surface: #1C1B1F;
         background-color: rgba(255, 255, 255, 0.10) !important;
@@ -33,6 +33,11 @@ class EmelyaWasherCard extends LitElement {
         --ha-card-border-radius: 16px !important;
         box-sizing: border-box !important;
         backdrop-filter: blur(12px) !important;
+        z-index: 99 !important;
+      }
+      ha-card ha-select mwc-list-item{
+        z-index: 99 !important;
+        position: relative !important;
       }
     `,
     "ha-select": {

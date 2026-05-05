@@ -21,6 +21,7 @@ class EmelyaCoffeeCard extends LitElement {
       
       ha-card {
         font-size: 16px !important;
+        overflow: visible !important;
       } 
       
       ha-card ha-select { 
@@ -32,6 +33,11 @@ class EmelyaCoffeeCard extends LitElement {
         --ha-card-border-radius: 16px !important;
         box-sizing: border-box !important;
         backdrop-filter: blur(12px) !important;
+        z-index: 99 !important;
+      }
+      ha-card ha-select mwc-list-item{
+        z-index: 99 !important;
+        position: relative !important;
       }
     `,
 
@@ -41,7 +47,7 @@ class EmelyaCoffeeCard extends LitElement {
         .mdc-select {
           border-radius: 16px !important;
           background-color: transparent !important;
-        }  
+        }
 
         .mdc-select__anchor {
           border-radius: 16px !important;
@@ -177,6 +183,7 @@ class EmelyaCoffeeCard extends LitElement {
     ha-card {
       border-radius: 24px !important;
       border: none !important;
+      overflow: visible !important;
     }
 
     .card {
@@ -192,6 +199,11 @@ class EmelyaCoffeeCard extends LitElement {
       cursor: pointer;
       user-select: none;
       position: relative;
+      overflow: visible !important;
+    }
+    :host(:has([aria-expanded="true"])) ha-card {
+      z-index: 10 !important;
+      position: relative !important;
     }
 
     .card::before {

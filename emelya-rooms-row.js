@@ -1,5 +1,8 @@
 import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
 
+/* ─────────────────────────────────────────
+   CARD
+───────────────────────────────────────── */
 class EmelyaRoomsRow extends LitElement {
   static properties = {
     hass: {},
@@ -12,10 +15,42 @@ class EmelyaRoomsRow extends LitElement {
     this.dragStarted = false;
     this.startX = 0;
     this.startScrollLeft = 0;
+    this._preloadedBgs = new Set();
   }
 
   setConfig(config) {
     this.config = config || {};
+    // Предзагружаем все фоны сразу при установке конфига —
+    // до рендера, чтобы браузер начал качать картинки как можно раньше
+    this._preloadRoomBackgrounds();
+  }
+
+  _preloadRoomBackgrounds() {
+    const rooms = this.config?.rooms || [];
+    rooms.forEach(room => {
+      if (room.background && !this._preloadedBgs.has(room.background)) {
+        this._preloadedBgs.add(room.background);
+        const img = new Image();
+        img.src = room.background;
+      }
+    });
+  }
+
+  // После каждого рендера проходим по карточкам и инициализируем фон
+  updated() {
+    const cards = this.renderRoot.querySelectorAll(".card[data-bg]");
+    cards.forEach(el => {
+      const bgUrl = el.dataset.bg;
+      if (!bgUrl || el._bgInitialized === bgUrl) return;
+      el._bgInitialized = bgUrl;
+
+      el.style.setProperty("--room-bg", `url("${bgUrl}")`);
+
+      const img = new Image();
+      img.onload = () => el.classList.add("bg-loaded");
+      // Если картинка уже в кэше — onload стреляет синхронно, без мигания
+      img.src = bgUrl;
+    });
   }
 
   static styles = css`
@@ -53,6 +88,55 @@ class EmelyaRoomsRow extends LitElement {
       padding: 48px 28px 16px 16px;
       box-sizing: border-box;
       color: white;
+      position: relative;
+      /* Базовый цвет пока картинка не загружена */
+      background: #1C1B1F;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /*
+      Фон вынесен в ::before — убирает background-blend-mode с самого .card.
+      background-blend-mode на элементе создаёт stacking context,
+      из-за которого position:fixed у дочерних элементов ломается.
+    */
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background-image:
+        radial-gradient(179.4% 100% at 50% 0%, rgba(28, 27, 31, 0) 0%, #1C1B1F 100%),
+        var(--room-bg, none);
+      background-size: auto, cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      /* Плавное появление — воспринимается быстрее чем резкий pop-in */
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .card.bg-loaded::before {
+      opacity: 1;
+    }
+
+    /* Граница */
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      z-index: 0;
     }
 
     .icon {
@@ -65,6 +149,8 @@ class EmelyaRoomsRow extends LitElement {
       position: relative;
       justify-content: center;
       backdrop-filter: blur(12px);
+      z-index: 1;
+      flex-shrink: 0;
     }
     .icon::before {
       content: "";
@@ -93,6 +179,8 @@ class EmelyaRoomsRow extends LitElement {
       gap: 4px;
       flex: 1;
       padding-left: 8px;
+      position: relative;
+      z-index: 1;
     }
 
     .title {
@@ -135,9 +223,7 @@ class EmelyaRoomsRow extends LitElement {
 
   _onMouseUp = () => {
     const container = this.renderRoot.querySelector('.container');
-    if (container) {
-      container.classList.remove("dragging");
-    }
+    if (container) container.classList.remove("dragging");
     document.removeEventListener("mousemove", this._onMouseMove);
     document.removeEventListener("mouseup", this._onMouseUp);
     this._dragStartTime = null;
@@ -161,7 +247,6 @@ class EmelyaRoomsRow extends LitElement {
   _handleAction(actionConfig, room) {
     if (!actionConfig || !this.hass) return;
     const entityId = actionConfig.entity || room.entity;
-
     switch (actionConfig.action) {
       case "more-info":
         if (entityId) this._fireMoreInfo(entityId);
@@ -203,18 +288,7 @@ class EmelyaRoomsRow extends LitElement {
           return html`
             <div
               class="card"
-              style="
-                background-image:
-                  radial-gradient(179.4% 100% at 50% 0%, rgba(28, 27, 31, 0) 0%, #1C1B1F 100%),
-                  url(${room.background}),
-                  linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%);
-                background-size: auto, cover, auto;
-                background-position: center;
-                background-repeat: no-repeat;
-                border: 1px solid transparent;
-                background-origin: border-box;
-                background-clip: padding-box, padding-box, border-box;
-              "
+              data-bg=${room.background || ""}
               @click=${() => this._onRoomClick(room)}
             >
               <div class="icon">
@@ -258,6 +332,7 @@ const ICON_OPTIONS = [
   { label: "Комната няни",   value: "/local/images/icons/nanny_room.svg" },
   { label: "Прихожая",       value: "/local/images/icons/entrance.svg" },
 ];
+
 class EmelyaRoomsRowEditor extends LitElement {
   static properties = {
     hass:           {},
@@ -270,153 +345,66 @@ class EmelyaRoomsRowEditor extends LitElement {
   };
 
   static styles = css`
-    :host {
-      display: block;
-      box-sizing: border-box;
-    }
+    :host { display: block; box-sizing: border-box; }
 
-    .editor {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .toolbar {
-      display: flex;
-      justify-content: flex-end;
-    }
-
+    .editor { display: flex; flex-direction: column; gap: 16px; }
+    .toolbar { display: flex; justify-content: flex-end; }
     .toolbar button {
-      border: none;
-      border-radius: 10px;
-      padding: 10px 14px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      background: var(--primary-color);
-      color: white;
+      border: none; border-radius: 10px; padding: 10px 14px;
+      cursor: pointer; font-size: 14px; font-weight: 600;
+      background: var(--primary-color); color: white;
     }
 
-    .rooms-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
+    .rooms-list { display: flex; flex-direction: column; gap: 8px; }
     .room-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 12px;
-      border-radius: 14px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 12px; border-radius: 14px;
       border: 1px solid var(--divider-color);
-      background: var(--secondary-background-color);
-      cursor: pointer;
+      background: var(--secondary-background-color); cursor: pointer;
     }
-
     .room-item.selected {
       border-color: var(--primary-color);
       box-shadow: 0 0 0 1px var(--primary-color) inset;
     }
-
     .room-main { flex: 1; min-width: 0; }
-
-    .room-name {
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--primary-text-color);
-    }
-
+    .room-name { font-weight: 600; font-size: 14px; color: var(--primary-text-color); }
     .room-sub {
-      font-size: 12px;
-      color: var(--secondary-text-color);
-      margin-top: 4px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      font-size: 12px; color: var(--secondary-text-color); margin-top: 4px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-
-    .room-actions {
-      display: flex;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-
+    .room-actions { display: flex; gap: 6px; flex-shrink: 0; }
     .icon-btn {
-      border: 1px solid var(--divider-color);
-      background: var(--card-background-color);
-      color: var(--primary-text-color);
-      border-radius: 10px;
-      width: 34px;
-      height: 34px;
-      cursor: pointer;
-      font-size: 14px;
-      line-height: 1;
+      border: 1px solid var(--divider-color); background: var(--card-background-color);
+      color: var(--primary-text-color); border-radius: 10px;
+      width: 34px; height: 34px; cursor: pointer; font-size: 14px; line-height: 1;
     }
 
     .panel {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      border: 1px solid var(--divider-color);
-      border-radius: 16px;
-      padding: 16px;
-      background: var(--card-background-color);
+      display: flex; flex-direction: column; gap: 16px;
+      border: 1px solid var(--divider-color); border-radius: 16px;
+      padding: 16px; background: var(--card-background-color);
     }
+    .section-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
 
-    .section-title {
-      font-size: 15px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .field label {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--primary-text-color);
-    }
-
-    .field input,
-    .field select,
-    .field textarea {
-      width: 100%;
-      box-sizing: border-box;
-      border: 1px solid var(--divider-color);
-      border-radius: 10px;
-      padding: 10px 12px;
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 13px; font-weight: 600; color: var(--primary-text-color); }
+    .field input, .field select, .field textarea {
+      width: 100%; box-sizing: border-box; border: 1px solid var(--divider-color);
+      border-radius: 10px; padding: 10px 12px;
       background: var(--secondary-background-color);
-      color: var(--primary-text-color);
-      font: inherit;
+      color: var(--primary-text-color); font: inherit;
     }
-
-    .field textarea {
-      min-height: 110px;
-      resize: vertical;
-      font-family: monospace;
-    }
+    .field textarea { min-height: 110px; resize: vertical; font-family: monospace; }
 
     .error { font-size: 12px; color: var(--error-color, #db4437); }
     .hint  { font-size: 12px; color: var(--secondary-text-color); }
-
     .empty {
-      padding: 20px;
-      border: 1px dashed var(--divider-color);
-      border-radius: 16px;
-      color: var(--secondary-text-color);
-      text-align: center;
+      padding: 20px; border: 1px dashed var(--divider-color); border-radius: 16px;
+      color: var(--secondary-text-color); text-align: center;
     }
 
-    /* ── Image upload ── */
     .img-field { display: flex; flex-direction: column; gap: 10px; }
     .img-label { font-size: 13px; font-weight: 600; color: var(--primary-text-color); }
-
     .img-preview {
       width: 100%; height: 120px; border-radius: 16px; overflow: hidden;
       background: #1C1B1F; border: 1px solid rgba(101,101,101,0.3);
@@ -441,11 +429,9 @@ class EmelyaRoomsRowEditor extends LitElement {
       background: color-mix(in srgb, var(--primary-color) 10%, transparent);
     }
     .drop-zone.loading { opacity: 0.6; pointer-events: none; }
-
     .drop-icon { font-size: 24px; line-height: 1; }
     .drop-text { font-size: 13px; color: var(--primary-text-color); line-height: 1.4; }
     .drop-sub  { font-size: 11px; color: var(--secondary-text-color); }
-
     .drop-btn {
       margin-top: 2px; padding: 5px 12px; border-radius: 8px;
       border: 1px solid var(--primary-color); background: transparent;
@@ -509,8 +495,6 @@ class EmelyaRoomsRowEditor extends LitElement {
     ];
   }
 
-  /* ── Drag & Drop ── */
-
   _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
   _onDragLeave()  { this._dragOver = false; }
 
@@ -532,7 +516,20 @@ class EmelyaRoomsRowEditor extends LitElement {
     e.target.value = "";
   }
 
-  /* ── File upload ── */
+  /*
+    HA API отклоняет image/avif (и некоторые другие форматы) с HTTP 400.
+    Решение: подменяем MIME-тип на image/png перед отправкой.
+    Бинарные данные файла остаются нетронутыми — сервер сохраняет байты как есть.
+    Браузер при отображении читает файл по реальным байтам (magic bytes),
+    игнорируя Content-Type с которым файл был загружен, так что avif корректно отобразится.
+  */
+  _normalizeFileForUpload(file) {
+    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupportedByHA.includes(file.type)) {
+      return new File([file], file.name, { type: "image/png" });
+    }
+    return file;
+  }
 
   async _uploadFile(file) {
     if (!file.type.startsWith("image/")) {
@@ -544,10 +541,12 @@ class EmelyaRoomsRowEditor extends LitElement {
     this._uploadState = "loading";
     this._uploadError = "";
 
+    const uploadFile = this._normalizeFileForUpload(file);
+
     // Attempt 1 — HA store_image
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await this.hass.fetchWithAuth(
         `/api/config/core/store_image`,
@@ -566,7 +565,7 @@ class EmelyaRoomsRowEditor extends LitElement {
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await fetch(`${window.location.origin}/api/image/upload`, {
         method: "POST",
@@ -606,8 +605,6 @@ class EmelyaRoomsRowEditor extends LitElement {
     this._emitConfig();
   }
 
-  /* ── Image upload UI ── */
-
   _renderBgUpload(room) {
     const src = room?.background;
     return html`
@@ -616,15 +613,10 @@ class EmelyaRoomsRowEditor extends LitElement {
 
         <div class="img-preview">
           ${src ? html`
-            <img
-              src=${src}
-              alt="preview"
-              @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }}
-            />
+            <img src=${src} alt="preview"
+              @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }} />
           ` : html`
-            <div class="img-preview-empty">
-              Фон не задан.<br>Будет использован пустой фон.
-            </div>
+            <div class="img-preview-empty">Фон не задан.<br>Будет использован пустой фон.</div>
           `}
         </div>
 
@@ -637,7 +629,7 @@ class EmelyaRoomsRowEditor extends LitElement {
         >
           <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
           <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
-          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          <div class="drop-sub">PNG, JPG, WebP, AVIF, SVG</div>
           ${this._uploadState !== "loading" ? html`
             <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
           ` : ""}
@@ -645,12 +637,8 @@ class EmelyaRoomsRowEditor extends LitElement {
 
         <input type="file" id="bgFileInput" accept="image/*" @change=${this._onFileInput} />
 
-        ${this._uploadState === "success" ? html`
-          <div class="status-row success">✓ Изображение загружено</div>
-        ` : ""}
-        ${this._uploadState === "error" ? html`
-          <div class="status-row error">⚠ ${this._uploadError}</div>
-        ` : ""}
+        ${this._uploadState === "success" ? html`<div class="status-row success">✓ Изображение загружено</div>` : ""}
+        ${this._uploadState === "error"   ? html`<div class="status-row error">⚠ ${this._uploadError}</div>` : ""}
 
         ${src ? html`
           <div class="current-path">
@@ -661,6 +649,7 @@ class EmelyaRoomsRowEditor extends LitElement {
 
         <div class="img-hint">
           Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
+          Поддерживаются PNG, JPG, WebP и AVIF.
         </div>
       </div>
     `;
@@ -688,9 +677,9 @@ class EmelyaRoomsRowEditor extends LitElement {
                     <div class="room-sub">${room.entity || "Температурная сущность не выбрана"}</div>
                   </div>
                   <div class="room-actions" @click=${this._stopPropagation}>
-                    <button class="icon-btn" title="Вверх"  ?disabled=${index === 0}                @click=${() => this._moveRoom(index, -1)}>↑</button>
-                    <button class="icon-btn" title="Вниз"   ?disabled=${index === rooms.length - 1} @click=${() => this._moveRoom(index, 1)}>↓</button>
-                    <button class="icon-btn" title="Удалить"                                        @click=${() => this._removeRoom(index)}>✕</button>
+                    <button class="icon-btn" ?disabled=${index === 0}                @click=${() => this._moveRoom(index, -1)}>↑</button>
+                    <button class="icon-btn" ?disabled=${index === rooms.length - 1} @click=${() => this._moveRoom(index, 1)}>↓</button>
+                    <button class="icon-btn"                                         @click=${() => this._removeRoom(index)}>✕</button>
                   </div>
                 </div>
               `)
@@ -712,24 +701,16 @@ class EmelyaRoomsRowEditor extends LitElement {
               <label>Иконка</label>
               <div style="display:flex; align-items:center; gap:10px;">
                 ${selected.icon ? html`
-                  <div style="
-                    width:40px; height:40px; border-radius:12px;
-                    background:#28272C; border:1px solid #4D4A54;
-                    display:flex; align-items:center; justify-content:center; flex-shrink:0;
-                  ">
+                  <div style="width:40px;height:40px;border-radius:12px;background:#28272C;
+                    border:1px solid #4D4A54;display:flex;align-items:center;
+                    justify-content:center;flex-shrink:0;">
                     <img src=${selected.icon} style="width:20px;height:20px;filter:brightness(0) invert(1);object-fit:contain;" />
                   </div>
                 ` : ''}
-                <select
-                  style="flex:1;"
-                  .value=${selected.icon || ""}
-                  @change=${(e) => this._onIconChange(e)}
-                >
+                <select style="flex:1;" .value=${selected.icon || ""} @change=${this._onIconChange}>
                   <option value="">— Выберите иконку —</option>
                   ${ICON_OPTIONS.map(opt => html`
-                    <option value=${opt.value} ?selected=${selected.icon === opt.value}>
-                      ${opt.label}
-                    </option>
+                    <option value=${opt.value} ?selected=${selected.icon === opt.value}>${opt.label}</option>
                   `)}
                 </select>
               </div>
@@ -742,10 +723,7 @@ class EmelyaRoomsRowEditor extends LitElement {
 
             <div class="field">
               <label>Действие по нажатию</label>
-              <select
-                .value=${selected.tap_action?.action || "none"}
-                @change=${this._onActionTypeChange}
-              >
+              <select .value=${selected.tap_action?.action || "none"} @change=${this._onActionTypeChange}>
                 <option value="none">Нет</option>
                 <option value="more-info">more-info</option>
                 <option value="navigate">navigate</option>
@@ -757,19 +735,15 @@ class EmelyaRoomsRowEditor extends LitElement {
             ${selected.tap_action?.action === "call-service" ? html`
               <div class="field">
                 <label>Сервис</label>
-                <input
-                  .value=${selected.tap_action?.service || ""}
+                <input .value=${selected.tap_action?.service || ""}
                   @input=${(e) => this._updateActionField("service", e.target.value)}
-                  placeholder="light.turn_on"
-                />
+                  placeholder="light.turn_on" />
               </div>
               <div class="field">
                 <label>Service data (JSON)</label>
-                <textarea
-                  .value=${this._formatJson(selected.tap_action?.data)}
+                <textarea .value=${this._formatJson(selected.tap_action?.data)}
                   @input=${this._onActionDataInput}
-                  placeholder='{"brightness": 150}'
-                ></textarea>
+                  placeholder='{"brightness": 150}'></textarea>
                 ${this._jsonError
                   ? html`<div class="error">${this._jsonError}</div>`
                   : html`<div class="hint">Оставь пустым, если дополнительные данные не нужны.</div>`}
@@ -779,22 +753,18 @@ class EmelyaRoomsRowEditor extends LitElement {
             ${selected.tap_action?.action === "navigate" ? html`
               <div class="field">
                 <label>Путь навигации</label>
-                <input
-                  .value=${selected.tap_action?.navigation_path || ""}
+                <input .value=${selected.tap_action?.navigation_path || ""}
                   @input=${(e) => this._updateActionField("navigation_path", e.target.value)}
-                  placeholder="/lovelace/rooms"
-                />
+                  placeholder="/lovelace/rooms" />
               </div>
             ` : ""}
 
             ${selected.tap_action?.action === "url" ? html`
               <div class="field">
                 <label>URL</label>
-                <input
-                  .value=${selected.tap_action?.url_path || ""}
+                <input .value=${selected.tap_action?.url_path || ""}
                   @input=${(e) => this._updateActionField("url_path", e.target.value)}
-                  placeholder="https://example.com"
-                />
+                  placeholder="https://example.com" />
               </div>
             ` : ""}
           </div>
@@ -803,14 +773,11 @@ class EmelyaRoomsRowEditor extends LitElement {
     `;
   }
 
-  /* ── Room management ── */
-
   _stopPropagation(e) { e.stopPropagation(); }
 
   _selectRoom(index) {
     this._selectedIndex = index;
     this._jsonError = "";
-    // Reset upload state when switching rooms
     this._uploadState = "idle";
     this._uploadError = "";
     this._dragOver = false;
@@ -818,13 +785,7 @@ class EmelyaRoomsRowEditor extends LitElement {
 
   _addRoom = () => {
     const rooms = [...(this._config.rooms || [])];
-    rooms.push({
-      name: `Комната ${rooms.length + 1}`,
-      entity: "",
-      icon: "",
-      background: "",
-      tap_action: { action: "none" }
-    });
+    rooms.push({ name: `Комната ${rooms.length + 1}`, entity: "", icon: "", background: "", tap_action: { action: "none" } });
     this._config = { ...this._config, rooms };
     this._selectedIndex = rooms.length - 1;
     this._uploadState = "idle";
@@ -836,9 +797,7 @@ class EmelyaRoomsRowEditor extends LitElement {
     const rooms = [...(this._config.rooms || [])];
     rooms.splice(index, 1);
     this._config = { ...this._config, rooms };
-    if (this._selectedIndex >= rooms.length) {
-      this._selectedIndex = Math.max(0, rooms.length - 1);
-    }
+    if (this._selectedIndex >= rooms.length) this._selectedIndex = Math.max(0, rooms.length - 1);
     this._uploadState = "idle";
     this._uploadError = "";
     this._emitConfig();
@@ -853,17 +812,17 @@ class EmelyaRoomsRowEditor extends LitElement {
     this._selectedIndex = newIndex;
     this._emitConfig();
   }
+
   _onIconChange = (e) => {
-    const value = e.target.value;
     const rooms = [...(this._config.rooms || [])];
-    rooms[this._selectedIndex] = { ...rooms[this._selectedIndex], icon: value };
+    rooms[this._selectedIndex] = { ...rooms[this._selectedIndex], icon: e.target.value };
     this._config = { ...this._config, rooms };
     this._emitConfig();
   };
+
   _onRoomFormChanged = (e) => {
     const updated = e.detail.value;
     const rooms = [...(this._config.rooms || [])];
-    // Preserve background — it's managed separately
     rooms[this._selectedIndex] = {
       ...rooms[this._selectedIndex],
       ...updated,
@@ -905,12 +864,8 @@ class EmelyaRoomsRowEditor extends LitElement {
   _onActionDataInput = (e) => {
     const value = e.target.value.trim();
     if (!value) { this._setActionData({}); this._jsonError = ""; return; }
-    try {
-      this._setActionData(JSON.parse(value));
-      this._jsonError = "";
-    } catch (_) {
-      this._jsonError = "Невалидный JSON";
-    }
+    try { this._setActionData(JSON.parse(value)); this._jsonError = ""; }
+    catch (_) { this._jsonError = "Невалидный JSON"; }
   };
 
   _setActionData(data) {
@@ -946,13 +901,7 @@ EmelyaRoomsRow.getConfigElement = function () {
 EmelyaRoomsRow.getStubConfig = function () {
   return {
     rooms: [
-      {
-        name: "Гостиная",
-        entity: "",
-        icon: "",
-        background: "",
-        tap_action: { action: "none" }
-      }
+      { name: "Гостиная", entity: "", icon: "", background: "", tap_action: { action: "none" } }
     ]
   };
 };

@@ -34,6 +34,11 @@ class EmelyaDishwasherCard extends LitElement {
         --ha-card-border-radius: 16px !important;
         box-sizing: border-box !important;
         backdrop-filter: blur(12px) !important;
+        z-index: 99 !important;
+      }
+      ha-card ha-select mwc-list-item{
+        z-index: 99 !important;
+        position: relative !important;
       }
     `,
 
