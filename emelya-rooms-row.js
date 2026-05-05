@@ -108,8 +108,8 @@ class EmelyaRoomsRow extends LitElement {
       background-image:
         radial-gradient(179.4% 100% at 50% 0%, rgba(28, 27, 31, 0) 0%, #1C1B1F 100%),
         var(--room-bg, none);
-      background-size: auto, 109.286% 291.312%;
-      background-position: center, 0px -241.073px;
+      background-size: auto, 117.857% 176.668%;
+      background-position: center, -25px -77.399px;
       background-repeat: no-repeat, no-repeat;
       background-blend-mode: normal, luminosity;
     }

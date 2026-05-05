@@ -112,7 +112,8 @@ class EmelyaHoodCard extends LitElement {
         linear-gradient(#fff 0 0);
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
-      pointer-events: none;
+      pointer-events: none; 
+      z-index:3;
     }
     .frame::after {
       content: "";
