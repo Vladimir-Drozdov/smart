@@ -107,11 +107,11 @@ class EmelyaRoomsRow extends LitElement {
       border-radius: 24px;
       background-image:
         radial-gradient(179.4% 100% at 50% 0%, rgba(28, 27, 31, 0) 0%, #1C1B1F 100%),
-        var(--room-bg, none), linear-gradient(0deg, #1C1B1F, #1C1B1F);
-      background-size: auto, 109.286% 291.312%, auto;
-      background-position: center, 0px -241.073px, center;
-      background-repeat: no-repeat, no-repeat, no-repeat;
-      background-blend-mode: normal, luminosity, normal;
+        var(--room-bg, none);
+      background-size: auto, 109.286% 291.312%;
+      background-position: center, 0px -241.073px;
+      background-repeat: no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity;
     }
 
     .card.bg-loaded::before {

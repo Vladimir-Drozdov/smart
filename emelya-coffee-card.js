@@ -259,7 +259,7 @@ class EmelyaCoffeeCard extends LitElement {
       border-radius: 24px;
       background-image:
         linear-gradient(180deg, rgba(28, 27, 31, 0.00) 70%, #1C1B1F 100%),
-        var(--breezer-bg, none),
+        var(--coffee-bg, none),
         linear-gradient(0deg, #1C1B1F, #1C1B1F);
       background-size: auto, 74.782% 76.117%, auto;
       background-position: center, 88px 53.12px, center;
