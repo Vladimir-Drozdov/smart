@@ -632,6 +632,16 @@ const ICON_OPTIONS = [
   { label: "Гараж",          value: "/local/images/icons/garage.svg" }, //
   { label: "Комната няни",   value: "/local/images/icons/nanny_room.svg" },
   { label: "Прихожая",       value: "/local/images/icons/entrance.svg" }, //
+  { label: "Полумесяц",       value: "/local/images/icons/cresent_moon.svg" }, //
+  { label: "Часы",       value: "/local/images/icons/clock.svg" }, //
+  { label: "Холодный термостат",       value: "/local/images/icons/cool_thermostat.svg" }, //
+  { label: "Горячий термостат",       value: "/local/images/icons/heat_thermostat.svg" }, //
+  { label: "Дверь закрытая",       value: "/local/images/icons/door_front.svg" }, //
+  { label: "Дверь открытая",       value: "/local/images/icons/door_open.svg" }, //
+  { label: "Лампочка включенная",       value: "/local/images/icons/lightbulb.svg" }, //
+  { label: "Лампочка выключенная",       value: "/local/images/icons/lightbulb_turnoff.svg" }, //
+  { label: "Капля",       value: "/local/images/icons/no_drop.svg" }, //
+  { label: "вкл/выкл",       value: "/local/images/icons/power.svg" }, //
 ];
 class EmelyaQuickActionsEditor extends LitElement {
 

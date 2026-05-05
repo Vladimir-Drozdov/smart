@@ -58,8 +58,9 @@ class EmelyaHeaderCard extends LitElement {
     this._allPersons   = [];
     this._mode = localStorage.getItem("home_mode") || "home";
     this._holdTimer = null;
-    this._tapCount  = 0;
-    this._tapTimer  = null;
+    this._tapCount = 0;
+    this._tapTimer = null;
+    this._preloadedBg = null;
 
     window.addEventListener("home-mode-changed", () => {
       const saved = localStorage.getItem("home_mode");
@@ -74,8 +75,28 @@ class EmelyaHeaderCard extends LitElement {
     this._allPersons = config.person_entities
       ? (Array.isArray(config.person_entities) ? config.person_entities : [config.person_entities])
       : (config.person_entity ? [config.person_entity] : []);
+    this._preloadBackground();
+  }
+  _preloadBackground() {
+    const bg = this.config?.background_image || `${this.base}/images/header-bg.png`;
+    if (bg && this._preloadedBg !== bg) {
+      this._preloadedBg = bg;
+      const img = new Image();
+      img.src = bg;
+    }
   }
 
+  updated() {
+    const wrapper = this.renderRoot?.querySelector(".wrapper[data-bg]");
+    if (!wrapper) return;
+    const bgUrl = wrapper.dataset.bg;
+    if (!bgUrl || wrapper._bgInitialized === bgUrl) return;
+    wrapper._bgInitialized = bgUrl;
+    wrapper.style.setProperty("--wrapper-bg", `url("${bgUrl}")`);
+    const img = new Image();
+    img.onload = () => wrapper.classList.add("bg-loaded");
+    img.src = bgUrl;
+  }
   set hass(hass) {
     this._hass = hass;
 
@@ -136,6 +157,7 @@ class EmelyaHeaderCard extends LitElement {
       border-radius: 24px;
       position: relative;
       overflow: hidden;
+      background: #1C1B1F;
     }
 
     .wrapper::before {
@@ -152,6 +174,25 @@ class EmelyaHeaderCard extends LitElement {
       mask-composite: exclude !important;
       pointer-events: none;
     }
+    .wrapper::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background-image:
+        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 75%, #1C1B1F 100%),
+        var(--wrapper-bg, none);
+      background-size: auto, 100%;
+      background-position: center, 0px -329.447px;
+      background-repeat: no-repeat;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .wrapper.bg-loaded::after {
+      opacity: 1;
+    }
 
     .row {
       position: relative;
@@ -159,6 +200,7 @@ class EmelyaHeaderCard extends LitElement {
       justify-content: space-between;
       align-items: center;
       height: 100%;
+      z-index: 1;
     }
 
     .left {
@@ -371,11 +413,7 @@ class EmelyaHeaderCard extends LitElement {
       <div class="outer">
         <div
           class="wrapper"
-          style='
-            background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 75%, #1C1B1F 100%), url("${bgUrl}") 0px -329.447px / 100% 457.197% no-repeat;
-            border: none;
-            border-radius: 24px !important;
-          '
+          data-bg="${this.config?.background_image || `${this.base}/images/header-bg.png`}"
           @pointerdown=${this._onPointerDown}
           @pointerup=${this._onPointerUp}
           @pointercancel=${this._onPointerCancel}
@@ -730,7 +768,7 @@ class EmelyaHeaderCardEditor extends LitElement {
         >
           <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
           <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
-          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          <div class="drop-sub">PNG, JPG, WebP, AVIF, SVG</div>
           ${this._uploadState !== "loading" ? html`
             <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
           ` : ""}
@@ -809,6 +847,13 @@ class EmelyaHeaderCardEditor extends LitElement {
     if (file) this._uploadFile(file);
     e.target.value = "";
   }
+  _normalizeFileForUpload(file) {
+    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupportedByHA.includes(file.type)) {
+      return new File([file], file.name, { type: "image/png" });
+    }
+    return file;
+  }
 
   /* ── File upload ── */
 
@@ -821,10 +866,11 @@ class EmelyaHeaderCardEditor extends LitElement {
 
     this._uploadState = "loading";
     this._uploadError = "";
+    const uploadFile = this._normalizeFileForUpload(file);
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await this.hass.fetchWithAuth(
         `/api/config/core/store_image`,
@@ -843,7 +889,7 @@ class EmelyaHeaderCardEditor extends LitElement {
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await fetch(`${window.location.origin}/api/image/upload`, {
         method: "POST",

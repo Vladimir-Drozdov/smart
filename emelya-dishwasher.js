@@ -110,6 +110,7 @@ class EmelyaDishwasherCard extends LitElement {
     this._expectedMode = null;
     this._holdTimer = null;
     this._lastTap = 0;
+    this._preloadedBg = null;
   }
 
   set hass(hass){
@@ -164,8 +165,30 @@ class EmelyaDishwasherCard extends LitElement {
       ...config,
     };
     this.base = this.config.base_path || "/local";
+    this._preloadBackground();
   }
+  updated() {
+    const card = this.renderRoot?.querySelector(".card[data-bg]");
+    if (!card) return;
+    const bgUrl = card.dataset.bg;
+    if (!bgUrl || card._bgInitialized === bgUrl) return;
+    card._bgInitialized = bgUrl;
+    card.style.setProperty("--card-bg", `url("${bgUrl}")`);
+    const img = new Image();
+    img.onload = () => card.classList.add("bg-loaded");
+    img.src = bgUrl;
+  }
+  _preloadBackground() {
+    const bg = this.config.background_image
+      ? this.config.background_image
+      : `${this.base}/images/container-images/dishwasher.png`;
 
+    if (bg && this._preloadedBg !== bg) {
+      this._preloadedBg = bg;
+      const img = new Image();
+      img.src = bg;
+    }
+  }
   static styles = css`
     :host { 
       display: block; 
@@ -194,6 +217,27 @@ class EmelyaDishwasherCard extends LitElement {
       cursor: pointer;
       user-select: none;
       position: relative;
+      background: #1C1B1F;
+    }
+    .card-bg {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background-image:
+        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 75%, #1C1B1F 100%),
+        var(--card-bg, none);
+      background-size: auto, 100.889%;
+      background-position: center, 41.817px 1.357px;
+      background-repeat: no-repeat;
+      background-blend-mode: normal, luminosity;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .card.bg-loaded .card-bg {
+      opacity: 1;
     }
     .card::before {
       content: "";
@@ -208,12 +252,15 @@ class EmelyaDishwasherCard extends LitElement {
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
       pointer-events: none;
+      z-index: 1;
     }
 
     .header{ 
       display:flex; 
       justify-content:space-between; 
-      align-items:center; 
+      align-items:center;
+      position: relative;
+      z-index: 2;
     }
     .title{ 
       font-size:16px; 
@@ -226,7 +273,9 @@ class EmelyaDishwasherCard extends LitElement {
     .controls{ 
       display:flex; 
       gap:8px; 
-      align-items:center; 
+      align-items:center;
+      position: relative;
+      z-index: 2;
     }
     .power{
       display: flex;
@@ -413,15 +462,8 @@ class EmelyaDishwasherCard extends LitElement {
 
     return html`
     <ha-card>
-      <div
-        class="card"
-        style='
-          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 75%, #1C1B1F 100%), url("${bg}") 41.817px 1.357px / 100.889% 102.166% no-repeat, #1C1B1F;
-          background-blend-mode: normal, luminosity, normal;
-          border: none;
-          border-radius: 24px !important;
-        '
-      >
+      <div class="card" data-bg="${bg}">
+        <div class="card-bg"></div>
 
         <div class="header">
           <div class="title">Посудомойка</div>
@@ -626,7 +668,7 @@ class EmelyaDishwasherCardEditor extends LitElement {
         >
           <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
           <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
-          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          <div class="drop-sub">PNG, JPG, WebP, AVIF, SVG</div>
           ${this._uploadState !== "loading" ? html`
             <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
           ` : ""}
@@ -673,6 +715,13 @@ class EmelyaDishwasherCardEditor extends LitElement {
     if (file) this._uploadFile(file);
     e.target.value = "";
   }
+  _normalizeFileForUpload(file) {
+    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupportedByHA.includes(file.type)) {
+      return new File([file], file.name, { type: "image/png" });
+    }
+    return file;
+  }
 
   /* ── Загрузка файла ── */
 
@@ -685,10 +734,11 @@ class EmelyaDishwasherCardEditor extends LitElement {
 
     this._uploadState = "loading";
     this._uploadError = "";
+    const uploadFile = this._normalizeFileForUpload(file);
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await this.hass.fetchWithAuth(
         `/api/config/core/store_image`,
@@ -707,7 +757,7 @@ class EmelyaDishwasherCardEditor extends LitElement {
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await fetch(`${window.location.origin}/api/image/upload`, {
         method: "POST",

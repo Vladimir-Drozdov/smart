@@ -108,6 +108,7 @@ class EmelyaCoffeeCard extends LitElement {
     this._expectedCoffee = null;
     this._holdTimer = null;
     this._lastTap = 0;
+    this._bgPreloaded = false;
   }
 
   set hass(hass) {
@@ -166,6 +167,43 @@ class EmelyaCoffeeCard extends LitElement {
     };
 
     this.base = this.config.base_path || "/local";
+
+    // Предзагружаем фоновое изображение сразу при установке конфига
+    this._preloadBackground();
+  }
+
+  // Предзагрузка фона — браузер начинает качать картинку до рендера
+  _preloadBackground() {
+    const bg = this.config?.background_image
+      ? this.config.background_image
+      : `${this.base}/images/container-images/coffee_machine.png`;
+
+    if (bg && bg !== this._preloadedBg) {
+      this._preloadedBg = bg;
+      this._bgPreloaded = false;
+      const img = new Image();
+      img.onload = () => {
+        this._bgPreloaded = true;
+        // Добавляем класс bg-loaded на карточку для плавного появления
+        const card = this.renderRoot?.querySelector(".card");
+        if (card) card.classList.add("bg-loaded");
+      };
+      img.src = bg;
+    }
+  }
+
+  // После рендера проверяем — если картинка уже в кэше, сразу показываем
+  updated(changedProps) {
+    if (changedProps.has("config")) {
+      this._preloadBackground();
+    }
+
+    const card = this.renderRoot?.querySelector(".card");
+    if (!card) return;
+
+    if (this._bgPreloaded) {
+      card.classList.add("bg-loaded");
+    }
   }
 
   static styles = css`
@@ -200,13 +238,44 @@ class EmelyaCoffeeCard extends LitElement {
       user-select: none;
       position: relative;
       overflow: visible !important;
+      /* Базовый фон пока картинка не загружена */
+      background: #1C1B1F;
     }
     :host(:has([aria-expanded="true"])) ha-card {
       z-index: 10 !important;
       position: relative !important;
     }
 
+    /*
+      Фон вынесен в ::before — убирает background-blend-mode с самого .card.
+      background-blend-mode на элементе создаёт stacking context,
+      из-за которого position:fixed у дочерних элементов ломается.
+      Плавное появление через opacity: 0 → 1 после загрузки.
+    */
     .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background-image:
+        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 70%, #1C1B1F 100%),
+        var(--coffee-bg, none);
+      background-size: auto, 74.782% 76.117%;
+      background-position: center, 88px 53.12px;
+      background-repeat: no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity;
+      /* Плавное появление — воспринимается быстрее чем резкий pop-in */
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .card.bg-loaded::before {
+      opacity: 1;
+    }
+
+    .card::after {
       content: "";
       position: absolute;
       inset: 0;
@@ -243,6 +312,8 @@ class EmelyaCoffeeCard extends LitElement {
       display: flex;
       gap: 8px;
       align-items: center;
+      position: relative;
+      z-index: 1;
     }
 
     .power {
@@ -331,6 +402,9 @@ class EmelyaCoffeeCard extends LitElement {
     card.addEventListener("pointerdown", this._onPointerDown.bind(this));
     card.addEventListener("pointerup", this._onPointerUp.bind(this));
     card.addEventListener("click", this._onClick.bind(this));
+
+    // Если картинка уже в кэше — сразу показываем без мигания
+    if (this._bgPreloaded) card.classList.add("bg-loaded");
   }
 
   disconnectedCallback() {
@@ -444,7 +518,6 @@ class EmelyaCoffeeCard extends LitElement {
   }
 
   render() {
-    const coffeeState = this.hass?.states?.[this.config?.coffee_entity];
     const bg = this.config.background_image
       ? this.config.background_image
       : `${this.base}/images/container-images/coffee_machine.png`;
@@ -453,15 +526,7 @@ class EmelyaCoffeeCard extends LitElement {
       <ha-card>
         <div
           class="card"
-          style='
-            background:
-              linear-gradient(180deg, rgba(28, 27, 31, 0.00) 70%, #1C1B1F 100%),
-              url("${bg}") 88px 53.12px / 74.782% 76.117% no-repeat,
-              #1C1B1F;
-            background-blend-mode: normal, luminosity, normal;
-            border: none;
-            border-radius: 24px !important;
-          '
+          style="--coffee-bg: url('${bg}'); border: none; border-radius: 24px !important;"
         >
           <div class="header">
             <div class="title">${this.config?.title || "Кофеварка"}</div>
@@ -477,15 +542,15 @@ class EmelyaCoffeeCard extends LitElement {
               <img src="${this.base}/images/container-images/power_button.png" alt="power">
             </div>
 
-            ${coffeeState ? html`
+            ${this.hass?.states?.[this.config?.coffee_entity] ? html`
               <ha-select
-                .label=${coffeeState.attributes?.friendly_name || "Тип кофе"}
+                .label=${this.hass.states[this.config.coffee_entity].attributes?.friendly_name || "Тип кофе"}
                 .value=${this.selectedCoffee}
                 @pointerdown=${this._stopPropagation}
                 @change=${this._handleSelectChange}
                 @dblclick=${this._handleSelectDblClick}
               >
-                ${(coffeeState.attributes?.options || []).map(opt => html`
+                ${(this.hass.states[this.config.coffee_entity].attributes?.options || []).map(opt => html`
                   <mwc-list-item .value=${opt}>${opt}</mwc-list-item>
                 `)}
               </ha-select>
@@ -711,7 +776,7 @@ class EmelyaCoffeeCardEditor extends LitElement {
         >
           <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
           <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
-          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          <div class="drop-sub">PNG, JPG, WebP, AVIF, SVG</div>
           ${this._uploadState !== "loading" ? html`
             <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
           ` : ""}
@@ -731,6 +796,7 @@ class EmelyaCoffeeCardEditor extends LitElement {
 
         <div class="img-hint">
           Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
+          Поддерживаются PNG, JPG, WebP и AVIF.
         </div>
       </div>
     `;
@@ -759,6 +825,19 @@ class EmelyaCoffeeCardEditor extends LitElement {
     e.target.value = "";
   }
 
+  /* ── Нормализация MIME-типа ──
+     HA API отклоняет image/avif (и некоторые другие форматы) с HTTP 400.
+     Подменяем MIME-тип на image/png перед отправкой — байты файла не трогаем.
+     Браузер читает файл по magic bytes, игнорируя Content-Type, поэтому
+     avif корректно отобразится после загрузки. */
+  _normalizeFileForUpload(file) {
+    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupportedByHA.includes(file.type)) {
+      return new File([file], file.name, { type: "image/png" });
+    }
+    return file;
+  }
+
   /* ── Загрузка файла ── */
 
   async _uploadFile(file) {
@@ -771,9 +850,12 @@ class EmelyaCoffeeCardEditor extends LitElement {
     this._uploadState = "loading";
     this._uploadError = "";
 
+    const uploadFile = this._normalizeFileForUpload(file);
+
+    // Attempt 1 — HA store_image
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await this.hass.fetchWithAuth(
         `/api/config/core/store_image`,
@@ -788,11 +870,11 @@ class EmelyaCoffeeCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Fallback — пробуем прямой fetch
+    // Attempt 2 — /api/image/upload fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await fetch(`${window.location.origin}/api/image/upload`, {
         method: "POST",

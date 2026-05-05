@@ -106,6 +106,7 @@ class EmelyaWasherCard extends LitElement {
     this._expectedMode = null;
     this._holdTimer = null;
     this._lastTap = 0;
+    this._preloadedBg = null;
   }
 
   set hass(hass){
@@ -162,6 +163,38 @@ class EmelyaWasherCard extends LitElement {
       ...config,
     };
     this.base = this.config.base_path || "/local";
+
+    // Предзагрузка фона — браузер начинает качать картинку до рендера
+    this._preloadBackground();
+  }
+
+  _preloadBackground() {
+    const bg = this.config.background_image
+      ? this.config.background_image
+      : `${this.base}/images/container-images/washing_machine.png`;
+
+    if (bg && this._preloadedBg !== bg) {
+      this._preloadedBg = bg;
+      const img = new Image();
+      img.src = bg;
+    }
+  }
+
+  // После каждого рендера инициализируем фон с плавным появлением
+  updated() {
+    const card = this.renderRoot?.querySelector(".card[data-bg]");
+    if (!card) return;
+
+    const bgUrl = card.dataset.bg;
+    if (!bgUrl || card._bgInitialized === bgUrl) return;
+    card._bgInitialized = bgUrl;
+
+    card.style.setProperty("--card-bg", `url("${bgUrl}")`);
+
+    const img = new Image();
+    img.onload = () => card.classList.add("bg-loaded");
+    // Если картинка уже в кэше — onload стреляет синхронно, без мигания
+    img.src = bgUrl;
   }
 
   static styles = css`
@@ -192,8 +225,40 @@ class EmelyaWasherCard extends LitElement {
       cursor: pointer;
       user-select: none;
       position:relative;
+      /* Базовый цвет пока картинка не загружена */
+      background: #1C1B1F;
     }
+
+    /*
+      Фон вынесен в ::before — убирает background-blend-mode с самого .card.
+      background-blend-mode на элементе создаёт stacking context,
+      из-за которого position:fixed у дочерних элементов ломается.
+    */
     .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background-image:
+        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 80%, #1C1B1F 100%),
+        var(--card-bg, none);
+      background-size: auto, 112.282%;
+      background-position: center, 46.698px 62.07px;
+      background-repeat: no-repeat;
+      background-blend-mode: normal, luminosity;
+      /* Плавное появление — воспринимается быстрее чем резкий pop-in */
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .card.bg-loaded::before {
+      opacity: 1;
+    }
+
+    /* Граница */
+    .card::after {
       content: "";
       position: absolute;
       inset: 0;
@@ -212,6 +277,8 @@ class EmelyaWasherCard extends LitElement {
       display:flex;
       justify-content:space-between;
       align-items:center;
+      position: relative;
+      z-index: 1;
     }
 
     .title{
@@ -228,6 +295,8 @@ class EmelyaWasherCard extends LitElement {
       display:flex;
       gap:8px;
       height:56px;
+      position: relative;
+      z-index: 1;
     }
 
     .power{
@@ -397,12 +466,7 @@ class EmelyaWasherCard extends LitElement {
     <ha-card>
       <div
         class="card"
-        style='
-          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 80%, #1C1B1F 100%), url("${bg}") 46.698px 62.07px / 112.282% 112.282% no-repeat, var(--Background-Surface-2, #1C1B1F);
-          background-blend-mode: normal, luminosity, normal;
-          border: none;
-          border-radius: 24px !important;
-        '
+        data-bg="${bg}"
       >
 
         <div class="header">
@@ -621,7 +685,7 @@ class EmelyaWasherCardEditor extends LitElement {
         >
           <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
           <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
-          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          <div class="drop-sub">PNG, JPG, WebP, AVIF, SVG</div>
           ${this._uploadState !== "loading" ? html`
             <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
           ` : ""}
@@ -641,6 +705,7 @@ class EmelyaWasherCardEditor extends LitElement {
 
         <div class="img-hint">
           Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
+          Поддерживаются PNG, JPG, WebP и AVIF.
         </div>
       </div>
     `;
@@ -689,6 +754,15 @@ class EmelyaWasherCardEditor extends LitElement {
     e.target.value = "";
   }
 
+  /* ── Нормализация MIME для HA API ── */
+  _normalizeFileForUpload(file) {
+    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupportedByHA.includes(file.type)) {
+      return new File([file], file.name, { type: "image/png" });
+    }
+    return file;
+  }
+
   /* ── Загрузка файла ── */
 
   async _uploadFile(file) {
@@ -701,9 +775,12 @@ class EmelyaWasherCardEditor extends LitElement {
     this._uploadState = "loading";
     this._uploadError = "";
 
+    const uploadFile = this._normalizeFileForUpload(file);
+
+    // Attempt 1 — HA store_image
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await this.hass.fetchWithAuth(
         `/api/config/core/store_image`,
@@ -718,11 +795,11 @@ class EmelyaWasherCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Fallback
+    // Attempt 2 — /api/image/upload fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await fetch(`${window.location.origin}/api/image/upload`, {
         method: "POST",
@@ -806,4 +883,4 @@ window.customCards.push({
   name: "Emelya Washer Card",
   description: "Управление стиральной машиной",
   preview: true
-});S
+});

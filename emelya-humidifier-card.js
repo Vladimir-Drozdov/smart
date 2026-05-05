@@ -93,6 +93,7 @@ class EmelyaHumidifierCard extends LitElement {
     this._expectedMode = null;
     this._holdTimer = null;
     this._lastTap = 0;
+    this._bgPreloaded = false;
   }
 
   set hass(hass){
@@ -148,6 +149,43 @@ class EmelyaHumidifierCard extends LitElement {
       ...config,
     };
     this.base = this.config.base_path || "/local";
+
+    // Предзагружаем фоновое изображение сразу при установке конфига
+    this._preloadBackground();
+  }
+
+  // Предзагрузка фона — браузер начинает качать картинку до рендера
+  _preloadBackground() {
+    const bg = this.config?.background_image
+      ? this.config.background_image
+      : `${this.base}/images/container-images/humidifier.png`;
+
+    if (bg && bg !== this._preloadedBg) {
+      this._preloadedBg = bg;
+      this._bgPreloaded = false;
+      const img = new Image();
+      img.onload = () => {
+        this._bgPreloaded = true;
+        // Добавляем класс bg-loaded на карточку для плавного появления
+        const card = this.renderRoot?.querySelector(".card");
+        if (card) card.classList.add("bg-loaded");
+      };
+      img.src = bg;
+    }
+  }
+
+  // После рендера проверяем — если картинка уже в кэше, сразу показываем
+  updated(changedProps) {
+    if (changedProps.has("config")) {
+      this._preloadBackground();
+    }
+
+    const card = this.renderRoot?.querySelector(".card");
+    if (!card) return;
+
+    if (this._bgPreloaded) {
+      card.classList.add("bg-loaded");
+    }
   }
 
   static styles = css`
@@ -178,8 +216,40 @@ class EmelyaHumidifierCard extends LitElement {
       cursor: pointer;
       user-select: none;
       position: relative;
+      /* Базовый фон пока картинка не загружена */
+      background: #1C1B1F;
     }
+
+    /*
+      Фон вынесен в ::before — убирает background-blend-mode с самого .card.
+      background-blend-mode на элементе создаёт stacking context,
+      из-за которого position:fixed у дочерних элементов ломается.
+      Плавное появление через opacity: 0 → 1 после загрузки.
+    */
     .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background-image:
+        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 80%, #1C1B1F 100%),
+        var(--humidifier-bg, none);
+      background-size: auto, 141.697% 141.697%;
+      background-position: center, -22.849px 67.463px;
+      background-repeat: no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity;
+      /* Плавное появление — воспринимается быстрее чем резкий pop-in */
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .card.bg-loaded::before {
+      opacity: 1;
+    }
+
+    .card::after {
       content: "";
       position: absolute;
       inset: 0;
@@ -198,6 +268,8 @@ class EmelyaHumidifierCard extends LitElement {
       display:flex;
       justify-content:space-between;
       align-items:center;
+      position: relative;
+      z-index: 1;
     }
 
     .title{
@@ -214,6 +286,8 @@ class EmelyaHumidifierCard extends LitElement {
       display:flex;
       gap:8px;
       height:56px;
+      position: relative;
+      z-index: 1;
     }
 
     .power{
@@ -288,6 +362,9 @@ class EmelyaHumidifierCard extends LitElement {
     card.addEventListener("pointerdown", this._onPointerDown.bind(this));
     card.addEventListener("pointerup", this._onPointerUp.bind(this));
     card.addEventListener("click", this._onClick.bind(this));
+
+    // Если картинка уже в кэше — сразу показываем без мигания
+    if (this._bgPreloaded) card.classList.add("bg-loaded");
   }
 
   disconnectedCallback() {
@@ -407,14 +484,7 @@ class EmelyaHumidifierCard extends LitElement {
     <ha-card>
       <div
         class="card"
-        style='
-          background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 80%, #1C1B1F 100%), 
-                      url("${bg}") -22.849px 67.463px / 141.697% 141.697% no-repeat, 
-                      var(--Background-Surface-2, #1C1B1F);
-          background-blend-mode: normal, luminosity, normal;
-          border: none;
-          border-radius: 24px !important;
-        '
+        style="--humidifier-bg: url('${bg}'); border: none; border-radius: 24px !important;"
       >
         <div class="header">
           <div class="title">Увлажнитель</div>
@@ -613,7 +683,7 @@ class EmelyaHumidifierCardEditor extends LitElement {
         >
           <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
           <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
-          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          <div class="drop-sub">PNG, JPG, WebP, AVIF, SVG</div>
           ${this._uploadState !== "loading" ? html`
             <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
           ` : ""}
@@ -633,6 +703,7 @@ class EmelyaHumidifierCardEditor extends LitElement {
 
         <div class="img-hint">
           Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
+          Поддерживаются PNG, JPG, WebP и AVIF.
         </div>
       </div>
     `;
@@ -660,6 +731,19 @@ class EmelyaHumidifierCardEditor extends LitElement {
     e.target.value = "";
   }
 
+  /* ── Нормализация MIME-типа ──
+     HA API отклоняет image/avif (и некоторые другие форматы) с HTTP 400.
+     Подменяем MIME-тип на image/png перед отправкой — байты файла не трогаем.
+     Браузер читает файл по magic bytes, игнорируя Content-Type, поэтому
+     avif корректно отобразится после загрузки. */
+  _normalizeFileForUpload(file) {
+    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupportedByHA.includes(file.type)) {
+      return new File([file], file.name, { type: "image/png" });
+    }
+    return file;
+  }
+
   /* Загрузка файла */
   async _uploadFile(file) {
     if (!file.type.startsWith("image/")) {
@@ -671,9 +755,12 @@ class EmelyaHumidifierCardEditor extends LitElement {
     this._uploadState = "loading";
     this._uploadError = "";
 
+    const uploadFile = this._normalizeFileForUpload(file);
+
+    // Attempt 1 — HA store_image
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await this.hass.fetchWithAuth(
         `/api/config/core/store_image`,
@@ -688,11 +775,11 @@ class EmelyaHumidifierCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Fallback
+    // Attempt 2 — /api/image/upload fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await fetch(`${window.location.origin}/api/image/upload`, {
         method: "POST",
@@ -707,9 +794,11 @@ class EmelyaHumidifierCardEditor extends LitElement {
         this._uploadState = "success";
         return;
       }
+
+      throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
       this._uploadState = "error";
-      this._uploadError = `Не удалось загрузить файл. Поместите вручную в config/www/ и укажите путь.`;
+      this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
     }
   }
 
