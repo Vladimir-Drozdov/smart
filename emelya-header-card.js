@@ -145,6 +145,7 @@ class EmelyaHeaderCard extends LitElement {
     .outer {
       border-radius: 24px;
       border: 1px solid rgba(101,101,101,0.35);
+      max-width:1250px;
     }
 
     .wrapper {
@@ -158,6 +159,7 @@ class EmelyaHeaderCard extends LitElement {
       position: relative;
       overflow: hidden;
       background: #1C1B1F;
+      max-width:1250px;
     }
 
     .wrapper::before {
@@ -182,7 +184,7 @@ class EmelyaHeaderCard extends LitElement {
       background-image:
         linear-gradient(180deg, rgba(28, 27, 31, 0.00) 75%, #1C1B1F 100%),
         var(--wrapper-bg, none);
-      background-size: auto, 100%;
+      background-size: auto, 100% 457.197%;
       background-position: center, 0px -329.447px;
       background-repeat: no-repeat;
       opacity: 0;

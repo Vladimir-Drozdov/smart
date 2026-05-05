@@ -352,7 +352,7 @@ class EmelyaLampCard extends LitElement {
       background-image:
         linear-gradient(180deg, rgba(28, 27, 31, 0.30) 76.38%, #1C1B1F 95.8%),
         var(--card-bg, none);
-      background-size: auto, 104.026%;
+      background-size: auto, 104.026% 85.591%;
       background-position: center, 77.756px 45.781px;
       background-repeat: no-repeat;
       background-blend-mode: normal, luminosity;
