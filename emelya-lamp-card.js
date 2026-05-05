@@ -342,8 +342,28 @@ class EmelyaLampCard extends LitElement {
       user-select: none;
       position: relative;
       overflow: hidden;
+      background: #1C1B1F;
     }
-
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background-image:
+        linear-gradient(180deg, rgba(28, 27, 31, 0.30) 76.38%, #1C1B1F 95.8%),
+        var(--card-bg, none);
+      background-size: auto, 104.026%;
+      background-position: center, 77.756px 45.781px;
+      background-repeat: no-repeat;
+      background-blend-mode: normal, luminosity;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .card.bg-loaded::after {
+      opacity: 1;
+    }
     .name {
       color: #fff;
       font-family: Roboto, sans-serif;
@@ -436,6 +456,7 @@ class EmelyaLampCard extends LitElement {
     this._lastTap = 0;
     // Храним последнее известное состояние для обновления слайдера
     this._lastIsOn = null;
+    this._preloadedBg = null;
   }
 
   setConfig(config) {
@@ -450,6 +471,15 @@ class EmelyaLampCard extends LitElement {
     };
     this.base = this.config.base_path || "/local";
     this._buildSliderCard();
+    this._preloadBackground();
+  }
+  _preloadBackground() {
+    const bg = this.config?.background_image || "";
+    if (bg && this._preloadedBg !== bg) {
+      this._preloadedBg = bg;
+      const img = new Image();
+      img.src = bg;
+    }
   }
 
   get hass() { return this._hass; }
@@ -788,6 +818,18 @@ class EmelyaLampCard extends LitElement {
     card.addEventListener("pointerdown", this._onPointerDown.bind(this));
     card.addEventListener("pointerup", this._onPointerUp.bind(this));
     card.addEventListener("click", this._onClick.bind(this));
+    this._initCardBg();
+  }
+  _initCardBg() {
+    const card = this.renderRoot?.querySelector(".card[data-bg]");
+    if (!card) return;
+    const bgUrl = card.dataset.bg;
+    if (!bgUrl || card._bgInitialized === bgUrl) return;
+    card._bgInitialized = bgUrl;
+    card.style.setProperty("--card-bg", `url("${bgUrl}")`);
+    const img = new Image();
+    img.onload = () => card.classList.add("bg-loaded");
+    img.src = bgUrl;
   }
 
   _onPointerDown(e) {
@@ -829,14 +871,7 @@ class EmelyaLampCard extends LitElement {
 
     return html`
     <ha-card>
-      <div class="card"
-        style='
-          border-radius: 24px !important;
-          background: linear-gradient(180deg, rgba(28, 27, 31, 0.30) 76.38%, #1C1B1F 95.8%), url("${bgImage}") lightgray 77.756px 45.781px / 104.026% 85.591% no-repeat;
-          background-color: #1C1B1F;
-          background-blend-mode: normal, luminosity, normal;
-        '
-      >
+      <div class="card" data-bg="${this.config?.background_image || ''}">
 
         <div class="header">
           <div class="name">${name}</div>
@@ -1049,7 +1084,7 @@ class EmelyaLampCardEditor extends LitElement {
         >
           <div class="drop-icon">${this._bgUploadState === "loading" ? "⏳" : "🌄"}</div>
           <div class="drop-text">${this._bgUploadState === "loading" ? "Загрузка..." : "Перетащите фон сюда"}</div>
-          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          <div class="drop-sub">PNG, JPG, WebP, AVIF, SVG</div>
           ${this._bgUploadState !== "loading" ? html`
             <button class="drop-btn" @click=${this._onBgZoneClick}>Выбрать файл</button>
           ` : ""}
@@ -1111,6 +1146,13 @@ class EmelyaLampCardEditor extends LitElement {
     if (file) this._uploadBgFile(file);
     e.target.value = "";
   }
+  _normalizeFileForUpload(file) {
+    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupportedByHA.includes(file.type)) {
+      return new File([file], file.name, { type: "image/png" });
+    }
+    return file;
+  }
 
   async _uploadBgFile(file) {
     if (!file.type.startsWith("image/")) {
@@ -1121,10 +1163,11 @@ class EmelyaLampCardEditor extends LitElement {
 
     this._bgUploadState = "loading";
     this._bgUploadError = "";
+    const uploadFile = this._normalizeFileForUpload(file);
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await this.hass.fetchWithAuth(
         `/api/config/core/store_image`,
@@ -1142,7 +1185,7 @@ class EmelyaLampCardEditor extends LitElement {
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await fetch(`${window.location.origin}/api/image/upload`, {
         method: "POST",

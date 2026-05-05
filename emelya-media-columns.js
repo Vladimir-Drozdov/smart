@@ -32,6 +32,8 @@ class EmelyaMediaColumns extends LitElement {
     this._expectedSpeaker = null;
     this._holdTimer = null;
     this._lastTap = 0;
+    // Предзагрузка
+    this._preloadedBgs = new Set();
   }
 
   setConfig(config) {
@@ -42,6 +44,35 @@ class EmelyaMediaColumns extends LitElement {
       ...config,
     };
     this.base = this.config.base_path || "/local";
+    this._preloadBackgrounds();
+  }
+
+  _preloadBackgrounds() {
+    const bgs = [
+      this.config.speaker_bg || `${this.base}/images/container-images/background-alice.png`,
+      this.config.tv_bg      || `${this.base}/images/container-images/background-tv.png`,
+    ];
+    bgs.forEach(bg => {
+      if (bg && !this._preloadedBgs.has(bg)) {
+        this._preloadedBgs.add(bg);
+        const img = new Image();
+        img.src = bg;
+      }
+    });
+  }
+
+  // После рендера инициализируем фоны обоих столбцов
+  updated() {
+    const columns = this.renderRoot?.querySelectorAll(".column[data-bg]");
+    columns?.forEach(el => {
+      const bgUrl = el.dataset.bg;
+      if (!bgUrl || el._bgInitialized === bgUrl) return;
+      el._bgInitialized = bgUrl;
+      el.style.setProperty("--col-bg", `url("${bgUrl}")`);
+      const img = new Image();
+      img.onload = () => el.classList.add("bg-loaded");
+      img.src = bgUrl;
+    });
   }
 
   set hass(hass) {
@@ -109,18 +140,18 @@ class EmelyaMediaColumns extends LitElement {
       width: 100%; 
       font-family: Roboto, sans-serif; 
       color: white; 
-      min-height:1px;
+      min-height: 1px;
     }
 
     .wrapper {
       display: flex;
       gap: 8px;
       max-width: 100%;
-      min-height:1px;
+      min-height: 1px;
     }
 
     .column {
-      min-height:1px;
+      min-height: 1px;
       width: 50%; 
       height: 280px; 
       border-radius: 24px; 
@@ -129,20 +160,74 @@ class EmelyaMediaColumns extends LitElement {
       display: flex; 
       flex-direction: column; 
       justify-content: space-between;
-      background-size: cover; 
-      background-position: center; 
-      background-repeat: no-repeat; 
       color: white;
       cursor: pointer;
       user-select: none;
       position: relative;
       overflow: hidden;
+      /* Базовый цвет пока картинка не загружена */
+      background: #1C1B1F;
+    }
+
+    /*
+      Фон вынесен в ::before — убирает background-blend-mode с самого .column.
+      background-blend-mode на элементе создаёт stacking context,
+      из-за которого position:fixed у дочерних элементов ломается.
+    */
+    .column::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background-image:
+        linear-gradient(180deg, #000000 0%, rgba(0,0,0,0.35) 40%, #000000 100%),
+        var(--col-bg, none);
+      background-size: auto, cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-blend-mode: normal, luminosity;
+      /* Плавное появление */
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .column.bg-loaded::before {
+      opacity: 1;
+    }
+
+    /* Граница */
+    .column::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%) border-box;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ТВ-колонка — другой градиент поверх фона */
+    .column.tv::before {
+      background-image:
+        linear-gradient(180deg, rgba(0,0,0,0) 0%, #000000 100%),
+        var(--col-bg, none);
+      background-blend-mode: normal, luminosity;
     }
 
     .controls { 
       display: flex; 
       flex-direction: column; 
-      gap: 8px; 
+      gap: 8px;
+      position: relative;
+      z-index: 2;
     }
 
     .control {
@@ -235,17 +320,9 @@ class EmelyaMediaColumns extends LitElement {
       transition: background 0.3s ease;
     }
 
-    /* Включено — зелёный */
-    .circle.on {
-      background: #7FB800;
-    }
+    .circle.on  { background: #7FB800; }
+    .circle.off { background: #D32F2F; }
 
-    /* Выключено — красный */
-    .circle.off {
-      background: #D32F2F;
-    }
-
-    /* Громкость */
     .volume-section {
       position: relative;
       z-index: 2;
@@ -267,7 +344,6 @@ class EmelyaMediaColumns extends LitElement {
       letter-spacing: -1px;
     }
 
-    /* Alice decorative image */
     .alice-img {
       position: absolute;
       top: -5%;
@@ -446,22 +522,15 @@ class EmelyaMediaColumns extends LitElement {
   }
 
   render() {
+    const speakerBg = this.config.speaker_bg || `${this.base}/images/container-images/background-alice.png`;
+    const tvBg      = this.config.tv_bg      || `${this.base}/images/container-images/background-tv.png`;
+
     return html`
       <div class="wrapper">
+
         <!-- АЛИСА -->
         <div class="column"
-            style='
-              background-image:
-                linear-gradient(180deg, #000000 0%, rgba(0,0,0,0.35) 40%, #000000 100%),
-                url("${this.base}/images/container-images/background-alice.png"),
-                linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-              border: 1px solid transparent;
-              background-size: auto, cover, auto;
-              background-position: 0% 0%, center, 0% 0%;
-              background-repeat: no-repeat;
-              background-origin: border-box;
-              background-clip: padding-box, padding-box, border-box;
-            '
+            data-bg="${speakerBg}"
             @click=${() => this._fireMoreInfo(this.config?.speaker)}>
 
           <!-- Декоративное изображение Алисы -->
@@ -500,18 +569,9 @@ class EmelyaMediaColumns extends LitElement {
           </div>
         </div>
 
-        <!-- ══ ТВ ══ -->
-        <div class="column"
-            style='
-              background-image:
-                linear-gradient(180deg, rgba(0,0,0,0) 0%, #000000 100%),
-                url("${this.base}/images/container-images/background-tv.png"),
-                linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-              border: 1px solid transparent;
-              background-size: auto, cover, auto;
-              background-origin: border-box;
-              background-clip: padding-box, padding-box, border-box;
-            '
+        <!-- ТВ -->
+        <div class="column tv"
+            data-bg="${tvBg}"
             @click=${() => this._fireMoreInfo(this.config?.tv)}>
 
           <!-- Заголовок -->
@@ -550,42 +610,123 @@ class EmelyaMediaColumns extends LitElement {
   }
 }
 
-/* EDITOR */
+/* ══════════════════════════════════════════
+   EDITOR
+══════════════════════════════════════════ */
 
 class EmelyaMediaColumnsEditor extends LitElement {
   static properties = {
     hass: {},
-    _config: {},
-    _tab: { state: true }
+    _config: { state: true },
+    _tab: { state: true },
+    // Speaker bg upload
+    _speakerUploadState: { state: true },
+    _speakerUploadError: { state: true },
+    _speakerDragOver:    { state: true },
+    // TV bg upload
+    _tvUploadState: { state: true },
+    _tvUploadError: { state: true },
+    _tvDragOver:    { state: true },
   };
 
   static styles = css`
-    :host {
-      display: block;
-      box-sizing: border-box;
-    }
-    .tabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
+    :host { display: block; box-sizing: border-box; }
+
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
     .tab {
-      padding: 8px 12px;
-      border-radius: 10px;
+      padding: 8px 12px; border-radius: 10px;
       border: 1px solid var(--divider-color);
       background: var(--secondary-background-color);
-      cursor: pointer;
+      cursor: pointer; font-size: 14px;
     }
-    .tab.active {
-      background: var(--primary-color);
-      color: white;
+    .tab.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+    .section-title {
+      font-size: 13px; font-weight: 700;
+      color: var(--secondary-text-color);
+      text-transform: uppercase; letter-spacing: .05em;
+      margin: 12px 0 8px;
+    }
+
+    .img-field { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+    .img-label { font-size: 13px; font-weight: 600; color: var(--primary-text-color); }
+
+    .img-preview {
+      width: 100%; height: 140px; border-radius: 16px; overflow: hidden;
+      background: #1C1B1F; border: 1px solid rgba(101,101,101,0.3);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .img-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .img-preview-empty {
+      font-size: 12px; color: var(--secondary-text-color);
+      text-align: center; padding: 16px; line-height: 1.5;
+    }
+
+    .drop-zone {
+      width: 100%; box-sizing: border-box; min-height: 80px;
+      border: 2px dashed var(--divider-color); border-radius: 14px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 6px; padding: 12px; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--secondary-background-color); text-align: center;
+    }
+    .drop-zone.dragover {
       border-color: var(--primary-color);
+      background: color-mix(in srgb, var(--primary-color) 10%, transparent);
     }
+    .drop-zone.loading { opacity: 0.6; pointer-events: none; }
+
+    .drop-icon { font-size: 24px; line-height: 1; }
+    .drop-text { font-size: 13px; color: var(--primary-text-color); line-height: 1.4; }
+    .drop-sub  { font-size: 11px; color: var(--secondary-text-color); }
+
+    .drop-btn {
+      margin-top: 2px; padding: 5px 12px; border-radius: 8px;
+      border: 1px solid var(--primary-color); background: transparent;
+      color: var(--primary-color); font-size: 13px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .drop-btn:hover { background: color-mix(in srgb, var(--primary-color) 15%, transparent); }
+
+    .status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .status-row.success { color: var(--success-color, #43a047); }
+    .status-row.error   { color: var(--error-color, #db4437); }
+
+    .current-path {
+      display: flex; align-items: center; gap: 8px; font-size: 12px;
+      color: var(--secondary-text-color); background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color); border-radius: 10px;
+      padding: 8px 10px; box-sizing: border-box;
+    }
+    .current-path span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .path-clear {
+      width: 24px; height: 24px; border: none; border-radius: 6px;
+      background: transparent; color: var(--secondary-text-color);
+      cursor: pointer; font-size: 14px; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.15s;
+    }
+    .path-clear:hover { color: var(--error-color, #db4437); }
+
+    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
+    .img-hint code {
+      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
+      border-radius: 4px; padding: 1px 5px; font-size: 11px;
+    }
+
+    hr { border: none; border-top: 1px solid var(--divider-color); margin: 8px 0 16px; }
+
+    input[type="file"] { display: none; }
   `;
 
   constructor() {
     super();
     this._tab = 0;
+    this._speakerUploadState = "idle";
+    this._speakerUploadError = "";
+    this._speakerDragOver = false;
+    this._tvUploadState = "idle";
+    this._tvUploadError = "";
+    this._tvDragOver = false;
   }
 
   setConfig(config) {
@@ -596,12 +737,13 @@ class EmelyaMediaColumnsEditor extends LitElement {
     if (!this._config) return html``;
     return html`
       <div class="tabs">
-        ${["Объект", "Взаимодействия"].map((t, i) => html`
+        ${["Объект", "Внешний вид", "Взаимодействия"].map((t, i) => html`
           <div class="tab ${this._tab === i ? "active" : ""}" @click=${() => this._tab = i}>${t}</div>
         `)}
       </div>
       ${this._tab === 0 ? this._objectTab() : ""}
-      ${this._tab === 1 ? this._actionsTab() : ""}
+      ${this._tab === 1 ? this._appearanceTab() : ""}
+      ${this._tab === 2 ? this._actionsTab() : ""}
     `;
   }
 
@@ -611,6 +753,86 @@ class EmelyaMediaColumnsEditor extends LitElement {
       { name: "speaker",  required: true, selector: { entity: { domain: "media_player" } } },
       { name: "base_path", selector: { text: {} } }
     ]);
+  }
+
+  _appearanceTab() {
+    return html`
+      <div class="section-title">Фон колонки «Алиса»</div>
+      ${this._renderBgUpload({
+        src:       this._config?.speaker_bg,
+        stateKey:  "_speakerUploadState",
+        errorKey:  "_speakerUploadError",
+        dragKey:   "_speakerDragOver",
+        inputId:   "speakerFileInput",
+        configKey: "speaker_bg",
+      })}
+
+      <hr>
+
+      <div class="section-title">Фон колонки «ТВ»</div>
+      ${this._renderBgUpload({
+        src:       this._config?.tv_bg,
+        stateKey:  "_tvUploadState",
+        errorKey:  "_tvUploadError",
+        dragKey:   "_tvDragOver",
+        inputId:   "tvFileInput",
+        configKey: "tv_bg",
+      })}
+    `;
+  }
+
+  _renderBgUpload({ src, stateKey, errorKey, dragKey, inputId, configKey }) {
+    const uploadState = this[stateKey];
+    const uploadError = this[errorKey];
+    const dragOver    = this[dragKey];
+
+    return html`
+      <div class="img-field">
+        <div class="img-preview">
+          ${src ? html`
+            <img src=${src} alt="preview"
+              @error=${() => { this[stateKey] = "error"; this[errorKey] = "Файл не найден"; }}
+            />
+          ` : html`
+            <div class="img-preview-empty">Фон не задан.<br>Будет использован фон по умолчанию.</div>
+          `}
+        </div>
+
+        <div
+          class="drop-zone ${dragOver ? "dragover" : ""} ${uploadState === "loading" ? "loading" : ""}"
+          @dragover=${e => { e.preventDefault(); this[dragKey] = true; }}
+          @dragleave=${() => this[dragKey] = false}
+          @drop=${e => { e.preventDefault(); this[dragKey] = false; const f = e.dataTransfer?.files?.[0]; if (f) this._uploadFile(f, stateKey, errorKey, configKey); }}
+          @click=${e => { e.stopPropagation(); this.shadowRoot?.getElementById(inputId)?.click(); }}
+        >
+          <div class="drop-icon">${uploadState === "loading" ? "⏳" : "🖼️"}</div>
+          <div class="drop-text">${uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
+          <div class="drop-sub">PNG, JPG, WebP, AVIF, SVG</div>
+          ${uploadState !== "loading" ? html`
+            <button class="drop-btn" @click=${e => { e.stopPropagation(); this.shadowRoot?.getElementById(inputId)?.click(); }}>Выбрать файл</button>
+          ` : ""}
+        </div>
+
+        <input type="file" id="${inputId}" accept="image/*"
+          @change=${e => { const f = e.target?.files?.[0]; if (f) this._uploadFile(f, stateKey, errorKey, configKey); e.target.value = ""; }}
+        />
+
+        ${uploadState === "success" ? html`<div class="status-row success">✓ Изображение загружено</div>` : ""}
+        ${uploadState === "error"   ? html`<div class="status-row error">⚠ ${uploadError}</div>` : ""}
+
+        ${src ? html`
+          <div class="current-path">
+            <span title=${src}>${src}</span>
+            <button class="path-clear" @click=${() => this._clearImage(stateKey, errorKey, configKey)}>✕</button>
+          </div>
+        ` : ""}
+
+        <div class="img-hint">
+          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
+          Поддерживаются PNG, JPG, WebP и AVIF.
+        </div>
+      </div>
+    `;
   }
 
   _actionsTab() {
@@ -633,6 +855,85 @@ class EmelyaMediaColumnsEditor extends LitElement {
     ]);
   }
 
+  /* ── Нормализация MIME для HA API ── */
+  _normalizeFileForUpload(file) {
+    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupportedByHA.includes(file.type)) {
+      return new File([file], file.name, { type: "image/png" });
+    }
+    return file;
+  }
+
+  async _uploadFile(file, stateKey, errorKey, configKey) {
+    if (!file.type.startsWith("image/")) {
+      this[stateKey] = "error";
+      this[errorKey] = "Файл не является изображением";
+      return;
+    }
+
+    this[stateKey] = "loading";
+    this[errorKey] = "";
+
+    const uploadFile = this._normalizeFileForUpload(file);
+
+    // Attempt 1 — HA store_image
+    try {
+      const formData = new FormData();
+      formData.append("file", uploadFile);
+
+      const resp = await this.hass.fetchWithAuth(
+        `/api/config/core/store_image`,
+        { method: "POST", body: formData }
+      );
+
+      if (resp.ok) {
+        const json = await resp.json();
+        this._setImage(configKey, json.url || `/local/${file.name}`);
+        this[stateKey] = "success";
+        return;
+      }
+    } catch (_) {}
+
+    // Attempt 2 — /api/image/upload fallback
+    try {
+      const token = this.hass?.auth?.data?.access_token;
+      const formData = new FormData();
+      formData.append("file", uploadFile);
+
+      const resp = await fetch(`${window.location.origin}/api/image/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      if (resp.ok) {
+        const json = await resp.json();
+        this._setImage(configKey, `/api/image/serve/${json.id}/original`);
+        this[stateKey] = "success";
+        return;
+      }
+
+      throw new Error(`HTTP ${resp.status}`);
+    } catch (err) {
+      this[stateKey] = "error";
+      this[errorKey] = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+    }
+  }
+
+  _setImage(configKey, path) {
+    this._config = { ...this._config, [configKey]: path };
+    this._fire();
+  }
+
+  _clearImage(stateKey, errorKey, configKey) {
+    this[stateKey] = "idle";
+    this[errorKey] = "";
+    const config = { ...this._config };
+    delete config[configKey];
+    this._config = config;
+    this._fire();
+  }
+
   _form(schema) {
     return html`
       <ha-form
@@ -646,12 +947,16 @@ class EmelyaMediaColumnsEditor extends LitElement {
 
   _valueChanged = (e) => {
     this._config = e.detail.value;
+    this._fire();
+  };
+
+  _fire() {
     this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config: this._config },
       bubbles: true,
       composed: true
     }));
-  };
+  }
 }
 
 /* ══════════════════════════════════════════

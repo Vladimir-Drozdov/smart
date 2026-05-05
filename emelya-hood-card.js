@@ -26,6 +26,7 @@ class EmelyaHoodCard extends LitElement {
     this._expectedLevel = null;
     this._holdTimer = null;
     this._lastTap = 0;
+    this._preloadedBg = null;
   }
 
   set hass(hass){
@@ -73,6 +74,17 @@ class EmelyaHoodCard extends LitElement {
       ...config,
     };
     this.base = this.config.base_path || "/local";
+    this._preloadBackground();
+  }
+  _preloadBackground() {
+    const bg = this.config.background_image
+      ? this.config.background_image
+      : `${this.base}/images/container-images/kitchen-hood.png`;
+    if (bg && this._preloadedBg !== bg) {
+      this._preloadedBg = bg;
+      const img = new Image();
+      img.src = bg;
+    }
   }
 
   static styles = css`
@@ -86,6 +98,7 @@ class EmelyaHoodCard extends LitElement {
       height: 264px;
       border-radius: 24px;
       position: relative;
+      background: #1C1B1F;
     }
     .frame::before {
       content: "";
@@ -100,6 +113,26 @@ class EmelyaHoodCard extends LitElement {
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
       pointer-events: none;
+    }
+    .frame::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background-image:
+        linear-gradient(180deg, rgba(28,27,31,0.00) 80%, #1C1B1F 100%),
+        var(--frame-bg, none);
+      background-size: auto, 135.625%;
+      background-position: center, 52.763px -213.194px;
+      background-repeat: no-repeat;
+      background-blend-mode: normal, luminosity;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .frame.bg-loaded::after {
+      opacity: 1;
     }
 
     /* ── шапка ── */
@@ -232,6 +265,19 @@ class EmelyaHoodCard extends LitElement {
   }
 
   updated() {
+    // Фон
+    const frame = this.renderRoot?.querySelector(".frame[data-bg]");
+    if (frame) {
+      const bgUrl = frame.dataset.bg;
+      if (bgUrl && frame._bgInitialized !== bgUrl) {
+        frame._bgInitialized = bgUrl;
+        frame.style.setProperty("--frame-bg", `url("${bgUrl}")`);
+        const img = new Image();
+        img.onload = () => frame.classList.add("bg-loaded");
+        img.src = bgUrl;
+      }
+    }
+    // Индикатор
     this._updateIndicator();
   }
 
@@ -332,14 +378,7 @@ class EmelyaHoodCard extends LitElement {
       <div
         class="frame"
         tabindex="0"
-        style='
-          background: linear-gradient(180deg, rgba(28,27,31,0.00) 80%, #1C1B1F 100%),
-                      url("${bg}") 52.763px -213.194px / 135.625% 164.394% no-repeat,
-                      #1C1B1F;
-          background-blend-mode: normal, luminosity, normal;
-          border: none;
-          border-radius: 24px !important;
-        '
+        data-bg="${this.config.background_image || `${this.base}/images/container-images/kitchen-hood.png`}"
       >
         <div class="header">
           <div class="title">Вытяжка</div>
@@ -532,7 +571,7 @@ class EmelyaHoodCardEditor extends LitElement {
         >
           <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
           <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
-          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          <div class="drop-sub">PNG, JPG, WebP, AVIF, SVG</div>
           ${this._uploadState !== "loading" ? html`
             <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
           ` : ""}
@@ -579,6 +618,13 @@ class EmelyaHoodCardEditor extends LitElement {
     if (file) this._uploadFile(file);
     e.target.value = "";
   }
+  _normalizeFileForUpload(file) {
+    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupportedByHA.includes(file.type)) {
+      return new File([file], file.name, { type: "image/png" });
+    }
+    return file;
+  }
 
   /* ── Загрузка файла ── */
 
@@ -591,10 +637,11 @@ class EmelyaHoodCardEditor extends LitElement {
 
     this._uploadState = "loading";
     this._uploadError = "";
+    const uploadFile = this._normalizeFileForUpload(file);
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await this.hass.fetchWithAuth(
         `/api/config/core/store_image`,
@@ -613,7 +660,7 @@ class EmelyaHoodCardEditor extends LitElement {
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await fetch(`${window.location.origin}/api/image/upload`, {
         method: "POST",

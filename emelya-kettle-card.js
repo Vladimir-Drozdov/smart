@@ -18,6 +18,7 @@ class EmelyaKettleCard extends LitElement {
     this._selectedSlot = 1;
     this._holdTimer = null;
     this._lastTap = 0;
+    this._preloadedBg = null;
   }
 
   setConfig(config) {
@@ -31,6 +32,17 @@ class EmelyaKettleCard extends LitElement {
       ...config,
     };
     this.base = this.config.base_path || "/local";
+    this._preloadBackground();
+  }
+  _preloadBackground() {
+    const bg = this.config.background_image
+      ? this.config.background_image
+      : `${this.base}/images/container-images/kettle.png`;
+    if (bg && this._preloadedBg !== bg) {
+      this._preloadedBg = bg;
+      const img = new Image();
+      img.src = bg;
+    }
   }
 
   set hass(hass) {
@@ -216,6 +228,7 @@ class EmelyaKettleCard extends LitElement {
       font-family: Roboto, sans-serif;
       cursor: pointer;
       user-select: none;
+      background: #1C1B1F;
     }
 
     .card::before {
@@ -231,6 +244,26 @@ class EmelyaKettleCard extends LitElement {
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
       pointer-events: none;
+    }
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background-image:
+        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 60%, #1C1B1F 88.4%),
+        var(--card-bg, none);
+      background-size: auto, 81.463%;
+      background-position: center, 53.318px 57.809px;
+      background-repeat: no-repeat;
+      background-blend-mode: normal, luminosity;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .card.bg-loaded::after {
+      opacity: 1;
     }
 
     .header {
@@ -310,6 +343,19 @@ class EmelyaKettleCard extends LitElement {
   `;
 
   updated() {
+    // Фон
+    const card = this.renderRoot?.querySelector(".card[data-bg]");
+    if (card) {
+      const bgUrl = card.dataset.bg;
+      if (bgUrl && card._bgInitialized !== bgUrl) {
+        card._bgInitialized = bgUrl;
+        card.style.setProperty("--card-bg", `url("${bgUrl}")`);
+        const img = new Image();
+        img.onload = () => card.classList.add("bg-loaded");
+        img.src = bgUrl;
+      }
+    }
+    // Индикатор
     this._updateIndicator();
   }
 
@@ -337,15 +383,7 @@ class EmelyaKettleCard extends LitElement {
 
     return html`
       <ha-card>
-        <div
-          class="card"
-          style="
-            background: linear-gradient(180deg, rgba(28, 27, 31, 0.00) 60%, #1C1B1F 88.4%),
-                        url('${bg}') 53.318px 57.809px / 81.463% 82.494% no-repeat,
-                        #1C1B1F;
-            background-blend-mode: normal, luminosity, normal;
-          "
-        >
+        <div class="card" data-bg="${bg}">
           <div class="header">
             <div class="title">${this.config?.title || "Чайник"}</div>
             <div class="state">${this.power ? "Включено" : "Выключено"}</div>
@@ -553,7 +591,7 @@ class EmelyaKettleCardEditor extends LitElement {
         >
           <div class="drop-icon">${this._uploadState === "loading" ? "⏳" : "🖼️"}</div>
           <div class="drop-text">${this._uploadState === "loading" ? "Загрузка..." : "Перетащите изображение сюда"}</div>
-          <div class="drop-sub">PNG, JPG, WebP, SVG</div>
+          <div class="drop-sub">PNG, JPG, WebP, AVIF, SVG</div>
           ${this._uploadState !== "loading" ? html`
             <button class="drop-btn" @click=${this._onZoneClick}>Выбрать файл</button>
           ` : ""}
@@ -599,6 +637,13 @@ class EmelyaKettleCardEditor extends LitElement {
     if (file) this._uploadFile(file);
     e.target.value = "";
   }
+  _normalizeFileForUpload(file) {
+    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupportedByHA.includes(file.type)) {
+      return new File([file], file.name, { type: "image/png" });
+    }
+    return file;
+  }
 
   async _uploadFile(file) {
     if (!file.type.startsWith("image/")) {
@@ -609,10 +654,11 @@ class EmelyaKettleCardEditor extends LitElement {
 
     this._uploadState = "loading";
     this._uploadError = "";
+    const uploadFile = this._normalizeFileForUpload(file);
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await this.hass.fetchWithAuth("/api/config/core/store_image", {
         method: "POST",
@@ -631,7 +677,7 @@ class EmelyaKettleCardEditor extends LitElement {
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
 
       const resp = await fetch(`${window.location.origin}/api/image/upload`, {
         method: "POST",
