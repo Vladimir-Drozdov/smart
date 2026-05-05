@@ -229,12 +229,13 @@ class EmelyaDryerCard extends LitElement {
       inset: 0;
       border-radius: 24px;
       background-image:
-        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 80%, #1C1B1F 100%),
-        var(--card-bg, none);
-      background-size: auto, 119.477%;
-      background-position: center, 42.588px 50.21px;
-      background-repeat: no-repeat;
-      background-blend-mode: normal, luminosity;
+        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%%, #1C1B1F 100%),
+        var(--breezer-bg, none),
+        linear-gradient(0deg, #1C1B1F, #1C1B1F);
+      background-size: auto, 119.477% 110.845%, auto;
+      background-position: center, 42.588px 50.21px, center;
+      background-repeat: no-repeat, no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity, normal;
       opacity: 0;
       transition: opacity 0.35s ease;
       pointer-events: none;

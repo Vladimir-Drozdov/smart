@@ -232,12 +232,13 @@ class EmelyaHumidifierCard extends LitElement {
       inset: 0;
       border-radius: 24px;
       background-image:
-        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 80%, #1C1B1F 100%),
-        var(--humidifier-bg, none);
-      background-size: auto, 141.697% 141.697%;
-      background-position: center, -22.849px 67.463px;
-      background-repeat: no-repeat, no-repeat;
-      background-blend-mode: normal, luminosity;
+        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 77.78%, #1C1B1F 100%),
+        var(--humidifier-bg, none),
+        linear-gradient(0deg, #1C1B1F, #1C1B1F);
+      background-size: auto, 141.697% 141.697%, auto;
+      background-position: center, -22.849px 67.463px, center;
+      background-repeat: no-repeat, no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity, normal;
       /* Плавное появление — воспринимается быстрее чем резкий pop-in */
       opacity: 0;
       transition: opacity 0.35s ease;

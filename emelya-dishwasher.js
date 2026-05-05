@@ -226,11 +226,12 @@ class EmelyaDishwasherCard extends LitElement {
       border-radius: 24px;
       background-image:
         linear-gradient(180deg, rgba(28, 27, 31, 0.00) 75%, #1C1B1F 100%),
-        var(--card-bg, none);
-      background-size: auto, 100.889%;
-      background-position: center, 41.817px 1.357px;
-      background-repeat: no-repeat;
-      background-blend-mode: normal, luminosity;
+        var(--breezer-bg, none),
+        linear-gradient(0deg, #1C1B1F, #1C1B1F);
+      background-size: auto, 100.889% 102.166%, auto;
+      background-position: center, 41.817px 1.357px, center;
+      background-repeat: no-repeat, no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity, normal;
       opacity: 0;
       transition: opacity 0.35s ease;
       pointer-events: none;

@@ -346,10 +346,10 @@ class EmelyaMediaColumns extends LitElement {
 
     .alice-img {
       position: absolute;
-      top: -5%;
-      right: -10%;
-      width: 65%;
-      height: 55%;
+      top: -32px;
+      left: 25px;
+      width: 168px;
+      height: 168px;
       pointer-events: none;
       z-index: 1;
     }

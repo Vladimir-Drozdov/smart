@@ -251,12 +251,13 @@ class EmelyaBreezerCard extends LitElement {
       inset: 0;
       border-radius: 24px;
       background-image:
-        linear-gradient(180deg, rgba(28, 27, 31, 0.40) 80%, #1C1B1F 100%),
-        var(--breezer-bg, none);
-      background-size: auto, 70.472% 98.523%;
-      background-position: center, 105.316px 49.164px;
-      background-repeat: no-repeat, no-repeat;
-      background-blend-mode: normal, luminosity;
+        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 74.79%, #1C1B1F 100%),
+        var(--breezer-bg, none),
+        linear-gradient(0deg, #1C1B1F, #1C1B1F);
+      background-size: auto, 70.472% 98.523%, auto;
+      background-position: center, 105.316px 49.164px, center;
+      background-repeat: no-repeat, no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity, normal;
       /* Плавное появление — воспринимается быстрее чем резкий pop-in */
       opacity: 0;
       transition: opacity 0.35s ease;

@@ -259,11 +259,12 @@ class EmelyaCoffeeCard extends LitElement {
       border-radius: 24px;
       background-image:
         linear-gradient(180deg, rgba(28, 27, 31, 0.00) 70%, #1C1B1F 100%),
-        var(--coffee-bg, none);
-      background-size: auto, 74.782% 76.117%;
-      background-position: center, 88px 53.12px;
-      background-repeat: no-repeat, no-repeat;
-      background-blend-mode: normal, luminosity;
+        var(--breezer-bg, none),
+        linear-gradient(0deg, #1C1B1F, #1C1B1F);
+      background-size: auto, 74.782% 76.117%, auto;
+      background-position: center, 88px 53.12px, center;
+      background-repeat: no-repeat, no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity, normal;
       /* Плавное появление — воспринимается быстрее чем резкий pop-in */
       opacity: 0;
       transition: opacity 0.35s ease;

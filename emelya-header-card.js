@@ -182,11 +182,13 @@ class EmelyaHeaderCard extends LitElement {
       inset: 0;
       border-radius: 24px;
       background-image:
-        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 75%, #1C1B1F 100%),
-        var(--wrapper-bg, none);
-      background-size: auto, 100% 457.197%;
-      background-position: center, 0px -329.447px;
-      background-repeat: no-repeat;
+        linear-gradient(90deg, #1C1B1F 0%, rgba(28, 27, 31, 0.00) 50%, #1C1B1F 100%),
+        var(--wrapper-bg, none), 
+        linear-gradient(0deg, #1C1B1F, #1C1B1F);
+      background-size: auto, 100% 457.197%, auto;
+      background-position: center, 0px -329.447px, center;
+      background-repeat: no-repeat, no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity, normal;
       opacity: 0;
       transition: opacity 0.35s ease;
       pointer-events: none;

@@ -251,12 +251,12 @@ class EmelyaKettleCard extends LitElement {
       inset: 0;
       border-radius: 24px;
       background-image:
-        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 60%, #1C1B1F 88.4%),
+        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 56.97%, #1C1B1F 88.4%),
         var(--card-bg, none);
-      background-size: auto, 81.463%;
-      background-position: center, 53.318px 57.809px;
-      background-repeat: no-repeat;
-      background-blend-mode: normal, luminosity;
+      background-size: auto, 81.463% 82.494%, auto;
+      background-position: center, 53.318px 57.809px, center;
+      background-repeat: no-repeat, no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity, normal;
       opacity: 0;
       transition: opacity 0.35s ease;
       pointer-events: none;

@@ -231,12 +231,13 @@ class EmelyaVacuumCleaner extends LitElement {
       inset: 0;
       border-radius: 24px;
       background-image:
-        linear-gradient(180deg, rgba(28, 27, 31, 0.00) 79.67%, #1C1B1F 100%),
-        var(--vacuum-bg, none);
-      background-size: auto, 134.876% 110.996%;
-      background-position: center, 9.86px -113.795px;
-      background-repeat: no-repeat, no-repeat;
-      background-blend-mode: normal, luminosity;
+        linear-gradient(0deg, rgba(28, 27, 31, 0.00) 79.67%, #1C1B1F 100%),
+        var(--vacuum-bg, none),
+        linear-gradient(0deg, #1C1B1F, #1C1B1F);
+      background-size: auto, 134.876% 110.996%, auto;
+      background-position: center, 9.86px -113.795px, center;
+      background-repeat: no-repeat, no-repeat, no-repeat;
+      background-blend-mode: normal, luminosity, normal;
       /* Плавное появление — воспринимается быстрее чем резкий pop-in */
       opacity: 0;
       transition: opacity 0.35s ease;
@@ -427,7 +428,7 @@ class EmelyaVacuumCleaner extends LitElement {
     <ha-card>
       <div
         class="frame"
-        style="--vacuum-bg: url('${bg}'); border: none; border-radius: 24px !important;"
+        style="--vacuum-bg: url('${bg}');"
       >
         <div class="type">
           <div class="title">Робот пылесос</div>
