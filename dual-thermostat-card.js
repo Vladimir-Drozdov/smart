@@ -760,24 +760,34 @@ const ICON_OPTIONS = [
   { label: "Спальня",        value: "/local/images/icons/bedroom.svg" },
   { label: "Гостиная",       value: "/local/images/icons/living_room.svg" },
   { label: "Душ, ванная",    value: "/local/images/icons/bathroom.svg" },
-  { label: "Детская",        value: "/local/images/icons/kids_room.svg" },
-  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" },
+  { label: "Детская",        value: "/local/images/icons/kids_room.svg" }, //
+  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" }, //
   { label: "Кухня",          value: "/local/images/icons/kitchen.svg" },
-  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" },
+  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" }, //
   { label: "Кабинет",        value: "/local/images/icons/office.svg" },
   { label: "Постирочная",    value: "/local/images/icons/laundry.svg" },
   { label: "Туалет",         value: "/local/images/icons/toilet.svg" },
   { label: "Холл",           value: "/local/images/icons/hall.svg" },
-  { label: "Кладовая",       value: "/local/images/icons/storage.svg" },
+  { label: "Кладовая",       value: "/local/images/icons/storage.svg" }, //
   { label: "Коридор",        value: "/local/images/icons/corridor.svg" },
   { label: "Двор",           value: "/local/images/icons/yard.svg" },
-  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" },
+  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" }, //
   { label: "Столовая",       value: "/local/images/icons/dining_room.svg" },
   { label: "Кинотеатр",      value: "/local/images/icons/home_cinema.svg" },
   { label: "Бассейн",        value: "/local/images/icons/pool.svg" },
-  { label: "Гараж",          value: "/local/images/icons/garage.svg" },
+  { label: "Гараж",          value: "/local/images/icons/garage.svg" }, //
   { label: "Комната няни",   value: "/local/images/icons/nanny_room.svg" },
-  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" },
+  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" }, //
+  { label: "Полумесяц",       value: "/local/images/icons/cresent_moon.svg" }, //
+  { label: "Часы",       value: "/local/images/icons/clock.svg" }, //
+  { label: "Холодный термостат",       value: "/local/images/icons/cool_thermostat.svg" }, //
+  { label: "Горячий термостат",       value: "/local/images/icons/heat_thermostat.svg" }, //
+  { label: "Дверь закрытая",       value: "/local/images/icons/door_front.svg" }, //
+  { label: "Дверь открытая",       value: "/local/images/icons/door_open.svg" }, //
+  { label: "Лампочка включенная",       value: "/local/images/icons/lightbulb.svg" }, //
+  { label: "Лампочка выключенная",       value: "/local/images/icons/lightbulb_turnoff.svg" }, //
+  { label: "Капля",       value: "/local/images/icons/no_drop.svg" }, //
+  { label: "вкл/выкл",       value: "/local/images/icons/power.svg" }, //
 ];
 class DualThermostatCardEditor extends LitElement {
   static properties = {
