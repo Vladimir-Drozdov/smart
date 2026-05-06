@@ -220,7 +220,6 @@ class EmelyaBreezerCard extends LitElement {
     ha-card{
       border-radius: 24px !important;
       border: none !important;
-      z-index: 99 !important;
     }
 
     .card {
