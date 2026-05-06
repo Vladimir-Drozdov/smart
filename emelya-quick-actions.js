@@ -51,32 +51,46 @@ class EmelyaQuickActions extends LitElement {
     const actions = this.config?.actions || [];
     const newActive = new Set();
 
-    const now = Date.now();
-    const ignore = (now - this._lastUserChange) < 1000;
-
     actions.forEach((action, index) => {
       if (action.divider || !action.entity) return;
       const stateObj = hass.states?.[action.entity];
       if (!stateObj) return;
-
-      const isOn = stateObj.state === "on" || stateObj.state === "home";
-      const expected = this._expectedStates[index];
-
-      if (expected !== undefined) {
-        if (isOn !== expected) return;
-        delete this._expectedStates[index];
+      if (["on", "home", "running"].includes(stateObj.state)) {
+        newActive.add(index);
       }
-
-      if (isOn) newActive.add(index);
     });
 
-    const hasAnyEntity = actions.some(action => {
-      if (action.divider || !action.entity) return false;
-      return !!hass.states?.[action.entity];
+    // Для каждой группы между divider-ами — если несколько горят,
+    // оставить только последнюю активную и выключить остальные
+    const groups = [];
+    let currentGroup = [];
+    actions.forEach((action, index) => {
+      if (action.divider) {
+        if (currentGroup.length) groups.push(currentGroup);
+        currentGroup = [];
+      } else {
+        currentGroup.push(index);
+      }
+    });
+    if (currentGroup.length) groups.push(currentGroup);
+
+    groups.forEach(group => {
+      const activeInGroup = group.filter(i => newActive.has(i));
+      if (activeInGroup.length > 1) {
+        // оставляем последний активный, остальные выключаем
+        const toTurnOff = activeInGroup.slice(0, -1);
+        toTurnOff.forEach(i => {
+          newActive.delete(i);
+          const entity = actions[i].entity;
+          if (entity) {
+            this._hass.callService("input_boolean", "turn_off", { entity_id: entity });
+          }
+        });
+      }
     });
 
-    if (!hasAnyEntity) return;
-    if (!ignore) this.activeActions = newActive;
+    this.activeActions = newActive;
+    this.requestUpdate();
   }
 
   get hass() { return this._hass; }
@@ -460,45 +474,11 @@ class EmelyaQuickActions extends LitElement {
   }
 
   _doToggle(action, index) {
-    if (index === 0) localStorage.setItem("home_mode", "home");
-    if (index === 1) localStorage.setItem("home_mode", "away");
-    if (index === 2) localStorage.setItem("home_mode", "night");
-    window.dispatchEvent(new Event("home-mode-changed"));
-
-    if (!action) return;
-
-    const actions = this.config.actions || [];
-    const newActive = new Set(this.activeActions);
-
-    let groupStart = 0;
-    let groupEnd = actions.length;
-    for (let i = index - 1; i >= 0; i--) {
-      if (actions[i].divider) { groupStart = i + 1; break; }
-    }
-    for (let i = index + 1; i < actions.length; i++) {
-      if (actions[i].divider) { groupEnd = i; break; }
-    }
-
-    const isActive = newActive.has(index);
-    const newState = !isActive;
-
-    if (newState) {
-      for (let i = groupStart; i < groupEnd; i++) newActive.delete(i);
-      newActive.add(index);
-    } else {
-      newActive.delete(index);
-    }
-
-    this.activeActions = newActive;
-
-    if (action.entity && this._hass?.states?.[action.entity]) {
-      this._expectedStates[index] = newState;
-      this._lastUserChange = Date.now();
-      const entity = this._hass.states[action.entity];
-      const domain = entity.entity_id.split(".")[0];
-      const service = newState ? "turn_on" : "turn_off";
-      this._hass.callService(domain, service, { entity_id: action.entity });
-    }
+    if (!action?.entity) return;
+    const [domain] = action.entity.split(".");
+    const isActive = this.activeActions.has(index);
+    const service = isActive ? "turn_off" : "turn_on";
+    this._hass.callService(domain, service, { entity_id: action.entity });
   }
 
   _closeModal() {
@@ -978,7 +958,7 @@ class EmelyaQuickActionsEditor extends LitElement {
       },
       {
         name: "entity",
-        selector: { entity: {} }
+        selector: { entity: { domain: ["input_boolean"] } }
       }
     ];
 

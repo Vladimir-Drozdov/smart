@@ -66,6 +66,7 @@ class EmelyaHeaderCard extends LitElement {
       const saved = localStorage.getItem("home_mode");
       if (saved) { this._mode = saved; this.requestUpdate(); }
     });
+    this._weatherIcon = { type: "img", src: "" };
   }
 
   setConfig(config) {
@@ -111,7 +112,25 @@ class EmelyaHeaderCard extends LitElement {
     if (weather) {
       const temp = weather.attributes?.temperature;
       this._temp = temp !== undefined ? Math.round(temp) : this._temp;
-      this._weatherIcon = this._mapWeather(weather.state);
+
+      const condition = weather.state;
+      const weatherConditions = {
+        rainy:        "mdi:weather-rainy",
+        pouring:      "mdi:weather-pouring",
+        cloudy:       "mdi:weather-cloudy",
+        sunny:        "mdi:weather-sunny",
+        clear:        "mdi:weather-sunny",
+        partlycloudy: "mdi:weather-partly-cloudy",
+      };
+
+      const customIcon = this.config?.weather_icons?.[condition];
+      const defaultMdi = weatherConditions[condition] || this.config?.weather_icons?.default || "mdi:weather-cloudy";
+
+      if (customIcon) {
+        this._weatherIcon = { type: "ha-icon", icon: customIcon };
+      } else {
+        this._weatherIcon = { type: "ha-icon", icon: defaultMdi };
+      }
     }
 
     // MODE FROM SCRIPTS
@@ -293,7 +312,11 @@ class EmelyaHeaderCard extends LitElement {
 
     .temp { font-size: 16px; font-weight: 600; }
 
-    .weather-icon-wrap img { display: block; }
+    .weather-icon-wrap img {
+      display: block;
+      width: 24px;
+      height: 24px;
+    }
 
     @container (max-width: 480px) {
       .left {
@@ -439,7 +462,10 @@ class EmelyaHeaderCard extends LitElement {
               <div class="weather">
                 <div class="temp" @click=${this._onWeatherClick}>${this._temp}°</div>
                 <div class="weather-icon-wrap" @click=${this._onWeatherClick}>
-                  <img src="${this._weatherIcon}">
+                  ${this._weatherIcon?.type === "ha-icon"
+                    ? html`<ha-icon icon="${this._weatherIcon.icon}" style="--mdc-icon-size:24px;color:white;"></ha-icon>`
+                    : html`<img src="${this._weatherIcon?.src || ''}" width="24" height="24">`
+                  }
                 </div>
               </div>
             </div>
@@ -725,6 +751,46 @@ class EmelyaHeaderCardEditor extends LitElement {
 
       <hr class="divider">
 
+      <div class="section-title">Иконки погоды</div>
+      ${[
+        { key: "rainy",        label: "Дождь" },
+        { key: "pouring",      label: "Ливень" },
+        { key: "cloudy",       label: "Облачно" },
+        { key: "sunny",        label: "Солнечно" },
+        { key: "clear",        label: "Ясно" },
+        { key: "partlycloudy", label: "Переменная облачность" },
+      ].map(({ key, label }) => html`
+        <div style="margin-bottom:8px;">
+          <div style="font-size:12px;color:var(--secondary-text-color);margin-bottom:4px;">${label}</div>
+          <ha-icon-picker
+            .hass=${this.hass}
+            .value=${this._config?.weather_icons?.[key] || ""}
+            @value-changed=${(e) => {
+              const icons = { ...(this._config.weather_icons || {}) };
+              icons[key] = e.detail.value;
+              this._config = { ...this._config, weather_icons: icons };
+              this._emit();
+            }}
+          ></ha-icon-picker>
+        </div>
+      `)}
+
+      <div style="margin-bottom:8px;margin-top:4px;">
+        <div style="font-size:12px;color:var(--secondary-text-color);margin-bottom:4px;">Иконка по умолчанию (заглушка)</div>
+        <ha-icon-picker
+          .hass=${this.hass}
+          .value=${this._config?.weather_icons?.default || ""}
+          @value-changed=${(e) => {
+            const icons = { ...(this._config.weather_icons || {}) };
+            icons.default = e.detail.value;
+            this._config = { ...this._config, weather_icons: icons };
+            this._emit();
+          }}
+        ></ha-icon-picker>
+      </div>
+
+      <hr class="divider">
+
       <div class="section-title">Пути к файлам</div>
       <ha-form
         .hass=${this.hass}
@@ -956,6 +1022,7 @@ EmelyaHeaderCard.getStubConfig = function () {
     tap_action:        { action: "none" },
     hold_action:       { action: "none" },
     double_tap_action: { action: "none" },
+    weather_icons: {},
   };
 };
 
