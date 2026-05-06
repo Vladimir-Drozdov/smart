@@ -133,19 +133,20 @@ class EmelyaHeaderCard extends LitElement {
       }
     }
 
-    // MODE FROM SCRIPTS
-    const scripts = [
-      { entity: "script.arrive_home",  mode: "home"  },
-      { entity: "script.leave_home",   mode: "away"  },
-      { entity: "script.night_mode",   mode: "night" },
+    // MODE FROM INPUT_BOOLEANS
+    const modeMap = [
+      { entity: this.config?.mode_entity_home,  mode: "home"  },
+      { entity: this.config?.mode_entity_away,  mode: "away"  },
+      { entity: this.config?.mode_entity_night, mode: "night" },
     ];
-    let lastTime = 0, newMode = null;
-    scripts.forEach(s => {
-      const obj = hass.states?.[s.entity];
-      if (!obj) return;
-      const t = new Date(obj.attributes?.last_triggered || 0).getTime();
-      if (t > lastTime) { lastTime = t; newMode = s.mode; }
+
+    let newMode = null;
+    modeMap.forEach(m => {
+      if (!m.entity) return;
+      const obj = this._hass.states?.[m.entity];
+      if (obj?.state === "on") newMode = m.mode;
     });
+
     if (newMode) {
       this._mode = newMode;
       localStorage.setItem("home_mode", newMode);
@@ -788,6 +789,27 @@ class EmelyaHeaderCardEditor extends LitElement {
           }}
         ></ha-icon-picker>
       </div>
+      <hr class="divider">
+
+      <div class="section-title">Режимы (input_boolean)</div>
+      ${[
+        { key: "mode_entity_home",  label: "Пришли домой" },
+        { key: "mode_entity_away",  label: "Ушли из дома" },
+        { key: "mode_entity_night", label: "Ночной режим" },
+      ].map(({ key, label }) => html`
+        <div style="margin-bottom:8px;">
+          <div style="font-size:12px;color:var(--secondary-text-color);margin-bottom:4px;">${label}</div>
+          <ha-selector
+            .hass=${this.hass}
+            .value=${this._config?.[key] || ""}
+            .selector=${{ entity: { domain: ["input_boolean"] } }}
+            @value-changed=${(e) => {
+              this._config = { ...this._config, [key]: e.detail.value };
+              this._emit();
+            }}
+          ></ha-selector>
+        </div>
+      `)}
 
       <hr class="divider">
 
@@ -1023,6 +1045,9 @@ EmelyaHeaderCard.getStubConfig = function () {
     hold_action:       { action: "none" },
     double_tap_action: { action: "none" },
     weather_icons: {},
+    mode_entity_home:  "",
+    mode_entity_away:  "",
+    mode_entity_night: "",
   };
 };
 
