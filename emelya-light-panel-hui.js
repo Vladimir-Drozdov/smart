@@ -16,6 +16,7 @@ const getDefaultTileCardMod = (base = "/local", entity = "") => ({
         box-shadow: none !important;
         padding: 8px !important;
         border-radius: 24px !important;
+        z-index: 99 !important;
       }
       ha-card:hover { background: transparent !important; }
       ha-card::before {
@@ -541,6 +542,7 @@ class EmelyaLightPanelHui extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 12px;
+      z-index:0;
     }
 
     .empty {

@@ -269,7 +269,6 @@ class EmelyaVacuumCleaner extends LitElement {
       flex-direction:column;
       gap:4px;
       position: relative;
-      z-index: 1;
     }
 
     .title{
@@ -287,7 +286,7 @@ class EmelyaVacuumCleaner extends LitElement {
       flex-direction:column;
       gap:8px;
       position: relative;
-      z-index: 1;
+      z-index: 99 !important;
     }
 
     ha-select {

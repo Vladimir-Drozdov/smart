@@ -270,7 +270,6 @@ class EmelyaKettleCard extends LitElement {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      z-index: 1;
     }
 
     .title { font-size: 16px; font-weight: 600; }

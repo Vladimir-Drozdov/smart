@@ -327,7 +327,7 @@ class EmelyaLampCard extends LitElement {
       align-items: center;
       padding: 16px 16px 0;
       position: relative;
-      z-index: 2;
+      z-index:1;
     }
     .card{
       width:100%;

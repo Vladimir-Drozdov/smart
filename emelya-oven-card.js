@@ -174,7 +174,6 @@ class EmelyaOvenCard extends LitElement {
       justify-content: space-between;
       align-items: center;
       position: relative;
-      z-index: 1;
     }
     .title {
       font-size: 16px;
@@ -189,7 +188,7 @@ class EmelyaOvenCard extends LitElement {
       gap: 8px;
       align-items: center;
       position: relative;
-      z-index: 1;
+      z-index: 99 !important;
     }
     .box {
       flex: 1;

@@ -279,7 +279,6 @@ class EmelyaWasherCard extends LitElement {
       justify-content:space-between;
       align-items:center;
       position: relative;
-      z-index: 1;
     }
 
     .title{
@@ -297,7 +296,7 @@ class EmelyaWasherCard extends LitElement {
       gap:8px;
       height:56px;
       position: relative;
-      z-index: 1;
+      z-index: 99 !important;
     }
 
     .power{

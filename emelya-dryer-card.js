@@ -239,7 +239,6 @@ class EmelyaDryerCard extends LitElement {
       opacity: 0;
       transition: opacity 0.35s ease;
       pointer-events: none;
-      z-index: 0;
     }
     .card.bg-loaded::after {
       opacity: 1;
@@ -257,6 +256,7 @@ class EmelyaDryerCard extends LitElement {
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
       pointer-events: none;                /* чтобы не мешал кликам */
+      z-index:0;
     }
 
     .header{
@@ -264,7 +264,7 @@ class EmelyaDryerCard extends LitElement {
       justify-content:space-between;
       align-items:center;
       position: relative;
-      z-index: 1;
+      z-index:1;
     }
 
     .title{
@@ -282,7 +282,7 @@ class EmelyaDryerCard extends LitElement {
       gap:8px;
       height:56px;
       position: relative;
-      z-index: 1;
+      z-index: 99 !important;
     }
 
     .power{

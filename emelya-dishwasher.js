@@ -261,7 +261,6 @@ class EmelyaDishwasherCard extends LitElement {
       justify-content:space-between; 
       align-items:center;
       position: relative;
-      z-index: 2;
     }
     .title{ 
       font-size:16px; 
@@ -276,7 +275,7 @@ class EmelyaDishwasherCard extends LitElement {
       gap:8px; 
       align-items:center;
       position: relative;
-      z-index: 2;
+      z-index: 99 !important;
     }
     .power{
       display: flex;

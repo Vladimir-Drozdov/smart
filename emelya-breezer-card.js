@@ -220,6 +220,7 @@ class EmelyaBreezerCard extends LitElement {
     ha-card{
       border-radius: 24px !important;
       border: none !important;
+      z-index: 99 !important;
     }
 
     .card {
@@ -289,7 +290,6 @@ class EmelyaBreezerCard extends LitElement {
       justify-content:space-between; 
       align-items:center;
       position: relative;
-      z-index: 1;
     }
     .title{ 
       font-size:16px; 
@@ -304,7 +304,7 @@ class EmelyaBreezerCard extends LitElement {
       gap:8px; 
       align-items:center;
       position: relative;
-      z-index: 1;
+      z-index: 99 !important;
     }
 
     .power{
