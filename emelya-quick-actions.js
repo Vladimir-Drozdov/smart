@@ -478,6 +478,33 @@ class EmelyaQuickActions extends LitElement {
     const [domain] = action.entity.split(".");
     const isActive = this.activeActions.has(index);
     const service = isActive ? "turn_off" : "turn_on";
+
+    // если включаем — сначала выключаем все остальные в группе
+    if (!isActive) {
+      const actions = this.config?.actions || [];
+
+      // найти границы группы для этого индекса
+      let groupStart = 0;
+      let groupEnd = actions.length;
+      for (let i = index - 1; i >= 0; i--) {
+        if (actions[i].divider) { groupStart = i + 1; break; }
+      }
+      for (let i = index + 1; i < actions.length; i++) {
+        if (actions[i].divider) { groupEnd = i; break; }
+      }
+
+      // выключить все активные в группе кроме текущей
+      for (let i = groupStart; i < groupEnd; i++) {
+        if (i !== index && this.activeActions.has(i)) {
+          const otherEntity = actions[i].entity;
+          if (otherEntity) {
+            const [otherDomain] = otherEntity.split(".");
+            this._hass.callService(otherDomain, "turn_off", { entity_id: otherEntity });
+          }
+        }
+      }
+    }
+
     this._hass.callService(domain, service, { entity_id: action.entity });
   }
 
