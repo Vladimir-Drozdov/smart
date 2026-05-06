@@ -33,10 +33,10 @@ class EmelyaWasherCard extends LitElement {
         --ha-card-border-radius: 16px !important;
         box-sizing: border-box !important;
         backdrop-filter: blur(12px) !important;
-        z-index: 99 !important;
+        z-index: 2 !important;
       }
       ha-card ha-select mwc-list-item{
-        z-index: 99 !important;
+        z-index: 2 !important;
         position: relative !important;
       }
     `,
@@ -296,7 +296,7 @@ class EmelyaWasherCard extends LitElement {
       gap:8px;
       height:56px;
       position: relative;
-      z-index: 99 !important;
+      z-index: 2 !important;
     }
 
     .power{

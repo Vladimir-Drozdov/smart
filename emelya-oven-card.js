@@ -188,7 +188,7 @@ class EmelyaOvenCard extends LitElement {
       gap: 8px;
       align-items: center;
       position: relative;
-      z-index: 99 !important;
+      z-index: 2 !important;
     }
     .box {
       flex: 1;

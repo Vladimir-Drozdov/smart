@@ -16,7 +16,7 @@ const getDefaultTileCardMod = (base = "/local", entity = "") => ({
         box-shadow: none !important;
         padding: 8px !important;
         border-radius: 24px !important;
-        z-index: 99 !important;
+        z-index: 2 !important;
       }
       ha-card:hover { background: transparent !important; }
       ha-card::before {
