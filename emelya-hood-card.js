@@ -142,6 +142,7 @@ class EmelyaHoodCard extends LitElement {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      z-index:1;
     }
     .title { font-weight:600; font-size:16px; }
     .state { font-size:15px; color: rgba(255,255,255,0.6); }

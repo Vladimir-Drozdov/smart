@@ -256,7 +256,7 @@ class EmelyaDryerCard extends LitElement {
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
       pointer-events: none;                /* чтобы не мешал кликам */
-      z-index:0;
+      z-index:1;
     }
 
     .header{
