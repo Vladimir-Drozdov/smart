@@ -380,7 +380,7 @@ class EmelyaLightPanelHui extends LitElement {
       display: flex;
       gap: 12px;
       align-items: center;
-      padding: 0 0 8px 8px;
+      padding: 0 0 8px;
     }
 
     .power-button {
@@ -484,7 +484,7 @@ class EmelyaLightPanelHui extends LitElement {
       gap: 12px;
       background: #1C1B1F;
       border-radius: 24px;
-      padding: 8px;
+      padding: 8px 0px 0px;
       box-sizing: border-box;
       cursor: pointer;
     }
@@ -558,7 +558,7 @@ class EmelyaLightPanelHui extends LitElement {
       gap: 12px;
       background: #1C1B1F;
       border-radius: 24px;
-      padding: 0px 8px 8px 8px;
+      padding: 8px 0px 0px;
       box-sizing: border-box;
       cursor: pointer;
     }
