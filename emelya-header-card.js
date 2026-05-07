@@ -82,8 +82,8 @@ class EmelyaHeaderCard extends LitElement {
     const bg = this.config?.background_image || `${this.base}/images/header-bg.png`;
     if (bg && this._preloadedBg !== bg) {
       this._preloadedBg = bg;
-      const img = new Image();
-      img.src = bg;
+      const img = new Image(); ////
+      img.src = bg; ////
     }
   }
 

@@ -178,6 +178,7 @@ class EmelyaOvenCard extends LitElement {
     .title {
       font-size: 16px;
       font-weight: 600;
+      z-index:1;
     }
     .state {
       font-size: 15px;
