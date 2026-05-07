@@ -1133,7 +1133,7 @@ class EmelyaLightPanelHui extends LitElement {
     if (!this._hass || !entityId) return "";
     const stateObj = this._hass.states[entityId];
     if (!stateObj) return "";
-    return stateObj.state === "on" ? "on" : "off";
+    return stateObj.state === "on" ? "Включено" : "Выключено";
   }
 
   _tileName(tile) {
@@ -1155,7 +1155,7 @@ class EmelyaLightPanelHui extends LitElement {
         </div>
         <div class="tile-text">
           <div class="tile-name">${name || "<Device>"}</div>
-          <div class="tile-state">&lt;${state || "off"}&gt;</div>
+          <div class="tile-state">${state || "off"}</div>
         </div>
       </div>
     `;
