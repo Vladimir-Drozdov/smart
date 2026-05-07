@@ -32,6 +32,7 @@ const getDefaultTileCardMod = (base = "/local", entity = "") => ({
         mask-composite: exclude !important;
       }
 
+      /* Hide the entire tile header (icon + name + state) — we render our own */
       ha-card ha-tile-container ha-tile-icon {
         display: none !important;
       }
@@ -48,10 +49,11 @@ const getDefaultTileCardMod = (base = "/local", entity = "") => ({
           padding: 0 !important; 
         }
       `,
+
       "hui-card-features $": {
         "hui-card-feature $": {
-          "hui-light-brightness-card-feature $": {
-            "ha-control-slider $": `
+          "hui-light-brightness-card-feature $":{
+            "ha-control-slider $":`
               .slider{
                 height: 64px !important;
                 border-radius: 20px !important;
@@ -80,6 +82,7 @@ const getDefaultTileCardMod = (base = "/local", entity = "") => ({
                 right: 16px !important;
                 --handle-margin: 16px !important;
               }
+
               .container {
                 height: 64px !important;
                 border-radius: 20px !important;
@@ -89,7 +92,7 @@ const getDefaultTileCardMod = (base = "/local", entity = "") => ({
                 border-radius: 20px !important;
               }
             `,
-            ".": `
+            "." : `
               ha-control-slider {
                 --control-slider-thickness: 64px !important;
                 height: 64px !important;
@@ -111,9 +114,9 @@ const getDefaultTileCardMod = (base = "/local", entity = "") => ({
                   linear-gradient(#fff 0 0);
                 -webkit-mask-composite: xor !important;
                 mask-composite: exclude !important;
-              }
-            `
+              }`,
           },
+
           "hui-light-color-temp-card-feature $": `
             ha-control-slider {
               --control-slider-thickness: 64px !important;
@@ -126,6 +129,7 @@ const getDefaultTileCardMod = (base = "/local", entity = "") => ({
               height: 64px !important;
               border-radius: 20px !important;
             }
+
             ha-control-slider .slider .slider-track-bar::after,
             ha-control-slider .slider .slider-track-cursor::after {
               right: 16px !important;
@@ -241,8 +245,9 @@ const getDefaultTileCardModToggle = (base = "/local", entity = "") => ({
         visibility:hidden !important;
       }
     `,
-    "ha-tile-container ha-tile-icon": {
-      "$": `
+
+    "ha-tile-container ha-tile-icon":{
+      "$":`
         .container.background,
         .container {
           opacity:0 !important;
@@ -252,6 +257,7 @@ const getDefaultTileCardModToggle = (base = "/local", entity = "") => ({
         }
       `
     },
+
     "ha-tile-container": {
       "$": `
         .content { 
@@ -289,6 +295,7 @@ function normalizeTileType(type) {
 function detectTileMode(tile) {
   const features = Array.isArray(tile?.features) ? tile.features : [];
   const types = features.map((f) => f?.type).filter(Boolean);
+
   if (types.includes("light-brightness")) return "brightness";
   return "toggle";
 }
@@ -315,52 +322,11 @@ function createDefaultTile(mode = "toggle", base = "/local", entity = "") {
     card_mod: getDefaultCardMod(mode, base, entity),
     features_position: mode === "toggle" ? "inline" : undefined
   };
+
   const features = buildFeaturesByMode(mode);
   if (features) tile.features = features;
+
   return tile;
-}
-
-/* ── Offscreen container (singleton) ──────────────────────────── */
-let _offscreenContainer = null;
-function getOffscreenContainer() {
-  if (!_offscreenContainer) {
-    _offscreenContainer = document.createElement("div");
-    _offscreenContainer.style.cssText =
-      "position:fixed;left:-9999px;top:-9999px;width:400px;visibility:hidden;pointer-events:none;";
-    document.body.appendChild(_offscreenContainer);
-  }
-  return _offscreenContainer;
-}
-
-/* ── Wait until card-mod has applied our styles ───────────────── */
-function waitForCardModReady(card, mode) {
-  return new Promise((resolve) => {
-    const deadline = Date.now() + 4000;
-
-    const check = () => {
-      if (Date.now() > deadline) { resolve(); return; }
-
-      const shadow = card.shadowRoot;
-      if (!shadow) { requestAnimationFrame(check); return; }
-
-      const haCard = shadow.querySelector("ha-card");
-      if (!haCard) { requestAnimationFrame(check); return; }
-
-      const bg = getComputedStyle(haCard).backgroundColor;
-
-      if (mode === "toggle") {
-        // card-mod sets background: rgba(28, 27, 31, 1) = rgb(28, 27, 31)
-        if (bg === "rgb(28, 27, 31)") { resolve(); return; }
-      } else {
-        // card-mod sets background: transparent
-        if (bg === "rgba(0, 0, 0, 0)" || bg === "transparent") { resolve(); return; }
-      }
-
-      requestAnimationFrame(check);
-    };
-
-    requestAnimationFrame(check);
-  });
 }
 
 /*  MAIN CARD */
@@ -369,8 +335,7 @@ class EmelyaLightPanelHui extends LitElement {
     hass: {},
     config: {},
     power: { state: true },
-    _cardsReady: { state: true },
-    _visible: { state: true }
+    _tilesVisible: { state: true }
   };
 
   static styles = css`
@@ -476,17 +441,19 @@ class EmelyaLightPanelHui extends LitElement {
       flex-direction: column;
       gap: 8px;
       z-index:0;
+      /*
+        Карточки находятся в реальном DOM — card-mod работает и применяет стили.
+        visibility:hidden скрывает их от глаз пользователя, но НЕ удаляет из layout,
+        поэтому card-mod получает computed styles и нормально инициализируется.
+        Как только два rAF прошли — стили card-mod уже применены, показываем.
+      */
+      visibility: hidden;
+    }
+    .tile-container.ready {
+      visibility: visible;
     }
 
-    /* Wrapper скрыт до готовности card-mod */
-    .tiles-wrapper {
-      opacity: 0;
-    }
-    .tiles-wrapper.visible {
-      opacity: 1;
-    }
-
-    /* ── Toggle tile ───────────────────────────────── */
+    /* ── Toggle tile wrapper ─────────────────────────── */
     .custom-tile-toggle {
       display: flex;
       align-items: center;
@@ -554,7 +521,7 @@ class EmelyaLightPanelHui extends LitElement {
       line-height: 20px;
     }
 
-    /* ── Brightness tile ────────────────────────────── */
+    /* ── Brightness tile wrapper ─────────────────────── */
     .custom-tile-brightness {
       display: flex;
       flex-direction: row;
@@ -652,14 +619,12 @@ class EmelyaLightPanelHui extends LitElement {
     super();
     this.power = true;
     this._cards = [];
-    this._cardModes = [];
     this._buildToken = 0;
     this._holdTimer = null;
     this._lastTap = 0;
     this._lastBrightness = {};
     this._lastIsOn = {};
-    this._cardsReady = false;
-    this._visible = false;
+    this._tilesVisible = false;
   }
 
   setConfig(config) {
@@ -674,9 +639,8 @@ class EmelyaLightPanelHui extends LitElement {
       ...clone(config || {})
     };
     this.base = this.config.base_path || "/local";
-    this.config.tiles = (this.config.tiles || []).map((tile) =>
-      normalizeTileConfig(tile, this.base)
-    );
+
+    this.config.tiles = (this.config.tiles || []).map((tile) => normalizeTileConfig(tile, this.base));
     this._rebuildCards();
   }
 
@@ -719,10 +683,8 @@ class EmelyaLightPanelHui extends LitElement {
     const needsPatch = entities.some((entityId) => {
       const stateObj = hass.states[entityId];
       if (!stateObj || this._lastBrightness[entityId] == null) return false;
-      return (
-        stateObj.state === "off" ||
-        (stateObj.state === "on" && !(stateObj.attributes?.brightness > 0))
-      );
+      return stateObj.state === "off" ||
+        (stateObj.state === "on" && !(stateObj.attributes?.brightness > 0));
     });
 
     if (!needsPatch) return hass;
@@ -732,16 +694,24 @@ class EmelyaLightPanelHui extends LitElement {
     entities.forEach((entityId) => {
       const stateObj = hass.states[entityId];
       if (!stateObj) return;
+
       const savedBrightness = this._lastBrightness[entityId];
       if (savedBrightness == null) return;
+
       const currentBrightness = stateObj.attributes?.brightness;
+
       const needsInject =
         stateObj.state === "off" ||
         (stateObj.state === "on" && !(currentBrightness > 0));
+
       if (!needsInject) return;
+
       patchedStates[entityId] = {
         ...stateObj,
-        attributes: { ...stateObj.attributes, brightness: savedBrightness }
+        attributes: {
+          ...stateObj.attributes,
+          brightness: savedBrightness
+        }
       };
     });
 
@@ -766,16 +736,13 @@ class EmelyaLightPanelHui extends LitElement {
     const tiles = Array.isArray(this.config?.tiles) ? this.config.tiles : [];
     const validTiles = tiles.filter((tile) => tile?.entity);
 
-    // Reset visibility while rebuilding
-    this._cardsReady = false;
-    this._visible = false;
+    // Скрываем тайлы на время перестройки
+    this._tilesVisible = false;
 
     if (!validTiles.length) {
       this._cards = [];
-      this._cardModes = [];
       this._syncPowerState();
-      this._cardsReady = true;
-      this._visible = true;
+      this._tilesVisible = true;
       this.requestUpdate();
       return;
     }
@@ -784,37 +751,13 @@ class EmelyaLightPanelHui extends LitElement {
       const helpers = await window.loadCardHelpers();
       if (token !== this._buildToken) return;
 
-      const offscreen = getOffscreenContainer();
-
       const built = await Promise.all(
         validTiles.map(async (tile) => {
           try {
             const cfg = normalizeTileConfig(tile, this.base);
-            const mode = detectTileMode(cfg);
             const card = await helpers.createCardElement(cfg);
-
             if (this._hass) card.hass = this._buildHassForCards(this._hass);
-
-            // Insert into offscreen so card-mod can apply styles
-            offscreen.appendChild(card);
-
-            // Wait until card-mod has applied our custom background
-            await waitForCardModReady(card, mode);
-
-            // Apply slider colours and handle fixes after card-mod is ready
-            this._forceShowHandle(card);
-            const isOn = this._hass?.states?.[tile.entity]?.state === "on";
-            this._lastIsOn[tile.entity] = isOn;
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => {
-                setTimeout(() => {
-                  this._updateSliderColors(card, isOn);
-                  this._watchSliderColors(card, tile.entity);
-                }, 50);
-              })
-            );
-
-            return { card, mode };
+            return card;
           } catch (err) {
             console.error("emelya-light-panel-hui: tile build error", tile, err);
             return null;
@@ -824,40 +767,54 @@ class EmelyaLightPanelHui extends LitElement {
 
       if (token !== this._buildToken) return;
 
-      const valid = built.filter(Boolean);
-      this._cards = valid.map((v) => v.card);
-      this._cardModes = valid.map((v) => v.mode);
-
+      this._cards = built.filter(Boolean);
       this._syncPowerState();
 
-      // Cards are ready with custom styles — mark ready so Lit inserts them
-      this._cardsReady = true;
+      // Шаг 1: вставляем карточки в DOM (visibility:hidden — пользователь не видит)
       this.requestUpdate();
+      await this.updateComplete;
 
-      // After Lit moves them into the real DOM, reveal with opacity
-      this.updateComplete.then(() => {
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            this._visible = true;
-          })
-        );
+      // Шаг 2: два rAF — браузер выполняет layout + paint.
+      // За это время card-mod получает реальные computed styles и применяет свои стили.
+      // Никакого polling, никакого таймаута — просто даём браузеру один цикл рендера.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      if (token !== this._buildToken) return;
+
+      // Шаг 3: карточки уже с кастомными стилями — исправляем слайдеры
+      this._cards.forEach((card, i) => {
+        const entityId = validTiles[i]?.entity;
+        if (!entityId) return;
+        this._forceShowHandle(card);
+        const isOn = this._hass?.states?.[entityId]?.state === "on";
+        this._lastIsOn[entityId] = isOn;
+        this._updateSliderColors(card, isOn);
+        this._watchSliderColors(card, entityId);
       });
+
+      // Шаг 4: показываем — card-mod уже отработал
+      this._tilesVisible = true;
+
     } catch (err) {
       console.error("emelya-light-panel-hui: rebuild error", err);
       this._cards = [];
-      this._cardModes = [];
-      this._cardsReady = true;
-      this._visible = true;
+      this._tilesVisible = true;
       this.requestUpdate();
     }
   }
 
   _syncPowerState() {
     if (!this._hass) return;
+
     const entityIds = (this.config?.tiles || [])
       .map((tile) => tile?.entity)
       .filter(Boolean);
-    if (!entityIds.length) { this.power = true; return; }
+
+    if (!entityIds.length) {
+      this.power = true;
+      return;
+    }
+
     this.power = entityIds.some((entityId) => {
       const stateObj = this._hass.states[entityId];
       return stateObj && stateObj.state !== "off";
@@ -865,16 +822,22 @@ class EmelyaLightPanelHui extends LitElement {
   }
 
   _lightEntities() {
-    return (this.config?.tiles || []).map((tile) => tile?.entity).filter(Boolean);
+    return (this.config?.tiles || [])
+      .map((tile) => tile?.entity)
+      .filter(Boolean);
   }
 
   togglePower(e) {
     e.stopPropagation();
+
     if (!this._hass) return;
+
     const entities = this._lightEntities();
     if (!entities.length) return;
+
     const shouldTurnOn = !this.power;
     this.power = shouldTurnOn;
+
     if (shouldTurnOn) {
       entities.forEach((entityId) => {
         const brightness = this._lastBrightness[entityId];
@@ -897,8 +860,10 @@ class EmelyaLightPanelHui extends LitElement {
   _toggleEntity(e, entityId) {
     e.stopPropagation();
     if (!this._hass || !entityId) return;
+
     const stateObj = this._hass.states[entityId];
     const isOn = stateObj?.state === "on";
+
     if (isOn) {
       const brightness = stateObj?.attributes?.brightness;
       if (typeof brightness === "number" && brightness > 0) {
@@ -927,6 +892,7 @@ class EmelyaLightPanelHui extends LitElement {
   firstUpdated() {
     const frame = this.shadowRoot?.querySelector("ha-card");
     if (!frame) return;
+
     frame.addEventListener("pointerdown", this._onPointerDown.bind(this));
     frame.addEventListener("pointerup", this._onPointerUp.bind(this));
     frame.addEventListener("click", this._onClick.bind(this));
@@ -978,6 +944,7 @@ class EmelyaLightPanelHui extends LitElement {
         };
         waitForShadow();
       });
+
       root.querySelectorAll("*").forEach((el) => {
         if (el.shadowRoot) findSliders(el.shadowRoot, depth + 1);
       });
@@ -1016,12 +983,8 @@ class EmelyaLightPanelHui extends LitElement {
   }
 
   _updateSliderColors(card, isOn) {
-    const trackColor = isOn
-      ? "#4D4A54"
-      : "linear-gradient(270deg, #343239 0%, #1C1B1F 100%)";
-    const sliderBg = isOn
-      ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)"
-      : "#1C1B1F";
+    const trackColor = isOn ? "#4D4A54" : "linear-gradient(270deg, #343239 0%, #1C1B1F 100%)";
+    const sliderBg   = isOn ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)" : "#1C1B1F";
     this._applyTrackBarColor(card, trackColor);
     this._applySliderBgColor(card, sliderBg);
   }
@@ -1044,6 +1007,7 @@ class EmelyaLightPanelHui extends LitElement {
       shadowRoot.querySelectorAll(".slider").forEach((el) => {
         el.style.setProperty("background", getSliderBg(), "important");
       });
+
       const mo = new MutationObserver(() => {
         shadowRoot.querySelectorAll(".slider-track-bar").forEach((el) => {
           el.style.setProperty("background", getTrackColor(), "important");
@@ -1085,6 +1049,7 @@ class EmelyaLightPanelHui extends LitElement {
   _onPointerDown(e) {
     if (e.target.closest(".power-button")) return;
     if (e.target.closest(".tile-container")) return;
+
     if (hasAction(this.config, "hold_action")) {
       this._holdTimer = setTimeout(() => this._performAction("hold"), 500);
     }
@@ -1100,7 +1065,9 @@ class EmelyaLightPanelHui extends LitElement {
   _onClick(e) {
     if (e.target.closest(".power-button")) return;
     if (e.target.closest(".tile-container")) return;
+
     const now = Date.now();
+
     if (this._lastTap && now - this._lastTap < 300) {
       if (hasAction(this.config, "double_tap_action")) {
         e.stopImmediatePropagation();
@@ -1109,6 +1076,7 @@ class EmelyaLightPanelHui extends LitElement {
         return;
       }
     }
+
     this._lastTap = now;
     setTimeout(() => {
       if (this._lastTap === now) this._performAction("tap");
@@ -1124,8 +1092,7 @@ class EmelyaLightPanelHui extends LitElement {
     if (!this._hass || !entityId) return "";
     const stateObj = this._hass.states[entityId];
     if (!stateObj) return "";
-    const brightness =
-      stateObj.attributes?.brightness ?? this._lastBrightness[entityId];
+    const brightness = stateObj.attributes?.brightness ?? this._lastBrightness[entityId];
     if (brightness == null) return "";
     return `${Math.round((brightness / 255) * 100)}%`;
   }
@@ -1165,7 +1132,7 @@ class EmelyaLightPanelHui extends LitElement {
     const entityId = tile.entity;
     const name = this._tileName(tile);
     const percent = this._brightnessLabel(entityId);
-    const card = this._cardsReady ? this._cards[i] : null;
+    const card = this._cards[i];
 
     return html`
       <div class="custom-tile-brightness" @click=${(e) => this._openMoreInfo(e, entityId)}>
@@ -1195,26 +1162,23 @@ class EmelyaLightPanelHui extends LitElement {
           >
             <img src="${this.base}/images/container-images/light_button.png" />
           </div>
+
           <div class="text-wrap">
             <div class="title">${this.config?.title || "Освещение"}</div>
             <div class="subtitle">${this.config?.subtitle || ""}</div>
           </div>
         </div>
 
-        <div class="tile-container">
+        <div class="tile-container ${this._tilesVisible ? "ready" : ""}">
           ${tiles.length
-            ? html`
-                <div class="tiles-wrapper ${this._visible ? "visible" : ""}">
-                  ${tiles.map((tile, i) => {
-                    const mode = detectTileMode(tile);
-                    if (mode === "brightness") {
-                      return this._renderBrightnessTile(tile, i);
-                    } else {
-                      return this._renderToggleTile(tile, i);
-                    }
-                  })}
-                </div>
-              `
+            ? tiles.map((tile, i) => {
+                const mode = detectTileMode(tile);
+                if (mode === "brightness") {
+                  return this._renderBrightnessTile(tile, i);
+                } else {
+                  return this._renderToggleTile(tile, i);
+                }
+              })
             : html`<div class="empty">Добавь светильники в визуальном редакторе</div>`}
         </div>
       </ha-card>
@@ -1362,9 +1326,10 @@ class EmelyaLightPanelEditor extends LitElement {
       base_path: "/local",
       ...clone(config || {})
     };
-    this._config.tiles = (this._config.tiles || []).map((tile) =>
-      normalizeTileConfig(tile, this._config.base_path)
+    this._config.tiles = (this._config.tiles || []).map(
+      (tile) => normalizeTileConfig(tile, this._config.base_path)
     );
+
     if (
       this._editingIndex !== null &&
       (!this._config.tiles || this._editingIndex > this._config.tiles.length - 1)
@@ -1375,6 +1340,7 @@ class EmelyaLightPanelEditor extends LitElement {
 
   render() {
     if (!this._config) return html``;
+
     return html`
       <div class="tabs">
         ${["Объект", "Светильники", "Взаимодействия"].map((label, i) => html`
@@ -1389,6 +1355,7 @@ class EmelyaLightPanelEditor extends LitElement {
           </div>
         `)}
       </div>
+
       ${this._tab === 0 ? this._objectTab() : ""}
       ${this._tab === 1 ? this._lightsTab() : ""}
       ${this._tab === 2 ? this._actionsTab() : ""}
@@ -1412,24 +1379,17 @@ class EmelyaLightPanelEditor extends LitElement {
       [
         {
           name: "tap_action",
-          label:
-            this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") ||
-            "При нажатии",
+          label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
           selector: { ui_action: {} }
         },
         {
           name: "hold_action",
-          label:
-            this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") ||
-            "При удержании",
+          label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
           selector: { ui_action: {} }
         },
         {
           name: "double_tap_action",
-          label:
-            this.hass?.localize?.(
-              "ui.panel.lovelace.editor.card.generic.double_tap_action"
-            ) || "При двойном нажатии",
+          label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
           selector: { ui_action: {} }
         }
       ],
@@ -1443,11 +1403,16 @@ class EmelyaLightPanelEditor extends LitElement {
 
     if (this._editingIndex !== null && tiles[this._editingIndex]) {
       const tile = this._toEditorTile(tiles[this._editingIndex]);
+
       return html`
         <div class="back-wrap">
           <ha-button @click=${this._back}>⬅ Назад</ha-button>
         </div>
-        <div class="edit-title">Светильник ${this._editingIndex + 1}</div>
+
+        <div class="edit-title">
+          Светильник ${this._editingIndex + 1}
+        </div>
+
         ${this._form(this._tileSchema(), tile, this._tileValueChanged)}
       `;
     }
@@ -1455,27 +1420,27 @@ class EmelyaLightPanelEditor extends LitElement {
     return html`
       <div class="tile-list">
         ${tiles.length
-          ? tiles.map(
-              (tile, i) => html`
-                <div class="tile-row">
-                  <div class="tile-meta">
-                    <div class="tile-title">
-                      ${tile.name || tile.entity || `Светильник ${i + 1}`}
-                    </div>
-                    <div class="tile-subtitle">
-                      ${this._tileTypeLabel(detectTileMode(tile))}
-                      ${tile.entity ? ` • ${tile.entity}` : " • entity не выбрана"}
-                    </div>
+          ? tiles.map((tile, i) => html`
+              <div class="tile-row">
+                <div class="tile-meta">
+                  <div class="tile-title">
+                    ${tile.name || tile.entity || `Светильник ${i + 1}`}
                   </div>
-                  <div class="tile-actions">
-                    <ha-button @click=${() => this._edit(i)}>Изменить</ha-button>
-                    <ha-button @click=${() => this._remove(i)}>Удалить</ha-button>
+                  <div class="tile-subtitle">
+                    ${this._tileTypeLabel(detectTileMode(tile))}
+                    ${tile.entity ? ` • ${tile.entity}` : " • entity не выбрана"}
                   </div>
                 </div>
-              `
-            )
+
+                <div class="tile-actions">
+                  <ha-button @click=${() => this._edit(i)}>Изменить</ha-button>
+                  <ha-button @click=${() => this._remove(i)}>Удалить</ha-button>
+                </div>
+              </div>
+            `)
           : html`<div class="empty">Пока нет ни одного светильника</div>`}
       </div>
+
       <div class="add-buttons">
         <ha-button @click=${() => this._addTile("toggle")}>
           Добавить: вкл/выкл
@@ -1528,7 +1493,10 @@ class EmelyaLightPanelEditor extends LitElement {
   }
 
   _valueChanged = (e) => {
-    this._config = { ...this._config, ...e.detail.value };
+    this._config = {
+      ...this._config,
+      ...e.detail.value
+    };
     this._fire();
   };
 
@@ -1537,6 +1505,7 @@ class EmelyaLightPanelEditor extends LitElement {
     const tiles = [...(this._config.tiles || [])];
     const current = clone(tiles[this._editingIndex] || {});
     const updated = this._fromEditorTile(rawEditorTile, current);
+
     tiles[this._editingIndex] = updated;
     this._config = { ...this._config, tiles };
     this._fire();
@@ -1552,20 +1521,20 @@ class EmelyaLightPanelEditor extends LitElement {
 
   _fromEditorTile(editorTile, currentTile = {}) {
     const result = clone(currentTile);
+
     result.type = "tile";
     result.entity = editorTile.entity || "";
+
     if (editorTile.name) result.name = editorTile.name;
     else delete result.name;
+
     const features = buildFeaturesByMode(editorTile.tile_type);
     if (features) result.features = features;
     else delete result.features;
-    result.card_mod = getDefaultCardMod(
-      editorTile.tile_type,
-      this._config?.base_path,
-      editorTile.entity || ""
-    );
-    result.features_position =
-      editorTile.tile_type === "toggle" ? "inline" : undefined;
+
+    result.card_mod = getDefaultCardMod(editorTile.tile_type, this._config?.base_path, editorTile.entity || "");
+    result.features_position = editorTile.tile_type === "toggle" ? "inline" : undefined;
+
     return normalizeTileConfig(result, this._config?.base_path);
   }
 
@@ -1582,9 +1551,13 @@ class EmelyaLightPanelEditor extends LitElement {
     this._fire();
   }
 
-  _edit(i) { this._editingIndex = i; }
+  _edit(i) {
+    this._editingIndex = i;
+  }
 
-  _back = () => { this._editingIndex = null; };
+  _back = () => {
+    this._editingIndex = null;
+  };
 
   _remove(i) {
     const tiles = [...(this._config.tiles || [])];
@@ -1599,13 +1572,12 @@ class EmelyaLightPanelEditor extends LitElement {
       const { card_mod, ...rest } = tile;
       return rest;
     });
-    this.dispatchEvent(
-      new CustomEvent("config-changed", {
-        detail: { config: { ...this._config, tiles: tilesForSave } },
-        bubbles: true,
-        composed: true
-      })
-    );
+
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config: { ...this._config, tiles: tilesForSave } },
+      bubbles: true,
+      composed: true
+    }));
   }
 }
 
