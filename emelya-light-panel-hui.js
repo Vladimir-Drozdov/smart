@@ -386,7 +386,8 @@ class EmelyaLightPanelHui extends LitElement {
     .power-button {
       width: 64px;
       height: 64px;
-      background: #343239;
+      /* OFF state color */
+      background: rgba(28, 27, 31, 1);
       border-radius: 16px;
       display: flex;
       align-items: center;
@@ -395,6 +396,10 @@ class EmelyaLightPanelHui extends LitElement {
       flex-shrink: 0;
       position: relative;
       border: none;
+      transition: background 0.2s ease;
+    }
+    .power-button.on {
+      background: #343239;
     }
     .power-button::before {
       content: "" !important;
@@ -440,18 +445,37 @@ class EmelyaLightPanelHui extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      z-index:0;
-      /*
-        Карточки находятся в реальном DOM — card-mod работает и применяет стили.
-        visibility:hidden скрывает их от глаз пользователя, но НЕ удаляет из layout,
-        поэтому card-mod получает computed styles и нормально инициализируется.
-        Как только два rAF прошли — стили card-mod уже применены, показываем.
-      */
-      visibility: hidden;
+      z-index: 0;
+      opacity: 0;
+      transition: opacity 0.15s ease;
     }
     .tile-container.ready {
-      visibility: visible;
+      opacity: 1;
     }
+
+    /* ── Skeleton placeholders (shown while tiles are loading) ── */
+    .tile-skeleton {
+      border-radius: 24px;
+      background: #1C1B1F;
+      position: relative;
+      overflow: hidden;
+    }
+    .tile-skeleton::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+    }
+    .tile-skeleton-toggle  { height: 88px; }
+    .tile-skeleton-brightness { height: 152px; }
 
     /* ── Toggle tile wrapper ─────────────────────────── */
     .custom-tile-toggle {
@@ -469,13 +493,18 @@ class EmelyaLightPanelHui extends LitElement {
       width: 64px;
       height: 64px;
       border-radius: 20px;
-      background: #343239;
+      /* OFF state */
+      background: rgba(28, 27, 31, 1);
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
       cursor: pointer;
       position: relative;
+      transition: background 0.2s ease;
+    }
+    .custom-tile-toggle .tile-icon-btn.on {
+      background: #343239;
     }
     .custom-tile-toggle .tile-icon-btn::before {
       content: "" !important;
@@ -538,7 +567,8 @@ class EmelyaLightPanelHui extends LitElement {
       width: 64px;
       height: 64px;
       border-radius: 20px;
-      background: #343239;
+      /* OFF state */
+      background: rgba(28, 27, 31, 1);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -546,6 +576,10 @@ class EmelyaLightPanelHui extends LitElement {
       cursor: pointer;
       align-self: flex-end;
       position: relative;
+      transition: background 0.2s ease;
+    }
+    .custom-tile-brightness .tile-icon-btn.on {
+      background: #343239;
     }
     .custom-tile-brightness .tile-icon-btn::before {
       content: "" !important;
@@ -736,7 +770,6 @@ class EmelyaLightPanelHui extends LitElement {
     const tiles = Array.isArray(this.config?.tiles) ? this.config.tiles : [];
     const validTiles = tiles.filter((tile) => tile?.entity);
 
-    // Скрываем тайлы на время перестройки
     this._tilesVisible = false;
 
     if (!validTiles.length) {
@@ -770,18 +803,18 @@ class EmelyaLightPanelHui extends LitElement {
       this._cards = built.filter(Boolean);
       this._syncPowerState();
 
-      // Шаг 1: вставляем карточки в DOM (visibility:hidden — пользователь не видит)
       this.requestUpdate();
       await this.updateComplete;
 
-      // Шаг 2: два rAF — браузер выполняет layout + paint.
-      // За это время card-mod получает реальные computed styles и применяет свои стили.
-      // Никакого polling, никакого таймаута — просто даём браузеру один цикл рендера.
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      // Даём card-mod 6 кадров чтобы полностью применить стили до показа
+      await new Promise((resolve) => {
+        let count = 0;
+        const tick = () => { if (++count >= 6) resolve(); else requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      });
 
       if (token !== this._buildToken) return;
 
-      // Шаг 3: карточки уже с кастомными стилями — исправляем слайдеры
       this._cards.forEach((card, i) => {
         const entityId = validTiles[i]?.entity;
         if (!entityId) return;
@@ -792,7 +825,6 @@ class EmelyaLightPanelHui extends LitElement {
         this._watchSliderColors(card, entityId);
       });
 
-      // Шаг 4: показываем — card-mod уже отработал
       this._tilesVisible = true;
 
     } catch (err) {
@@ -1114,10 +1146,11 @@ class EmelyaLightPanelHui extends LitElement {
     const entityId = tile.entity;
     const name = this._tileName(tile);
     const state = this._onOffLabel(entityId);
+    const isOn = this._hass?.states?.[entityId]?.state === "on";
 
     return html`
       <div class="custom-tile-toggle" @click=${(e) => this._openMoreInfo(e, entityId)}>
-        <div class="tile-icon-btn" @click=${(e) => { e.stopPropagation(); this._toggleEntity(e, entityId); }}>
+        <div class="tile-icon-btn ${isOn ? "on" : ""}" @click=${(e) => { e.stopPropagation(); this._toggleEntity(e, entityId); }}>
           <img src="${this.base}/images/container-images/light_button.png" />
         </div>
         <div class="tile-text">
@@ -1133,10 +1166,11 @@ class EmelyaLightPanelHui extends LitElement {
     const name = this._tileName(tile);
     const percent = this._brightnessLabel(entityId);
     const card = this._cards[i];
+    const isOn = this._hass?.states?.[entityId]?.state === "on";
 
     return html`
       <div class="custom-tile-brightness" @click=${(e) => this._openMoreInfo(e, entityId)}>
-        <div class="tile-icon-btn" @click=${(e) => { e.stopPropagation(); this._toggleEntity(e, entityId); }}>
+        <div class="tile-icon-btn ${isOn ? "on" : ""}" @click=${(e) => { e.stopPropagation(); this._toggleEntity(e, entityId); }}>
           <img src="${this.base}/images/container-images/light_button.png" />
         </div>
         <div class="tile-right">
@@ -1168,6 +1202,15 @@ class EmelyaLightPanelHui extends LitElement {
             <div class="subtitle">${this.config?.subtitle || ""}</div>
           </div>
         </div>
+
+        ${!this._tilesVisible && tiles.length ? html`
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${tiles.map((tile) => {
+              const mode = detectTileMode(tile);
+              return html`<div class="tile-skeleton tile-skeleton-${mode === "brightness" ? "brightness" : "toggle"}"></div>`;
+            })}
+          </div>
+        ` : ""}
 
         <div class="tile-container ${this._tilesVisible ? "ready" : ""}">
           ${tiles.length
