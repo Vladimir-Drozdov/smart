@@ -6,7 +6,8 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?modu
 class EmelyaRoomsRow extends LitElement {
   static properties = {
     hass: {},
-    config: {}
+    config: {},
+    _activeIndex: { state: true }
   };
 
   constructor() {
@@ -16,13 +17,46 @@ class EmelyaRoomsRow extends LitElement {
     this.startX = 0;
     this.startScrollLeft = 0;
     this._preloadedBgs = new Set();
+    this._activeIndex = 0;
+    this._hassInitialized = false;
+    this._hass = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._hassInitialized && hass) {
+      this._hassInitialized = true;
+      this._syncActiveFromHass(hass);
+    }
+  }
+
+  get hass() {
+    return this._hass;
+  }
+
+  _syncActiveFromHass(hass) {
+    const rooms = this.config?.rooms || [];
+    for (let i = 0; i < rooms.length; i++) {
+      const action = rooms[i].tap_action;
+      if (!action || action.action !== "call-service") continue;
+      const entityId = action.data?.entity_id;
+      const option   = action.data?.option;
+      if (!entityId || !option) continue;
+      const currentOption = hass.states[entityId]?.state;
+      if (currentOption === option) {
+        this._activeIndex = i;
+        return;
+      }
+    }
+    // Если ни одна не совпала — оставляем 0
   }
 
   setConfig(config) {
     this.config = config || {};
-    // Предзагружаем все фоны сразу при установке конфига —
-    // до рендера, чтобы браузер начал качать картинки как можно раньше
     this._preloadRoomBackgrounds();
+    if (this._hass) {
+      this._syncActiveFromHass(this._hass);
+    }
   }
 
   _preloadRoomBackgrounds() {
@@ -36,7 +70,6 @@ class EmelyaRoomsRow extends LitElement {
     });
   }
 
-  // После каждого рендера проходим по карточкам и инициализируем фон
   updated() {
     const cards = this.renderRoot.querySelectorAll(".card[data-bg]");
     cards.forEach(el => {
@@ -48,7 +81,6 @@ class EmelyaRoomsRow extends LitElement {
 
       const img = new Image();
       img.onload = () => el.classList.add("bg-loaded");
-      // Если картинка уже в кэше — onload стреляет синхронно, без мигания
       img.src = bgUrl;
     });
   }
@@ -67,6 +99,13 @@ class EmelyaRoomsRow extends LitElement {
       overflow-y: hidden;
       cursor: grab;
       scrollbar-width: none;
+      /*
+       * Резервируем по 6px сверху и снизу — ровно столько,
+       * на сколько active-карточка вылезает за пределы базовой высоты.
+       * Это предотвращает сдвиг соседних элементов.
+       */
+      padding-top: 16px; /* 16 + 6 */
+      padding-bottom: 16px;
     }
 
     .container::-webkit-scrollbar {
@@ -80,7 +119,7 @@ class EmelyaRoomsRow extends LitElement {
     .card {
       width: 280px;
       min-width: 280px;
-      height: 140px;
+      height: 128px;
       border-radius: 24px;
       display: flex;
       justify-content: space-between;
@@ -89,17 +128,28 @@ class EmelyaRoomsRow extends LitElement {
       box-sizing: border-box;
       color: white;
       position: relative;
-      /* Базовый цвет пока картинка не загружена */
       background: #1C1B1F;
       cursor: pointer;
       user-select: none;
+      transition: height 0.2s ease, margin-block 0.2s ease;
+      /*
+       * margin-block: 0 — базовое состояние.
+       * Карточка занимает ровно свою высоту, соседи не двигаются.
+       */
+      margin-block: 0;
     }
 
     /*
-      Фон вынесен в ::before — убирает background-blend-mode с самого .card.
-      background-blend-mode на элементе создаёт stacking context,
-      из-за которого position:fixed у дочерних элементов ломается.
-    */
+     * Активная карточка растёт на 12px (6 вверх + 6 вниз).
+     * margin-block: -6px «съедает» по 6px пространства сверху и снизу,
+     * которое мы заранее зарезервировали через padding контейнера —
+     * поэтому внешний layout не сдвигается.
+     */
+    .card.active {
+      height: 140px;
+      margin-block: -6px;
+    }
+
     .card::before {
       content: "";
       position: absolute;
@@ -118,7 +168,6 @@ class EmelyaRoomsRow extends LitElement {
       opacity: 1;
     }
 
-    /* Граница */
     .card::after {
       content: "";
       position: absolute;
@@ -265,8 +314,9 @@ class EmelyaRoomsRow extends LitElement {
     }
   }
 
-  _onRoomClick(room) {
+  _onRoomClick(room, index) {
     if (this.dragStarted) return;
+    this._activeIndex = index;
     this._handleAction(room.tap_action, room);
   }
 
@@ -276,16 +326,16 @@ class EmelyaRoomsRow extends LitElement {
 
     return html`
       <div class="container" @mousedown=${this._onMouseDown}>
-        ${rooms.map(room => {
+        ${rooms.map((room, index) => {
           const temp = room.entity
             ? this.hass?.states[room.entity]?.state
             : null;
 
           return html`
             <div
-              class="card"
+              class="card ${this._activeIndex === index ? 'active' : ''}"
               data-bg=${room.background || ""}
-              @click=${() => this._onRoomClick(room)}
+              @click=${() => this._onRoomClick(room, index)}
             >
               <div class="icon">
                 <img src="${room.icon}">
@@ -309,34 +359,34 @@ const ICON_OPTIONS = [
   { label: "Спальня",        value: "/local/images/icons/bedroom.svg" },
   { label: "Гостиная",       value: "/local/images/icons/living_room.svg" },
   { label: "Душ, ванная",    value: "/local/images/icons/bathroom.svg" },
-  { label: "Детская",        value: "/local/images/icons/kids_room.svg" }, //
-  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" }, //
+  { label: "Детская",        value: "/local/images/icons/kids_room.svg" },
+  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" },
   { label: "Кухня",          value: "/local/images/icons/kitchen.svg" },
-  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" }, //
+  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" },
   { label: "Кабинет",        value: "/local/images/icons/office.svg" },
   { label: "Постирочная",    value: "/local/images/icons/laundry.svg" },
   { label: "Туалет",         value: "/local/images/icons/toilet.svg" },
   { label: "Холл",           value: "/local/images/icons/hall.svg" },
-  { label: "Кладовая",       value: "/local/images/icons/storage.svg" }, //
+  { label: "Кладовая",       value: "/local/images/icons/storage.svg" },
   { label: "Коридор",        value: "/local/images/icons/corridor.svg" },
   { label: "Двор",           value: "/local/images/icons/yard.svg" },
-  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" }, //
+  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" },
   { label: "Столовая",       value: "/local/images/icons/dining_room.svg" },
   { label: "Кинотеатр",      value: "/local/images/icons/home_cinema.svg" },
   { label: "Бассейн",        value: "/local/images/icons/pool.svg" },
-  { label: "Гараж",          value: "/local/images/icons/garage.svg" }, //
+  { label: "Гараж",          value: "/local/images/icons/garage.svg" },
   { label: "Комната няни",   value: "/local/images/icons/nanny_room.svg" },
-  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" }, //
-  { label: "Полумесяц",       value: "/local/images/icons/cresent_moon.svg" }, //
-  { label: "Часы",       value: "/local/images/icons/clock.svg" }, //
-  { label: "Холодный термостат",       value: "/local/images/icons/cool_thermostat.svg" }, //
-  { label: "Горячий термостат",       value: "/local/images/icons/heat_thermostat.svg" }, //
-  { label: "Дверь закрытая",       value: "/local/images/icons/door_front.svg" }, //
-  { label: "Дверь открытая",       value: "/local/images/icons/door_open.svg" }, //
-  { label: "Лампочка включенная",       value: "/local/images/icons/lightbulb.svg" }, //
-  { label: "Лампочка выключенная",       value: "/local/images/icons/lightbulb_turnoff.svg" }, //
-  { label: "Капля",       value: "/local/images/icons/no_drop.svg" }, //
-  { label: "вкл/выкл",       value: "/local/images/icons/power.svg" }, //
+  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" },
+  { label: "Полумесяц",      value: "/local/images/icons/cresent_moon.svg" },
+  { label: "Часы",           value: "/local/images/icons/clock.svg" },
+  { label: "Холодный термостат", value: "/local/images/icons/cool_thermostat.svg" },
+  { label: "Горячий термостат",  value: "/local/images/icons/heat_thermostat.svg" },
+  { label: "Дверь закрытая",    value: "/local/images/icons/door_front.svg" },
+  { label: "Дверь открытая",    value: "/local/images/icons/door_open.svg" },
+  { label: "Лампочка включенная",   value: "/local/images/icons/lightbulb.svg" },
+  { label: "Лампочка выключенная",  value: "/local/images/icons/lightbulb_turnoff.svg" },
+  { label: "Капля",          value: "/local/images/icons/no_drop.svg" },
+  { label: "вкл/выкл",      value: "/local/images/icons/power.svg" },
 ];
 
 class EmelyaRoomsRowEditor extends LitElement {
@@ -522,13 +572,6 @@ class EmelyaRoomsRowEditor extends LitElement {
     e.target.value = "";
   }
 
-  /*
-    HA API отклоняет image/avif (и некоторые другие форматы) с HTTP 400.
-    Решение: подменяем MIME-тип на image/png перед отправкой.
-    Бинарные данные файла остаются нетронутыми — сервер сохраняет байты как есть.
-    Браузер при отображении читает файл по реальным байтам (magic bytes),
-    игнорируя Content-Type с которым файл был загружен, так что avif корректно отобразится.
-  */
   _normalizeFileForUpload(file) {
     const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
     if (unsupportedByHA.includes(file.type)) {
@@ -549,7 +592,6 @@ class EmelyaRoomsRowEditor extends LitElement {
 
     const uploadFile = this._normalizeFileForUpload(file);
 
-    // Attempt 1 — HA store_image
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -567,7 +609,6 @@ class EmelyaRoomsRowEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Attempt 2 — /api/image/upload fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();

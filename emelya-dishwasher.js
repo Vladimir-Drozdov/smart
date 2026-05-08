@@ -395,7 +395,6 @@ class EmelyaDishwasherCard extends LitElement {
   }
 
   _performAction(actionType) {
-    console.log(`Action performed: ${actionType}`);
     if (!this.hass || !this.config) return;
     handleAction(this, this.hass, this.config, actionType);
   }
@@ -430,7 +429,6 @@ class EmelyaDishwasherCard extends LitElement {
     if(!this.hass?.states?.[modeEntity]) return;
 
     const domain = modeEntity.split(".")[0];
-    
     if(domain === "select" || domain === "input_select") {
       this.hass.callService(domain, "select_option", {
         entity_id: modeEntity,

@@ -117,6 +117,8 @@ class EmelyaQuickActions extends LitElement {
       -webkit-user-select: none;
       -ms-overflow-style: none;
       scrollbar-width: none;
+      padding-top: 10px;
+      padding-bottom: 16px;
     }
     .quick-actions::-webkit-scrollbar { display: none; }
     .quick-actions.dragging {
