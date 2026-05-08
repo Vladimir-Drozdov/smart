@@ -489,7 +489,8 @@ class EmelyaHumidifierCard extends LitElement {
         <div class="header">
           <div class="title">Увлажнитель</div>
           <div class="state">
-            ${this.power ? (this.mode || "Включено") : "Выключено"}
+            ${this.power ? (this.config?.mode_labels?.[this.mode] || this.mode || "Включено") : "Выключено"}
+
           </div>
         </div>
 
@@ -511,7 +512,7 @@ class EmelyaHumidifierCard extends LitElement {
               @dblclick=${this._handleSelectDblClick}
             >
               ${(modeState.attributes?.options || []).map(opt => html`
-                <mwc-list-item .value=${opt}>${opt}</mwc-list-item>
+                <mwc-list-item .value=${opt}>${this.config?.mode_labels?.[opt] || opt}</mwc-list-item>
               `)}
             </ha-select>
           ` : ""}
@@ -614,6 +615,25 @@ class EmelyaHumidifierCardEditor extends LitElement {
     }
 
     input[type="file"] { display: none; }
+    .mode-labels { display: flex; flex-direction: column; }
+
+    .mode-label-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .mode-key {
+      min-width: 110px; font-size: 13px; color: var(--secondary-text-color);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .mode-label-row input {
+      flex: 1; padding: 6px 10px; border-radius: 8px;
+      border: 1px solid var(--divider-color);
+      background: var(--secondary-background-color);
+      color: var(--primary-text-color); font-size: 13px;
+      outline: none; box-sizing: border-box;
+    }
+    .mode-label-row input:focus {
+      border-color: var(--primary-color);
+    }
   `;
 
   constructor() {
@@ -645,11 +665,50 @@ class EmelyaHumidifierCardEditor extends LitElement {
   }
 
   _objectTab() {
-    return this._form([
-      { name: "entity",      required: true, selector: { entity: { domain: ["switch", "fan", "humidifier"] } } },
-      { name: "mode_entity", required: true, selector: { entity: { domain: ["select", "input_select", "fan", "humidifier"] } } },
-      { name: "base_path",                   selector: { text: {} } }
-    ]);
+    const modeEntity = this._config?.mode_entity;
+    const modeState  = this.hass?.states?.[modeEntity];
+    const options    = modeState?.attributes?.options || [];
+    const labels     = this._config?.mode_labels || {};
+
+    return html`
+      ${this._form([
+        { name: "entity",      required: true, selector: { entity: { domain: ["switch", "fan", "humidifier"] } } },
+        { name: "mode_entity", required: true, selector: { entity: { domain: ["select", "input_select", "fan", "humidifier"] } } },
+        { name: "base_path",                   selector: { text: {} } }
+      ])}
+
+      ${options.length ? html`
+        <div class="mode-labels">
+          <div class="img-label" style="margin-top:16px;margin-bottom:8px;">
+            Названия режимов <span style="font-weight:400;opacity:.6">(оставьте пустым — будет оригинал)</span>
+          </div>
+          ${options.map(opt => html`
+            <div class="mode-label-row">
+              <span class="mode-key">${opt}</span>
+              <input
+                type="text"
+                placeholder="${opt}"
+                .value=${labels[opt] || ""}
+                @input=${(e) => this._updateModeLabel(opt, e.target.value)}
+              />
+            </div>
+          `)}
+        </div>
+      ` : ""}
+    `;
+  }
+  _updateModeLabel(key, value) {
+    const labels = { ...(this._config?.mode_labels || {}) };
+    if (value.trim()) {
+      labels[key] = value.trim();
+    } else {
+      delete labels[key];
+    }
+    this._config = {
+      ...this._config,
+      mode_labels: Object.keys(labels).length ? labels : undefined
+    };
+    this._fire();
   }
 
   _actionsTab() {

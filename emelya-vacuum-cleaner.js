@@ -87,9 +87,9 @@ class EmelyaVacuumCleaner extends LitElement {
 
   constructor(){
     super();
-    this.selectedMode = "Ежедневная уборка";
+    this.selectedMode = "";
     this.cleaning = false;
-    this.battery = 0;
+    this.battery = null;
     this._expectedCleaning = null;
     this._expectedFan = null;
     this._holdTimer = null;
@@ -116,26 +116,18 @@ class EmelyaVacuumCleaner extends LitElement {
     }
 
     // BATTERY
-    this.battery = stateObj.attributes?.battery_level ?? 0;
+    this.battery = stateObj.attributes?.battery_level ?? null;
 
     // FAN MODE (режим уборки)
     const fan = stateObj.attributes?.fan_speed;
-    const reverseModeMap = {
-      standard: "Ежедневная уборка",
-      turbo: "Тщательная уборка",
-      quiet: "Быстрая уборка"
-    };
-
     if(fan){
-      const newMode = reverseModeMap[fan] || fan;
-
       if(this._expectedFan !== null){
-        if(newMode === this._expectedFan){
+        if(fan === this._expectedFan){
           this._expectedFan = null;
-          this.selectedMode = newMode;
+          this.selectedMode = fan;
         }
       } else {
-        this.selectedMode = newMode;
+        this.selectedMode = fan;
       }
     }
   }
@@ -147,9 +139,11 @@ class EmelyaVacuumCleaner extends LitElement {
       tap_action: { action: "more-info" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
-      card_mod: {
-        style: structuredClone(this.DEFAULT_VACUUM_CARD_MOD)
-      },
+      title: "Робот пылесос",
+      label_battery_suffix: "% заряда",
+      label_start: "Начать уборку",
+      label_stop: "Остановить уборку",
+      card_mod: { style: structuredClone(this.DEFAULT_VACUUM_CARD_MOD) },
       ...config,
     };
     this.base = this.config.base_path || "/local";
@@ -430,46 +424,32 @@ class EmelyaVacuumCleaner extends LitElement {
         style="--vacuum-bg: url('${bg}');"
       >
         <div class="type">
-          <div class="title">Робот пылесос</div>
+          <div class="title">${this.config?.title || ""}</div>
           <div class="subtitle">
-            ${this.battery ? `${this.battery}% заряда` : ""}
+            ${this.battery != null ? `${this.battery}${this.config?.label_battery_suffix || ""}` : ""}
           </div>
         </div>
 
         <div class="controls">
           ${stateObj ? html`
             <ha-select
-              .label=${"Режим уборки"}
               .value=${this.selectedMode}
               @pointerdown=${this._stopPropagation}
               @change=${(e) => {
-                e.stopPropagation();
-                const modeName = e.target.value;
-                this.selectedMode = modeName;
-                this._expectedFan = modeName;
+              e.stopPropagation();
+              const fanSpeed = e.target.value;
+              this.selectedMode = fanSpeed;
+              this._expectedFan = fanSpeed;
 
-                const modeMap = {
-                  "Ежедневная уборка": "standard",
-                  "Тщательная уборка": "turbo",
-                  "Быстрая уборка": "quiet"
-                };
-
-                const fanSpeed = modeMap[modeName] || modeName;
-
-                this.hass.callService("vacuum", "set_fan_speed", {
-                  entity_id: this.config.entity,
-                  fan_speed: fanSpeed
-                });
-              }}
+              this.hass.callService("vacuum", "set_fan_speed", {
+                entity_id: this.config.entity,
+                fan_speed: fanSpeed
+              });
+            }}
             >
-              ${fanList.map(f => {
-                const modeName = {
-                  standard: "Ежедневная уборка",
-                  turbo: "Тщательная уборка",
-                  quiet: "Быстрая уборка"
-                }[f] || f;
-                return html`<mwc-list-item .value=${modeName}>${modeName}</mwc-list-item>`;
-              })}
+              ${fanList.map(f => html`
+                <mwc-list-item .value=${f}>${this.config?.mode_labels?.[f] || f}</mwc-list-item>
+              `)}
             </ha-select>
           ` : ""}
 
@@ -478,7 +458,8 @@ class EmelyaVacuumCleaner extends LitElement {
             @pointerdown=${this._stopPropagation}
             @click=${this._toggleCleaning}
           >
-            ${this.cleaning ? "Остановить уборку" : "Начать уборку"}
+            ${this.cleaning ? (this.config?.label_stop || "") : (this.config?.label_start || "")}
+
           </div>
         </div>
       </div>
@@ -578,6 +559,25 @@ class EmelyaVacuumCleanerEditor extends LitElement {
     }
 
     input[type="file"] { display: none; }
+    .mode-labels { display: flex; flex-direction: column; }
+
+    .mode-label-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .mode-key {
+      min-width: 110px; font-size: 13px; color: var(--secondary-text-color);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .mode-label-row input {
+      flex: 1; padding: 6px 10px; border-radius: 8px;
+      border: 1px solid var(--divider-color);
+      background: var(--secondary-background-color);
+      color: var(--primary-text-color); font-size: 13px;
+      outline: none; box-sizing: border-box;
+    }
+    .mode-label-row input:focus {
+      border-color: var(--primary-color);
+    }
   `;
 
   constructor() {
@@ -614,14 +614,60 @@ class EmelyaVacuumCleanerEditor extends LitElement {
   }
 
   _objectTab() {
+    const entity = this._config?.entity;
+    const stateObj = this.hass?.states?.[entity];
+    const fanList = stateObj?.attributes?.fan_speed_list || [];
+    const labels = this._config?.mode_labels || {};
+
+    return html`
+      ${this._form([
+        { name: "title",                label: "Название",              selector: { text: {} } },
+        { name: "label_battery_suffix", label: "Текст заряда",          selector: { text: {} } },
+        { name: "label_start",          label: "Кнопка: начать уборку", selector: { text: {} } },
+        { name: "label_stop",           label: "Кнопка: остановить",    selector: { text: {} } },
+        { name: "entity",    required: true, selector: { entity: { domain: "vacuum" } } },
+        { name: "base_path",            selector: { text: {} } }
+      ])}
+
+      ${fanList.length ? html`
+        <div class="mode-labels">
+          <div class="img-label" style="margin-top:16px;margin-bottom:8px;">
+            Названия режимов <span style="font-weight:400;opacity:.6">(оставьте пустым — будет оригинал)</span>
+          </div>
+          ${fanList.map(f => html`
+            <div class="mode-label-row">
+              <span class="mode-key">${f}</span>
+              <input
+                type="text"
+                placeholder="${f}"
+                .value=${labels[f] || ""}
+                @input=${(e) => this._updateModeLabel(f, e.target.value)}
+              />
+            </div>
+          `)}
+        </div>
+      ` : ""}
+    `;
+  }
+  _updateModeLabel(key, value) {
+    const labels = { ...(this._config?.mode_labels || {}) };
+    if (value.trim()) {
+      labels[key] = value.trim();
+    } else {
+      delete labels[key];
+    }
+    this._config = {
+      ...this._config,
+      mode_labels: Object.keys(labels).length ? labels : undefined
+    };
+    this._fire();
+  }
+  _form(schema) {
     return html`
       <ha-form
         .hass=${this.hass}
         .data=${this._config}
-        .schema=${[
-          { name: "entity", required: true, selector: { entity: { domain: "vacuum" } } },
-          { name: "base_path", selector: { text: {} } }
-        ]}
+        .schema=${schema}
         @value-changed=${this._valueChanged}
       ></ha-form>
     `;
@@ -816,6 +862,10 @@ EmelyaVacuumCleaner.getConfigElement = function () {
 
 EmelyaVacuumCleaner.getStubConfig = function () {
   return {
+    title: "Робот пылесос",
+    label_battery_suffix: "% заряда",
+    label_start: "Начать уборку",
+    label_stop: "Остановить уборку",
     entity: "",
     base_path: "/local"
   };
