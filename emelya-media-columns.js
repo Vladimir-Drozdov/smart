@@ -337,7 +337,7 @@ class EmelyaMediaColumns extends LitElement {
     }
 
     .volume-value {
-      font-size: 53px;
+      font-size: 45px;
       font-weight: 600;
       text-align: right;
       line-height: 1;
