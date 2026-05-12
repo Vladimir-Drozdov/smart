@@ -409,7 +409,7 @@ class EmelyaKettleCard extends LitElement {
   }
 }
 
-/* ==================== EDITOR ==================== */
+/* EDITOR */
 
 class EmelyaKettleCardEditor extends LitElement {
   static properties = {
@@ -493,12 +493,6 @@ class EmelyaKettleCardEditor extends LitElement {
       cursor: pointer; font-size: 14px;
     }
     .path-clear:hover { color: var(--error-color, #db4437); }
-
-    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
-    .img-hint code {
-      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
-      border-radius: 4px; padding: 1px 5px; font-size: 11px;
-    }
 
     input[type="file"] { display: none; }
   `;
@@ -607,10 +601,6 @@ class EmelyaKettleCardEditor extends LitElement {
             <button class="path-clear" @click=${this._clearImage}>✕</button>
           </div>
         ` : ""}
-
-        <div class="img-hint">
-          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
-        </div>
       </div>
     `;
   }
@@ -694,7 +684,7 @@ class EmelyaKettleCardEditor extends LitElement {
       throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
       this._uploadState = "error";
-      this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите вручную в config/www/.`;
+      this._uploadError = `Не удалось загрузить файл (${err.message}).`;
     }
   }
 

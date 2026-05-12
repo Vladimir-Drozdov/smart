@@ -608,12 +608,6 @@ class EmelyaHumidifierCardEditor extends LitElement {
     }
     .path-clear:hover { color: var(--error-color, #db4437); }
 
-    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
-    .img-hint code {
-      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
-      border-radius: 4px; padding: 1px 5px; font-size: 11px;
-    }
-
     input[type="file"] { display: none; }
     .mode-labels { display: flex; flex-direction: column; }
 
@@ -680,7 +674,7 @@ class EmelyaHumidifierCardEditor extends LitElement {
       ${options.length ? html`
         <div class="mode-labels">
           <div class="img-label" style="margin-top:16px;margin-bottom:8px;">
-            Названия режимов <span style="font-weight:400;opacity:.6">(оставьте пустым — будет оригинал)</span>
+            Названия режимов
           </div>
           ${options.map(opt => html`
             <div class="mode-label-row">
@@ -759,11 +753,6 @@ class EmelyaHumidifierCardEditor extends LitElement {
             <button class="path-clear" @click=${this._clearImage}>✕</button>
           </div>
         ` : ""}
-
-        <div class="img-hint">
-          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
-          Поддерживаются PNG, JPG, WebP и AVIF.
-        </div>
       </div>
     `;
   }
@@ -857,7 +846,7 @@ class EmelyaHumidifierCardEditor extends LitElement {
       throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
       this._uploadState = "error";
-      this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+      this._uploadError = `Не удалось загрузить файл (${err.message}).`;
     }
   }
 

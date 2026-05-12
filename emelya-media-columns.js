@@ -610,9 +610,7 @@ class EmelyaMediaColumns extends LitElement {
   }
 }
 
-/* ══════════════════════════════════════════
-   EDITOR
-══════════════════════════════════════════ */
+/* EDITOR */
 
 class EmelyaMediaColumnsEditor extends LitElement {
   static properties = {
@@ -706,12 +704,6 @@ class EmelyaMediaColumnsEditor extends LitElement {
       align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.15s;
     }
     .path-clear:hover { color: var(--error-color, #db4437); }
-
-    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
-    .img-hint code {
-      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
-      border-radius: 4px; padding: 1px 5px; font-size: 11px;
-    }
 
     hr { border: none; border-top: 1px solid var(--divider-color); margin: 8px 0 16px; }
 
@@ -826,11 +818,6 @@ class EmelyaMediaColumnsEditor extends LitElement {
             <button class="path-clear" @click=${() => this._clearImage(stateKey, errorKey, configKey)}>✕</button>
           </div>
         ` : ""}
-
-        <div class="img-hint">
-          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
-          Поддерживаются PNG, JPG, WebP и AVIF.
-        </div>
       </div>
     `;
   }
@@ -916,7 +903,7 @@ class EmelyaMediaColumnsEditor extends LitElement {
       throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
       this[stateKey] = "error";
-      this[errorKey] = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+      this[errorKey] = `Не удалось загрузить файл (${err.message}).`;
     }
   }
 
@@ -959,9 +946,7 @@ class EmelyaMediaColumnsEditor extends LitElement {
   }
 }
 
-/* ══════════════════════════════════════════
-   Регистрация
-══════════════════════════════════════════ */
+/* Регистрация */
 
 EmelyaMediaColumns.getConfigElement = function () {
   return document.createElement("emelya-media-columns-editor");

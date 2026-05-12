@@ -70,7 +70,7 @@ class EmelyaRoomsRow extends LitElement {
     });
   }
 
-  updated() {
+  updated(changedProps) {
     const cards = this.renderRoot.querySelectorAll(".card[data-bg]");
     cards.forEach(el => {
       const bgUrl = el.dataset.bg;
@@ -83,6 +83,20 @@ class EmelyaRoomsRow extends LitElement {
       img.onload = () => el.classList.add("bg-loaded");
       img.src = bgUrl;
     });
+
+    if (changedProps.has("_activeIndex")) {
+      const container = this.renderRoot.querySelector(".container");
+      const activeCard = this.renderRoot.querySelectorAll(".card")[this._activeIndex];
+      if (container && activeCard) {
+        const cardLeft = activeCard.offsetLeft;
+        const cardWidth = activeCard.offsetWidth;
+        const containerWidth = container.offsetWidth;
+        container.scrollTo({
+          left: cardLeft - (containerWidth - cardWidth) / 2,
+          behavior: "smooth"
+        });
+      }
+    }
   }
 
   static styles = css`

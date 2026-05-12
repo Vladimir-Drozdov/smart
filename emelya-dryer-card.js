@@ -592,12 +592,6 @@ class EmelyaDryerCardEditor extends LitElement {
     }
     .path-clear:hover { color: var(--error-color, #db4437); }
 
-    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
-    .img-hint code {
-      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
-      border-radius: 4px; padding: 1px 5px; font-size: 11px;
-    }
-
     input[type="file"] { display: none; }
     .mode-labels { display: flex; flex-direction: column; }
 
@@ -663,7 +657,7 @@ class EmelyaDryerCardEditor extends LitElement {
       ${options.length ? html`
         <div class="mode-labels">
           <div class="img-label" style="margin-top:16px;margin-bottom:8px;">
-            Названия режимов <span style="font-weight:400;opacity:.6">(оставьте пустым — будет оригинал)</span>
+            Названия режимов
           </div>
           ${options.map(opt => html`
             <div class="mode-label-row">
@@ -743,9 +737,6 @@ class EmelyaDryerCardEditor extends LitElement {
           </div>
         ` : ""}
 
-        <div class="img-hint">
-          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
-        </div>
       </div>
     `;
   }
@@ -800,8 +791,6 @@ class EmelyaDryerCardEditor extends LitElement {
       const formData = new FormData();
       formData.append("file", uploadFile);
 
-      // HA 2023.6+ поддерживает загрузку файлов через /api/config/core/upload
-      // Реальный рабочий эндпоинт для www — через fetchWithAuth + multipart
       const resp = await this.hass.fetchWithAuth(
         `/api/config/core/store_image`,
         { method: "POST", body: formData }
@@ -815,7 +804,7 @@ class EmelyaDryerCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Fallback — пробуем прямой fetch
+    // Fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
@@ -839,7 +828,7 @@ class EmelyaDryerCardEditor extends LitElement {
       throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
       this._uploadState = "error";
-      this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+      this._uploadError = `Не удалось загрузить файл (${err.message}).`;
     }
   }
 

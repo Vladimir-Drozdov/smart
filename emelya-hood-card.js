@@ -381,7 +381,7 @@ class EmelyaHoodCard extends LitElement {
       <div
         class="frame"
         tabindex="0"
-        data-bg="${this.config.background_image || `${this.base}/images/container-images/kitchen-hood.png`}"
+        data-bg="${bg}"
       >
         <div class="header">
           <div class="title">Вытяжка</div>
@@ -503,12 +503,6 @@ class EmelyaHoodCardEditor extends LitElement {
     }
     .path-clear:hover { color: var(--error-color, #db4437); }
 
-    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
-    .img-hint code {
-      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
-      border-radius: 4px; padding: 1px 5px; font-size: 11px;
-    }
-
     input[type="file"] { display: none; }
   `;
 
@@ -591,10 +585,6 @@ class EmelyaHoodCardEditor extends LitElement {
             <button class="path-clear" @click=${this._clearImage}>✕</button>
           </div>
         ` : ""}
-
-        <div class="img-hint">
-          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
-        </div>
       </div>
     `;
   }
@@ -659,7 +649,7 @@ class EmelyaHoodCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Fallback — пробуем прямой fetch
+    // Fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
@@ -682,7 +672,7 @@ class EmelyaHoodCardEditor extends LitElement {
       throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
       this._uploadState = "error";
-      this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+      this._uploadError = `Не удалось загрузить файл (${err.message}).`;
     }
   }
 

@@ -485,7 +485,7 @@ class EmelyaLampCard extends LitElement {
   get hass() { return this._hass; }
 
   set hass(hass) {
-    // Сначала сохраняем brightness из СТАРОГО hass (пока свет ещё "on")
+    // Сначала сохраняем brightness из старого hass (пока свет ещё "on")
     // Это критично: когда приходит новый hass с state:"off", brightness уже null
     this._saveBrightness(this._hass);
     // Из нового hass тоже сохраняем — если свет включён и brightness положительный
@@ -552,10 +552,8 @@ class EmelyaLampCard extends LitElement {
   }
 
   /**
-   * Обновляем background у .slider-track-bar напрямую в shadow DOM.
-   * ON  → #343239  (светлее, заметный бар как на картинке 1)
-   * OFF → #1C1B1F  (темнее, почти незаметный как на картинке 2)
-   */
+  Обновляем background у .slider-track-bar напрямую в shadow DOM.
+  */
   _updateSliderTrackBarColor(isOn) {
     const trackColor = isOn ? "#4D4A54" : "linear-gradient(270deg, #343239 0%, #1C1B1F 100%)";
     const sliderBg  = isOn ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)" : "#1C1B1F";
@@ -912,9 +910,7 @@ class EmelyaLampCard extends LitElement {
   }
 }
 
-/* ══════════════════════════════════════════
-   EDITOR
-══════════════════════════════════════════ */
+/* EDITOR */
 class EmelyaLampCardEditor extends LitElement {
   static properties = {
     hass: {},
@@ -995,12 +991,6 @@ class EmelyaLampCardEditor extends LitElement {
       align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.15s;
     }
     .path-clear:hover { color: var(--error-color, #db4437); }
-
-    .img-hint { font-size: 12px; color: var(--secondary-text-color); line-height: 1.6; }
-    .img-hint code {
-      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
-      border-radius: 4px; padding: 1px 5px; font-size: 11px;
-    }
 
     input[type="file"] { display: none; }
   `;
@@ -1101,10 +1091,6 @@ class EmelyaLampCardEditor extends LitElement {
             <button class="path-clear" @click=${this._clearBgImage}>✕</button>
           </div>
         ` : ""}
-
-        <div class="img-hint">
-          Файл сохраняется в <code>config/www/</code> и доступен по пути <code>/local/имя_файла</code>.
-        </div>
       </div>
     `;
   }
@@ -1204,7 +1190,7 @@ class EmelyaLampCardEditor extends LitElement {
       throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
       this._bgUploadState = "error";
-      this._bgUploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+      this._bgUploadError = `Не удалось загрузить файл (${err.message}).`;
     }
   }
 
@@ -1236,9 +1222,7 @@ class EmelyaLampCardEditor extends LitElement {
   }
 }
 
-/* ══════════════════════════════════════════
-   REGISTER
-══════════════════════════════════════════ */
+/* REGISTER */
 customElements.define("emelya-lamp-card-editor", EmelyaLampCardEditor);
 
 if (!customElements.get("emelya-lamp-card")) {
