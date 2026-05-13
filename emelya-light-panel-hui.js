@@ -359,6 +359,7 @@ class EmelyaLightPanelHui extends LitElement {
       gap: 8px;
       cursor: pointer;
       user-select: none;
+      position: relative;
     }
     ha-card::before {
       content: "" !important;
@@ -446,11 +447,19 @@ class EmelyaLightPanelHui extends LitElement {
       flex-direction: column;
       gap: 8px;
       z-index: 0;
-      opacity: 0;
-      transition: opacity 0.15s ease;
     }
-    .tile-container.ready {
+    .skeleton-overlay {
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      background: #1C1B1F;
+      z-index: 5;
       opacity: 1;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
+    }
+    .skeleton-overlay.hidden {
+      opacity: 0;
     }
 
     /* ── Skeleton placeholders (shown while tiles are loading) ── */
@@ -807,11 +816,7 @@ class EmelyaLightPanelHui extends LitElement {
       await this.updateComplete;
 
       // Даём card-mod 6 кадров чтобы полностью применить стили до показа
-      await new Promise((resolve) => {
-        let count = 0;
-        const tick = () => { if (++count >= 6) resolve(); else requestAnimationFrame(tick); };
-        requestAnimationFrame(tick);
-      });
+      await new Promise(resolve => setTimeout(resolve, 400));
 
       if (token !== this._buildToken) return;
 
@@ -1203,16 +1208,7 @@ class EmelyaLightPanelHui extends LitElement {
           </div>
         </div>
 
-        ${!this._tilesVisible && tiles.length ? html`
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            ${tiles.map((tile) => {
-              const mode = detectTileMode(tile);
-              return html`<div class="tile-skeleton tile-skeleton-${mode === "brightness" ? "brightness" : "toggle"}"></div>`;
-            })}
-          </div>
-        ` : ""}
-
-        <div class="tile-container ${this._tilesVisible ? "ready" : ""}">
+        <div class="tile-container">
           ${tiles.length
             ? tiles.map((tile, i) => {
                 const mode = detectTileMode(tile);
@@ -1224,6 +1220,16 @@ class EmelyaLightPanelHui extends LitElement {
               })
             : html`<div class="empty">Добавь светильники в визуальном редакторе</div>`}
         </div>
+
+        ${tiles.length ? html`
+          <div class="skeleton-overlay ${this._tilesVisible ? "hidden" : ""}">
+            ${tiles.map((tile) => {
+              const mode = detectTileMode(tile);
+              return html`<div class="tile-skeleton tile-skeleton-${mode === "brightness" ? "brightness" : "toggle"}"></div>`;
+            })}
+          </div>
+        ` : ""}
+
       </ha-card>
     `;
   }
