@@ -175,7 +175,7 @@ class EmelyaDishwasherCard extends LitElement {
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
       title: "Посудомойка",
-      label_on: "Включено",
+      label_on: "",
       label_off: "Выключено",
       card_mod: {
         style: structuredClone(this.DEFAULT_DISHWASHER_CARD_MOD)
