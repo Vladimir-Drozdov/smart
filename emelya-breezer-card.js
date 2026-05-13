@@ -14,8 +14,8 @@ class EmelyaBreezerCard extends LitElement {
     selectedMode: { state: true },
     modes: { state: true }
   };
+
   DEFAULT_BREEZER_CARD_MOD = {
-    // Стили для корневого элемента (.)
     ".": `
       ha-card {
         font-size: 16px !important;
@@ -43,7 +43,6 @@ class EmelyaBreezerCard extends LitElement {
       }
     `,
 
-    // Стили для ha-select и его внутренних элементов
     "ha-select": {
       "$": `
         .mdc-select {
@@ -119,35 +118,49 @@ class EmelyaBreezerCard extends LitElement {
     const entity = this.config?.entity;
     const stateObj = hass.states?.[entity];
 
-    // POWER
-    if(stateObj){
-      const newPower = stateObj.state === "on";
+    if (!stateObj) return;
 
-      if(this._expectedPower !== null){
-        if(newPower === this._expectedPower){
-          this._expectedPower = null;
-          this.power = newPower;
-        }
-      } else {
+    // POWER
+    const newPower = stateObj.state === "on";
+
+    if (this._expectedPower !== null) {
+      if (newPower === this._expectedPower) {
+        this._expectedPower = null;
         this.power = newPower;
       }
+    } else {
+      this.power = newPower;
     }
 
-    // MODE
+    // MODE — определяем источник режимов
     const modeEntity = this.config?.mode_entity;
-    const modeState = hass.states?.[modeEntity];
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeStateObj = isSingleEntity
+      ? stateObj
+      : (hass.states?.[modeEntity] ?? null);
 
-    if(modeState){
-      this.modes = modeState.attributes?.options || [];
-      const newMode = modeState.state;
+    if (modeStateObj) {
+      // fan хранит режимы в preset_modes, select/input_select — в options
+      this.modes = modeStateObj.attributes?.preset_modes
+        || modeStateObj.attributes?.options
+        || [];
+      // fan хранит текущий режим в preset_mode, select — в state
+      const rawMode = modeStateObj.attributes?.preset_mode ?? "";
+      // берём state только для select/input_select (не для fan в off)
+      const currentMode = (rawMode && this.modes.includes(rawMode))
+        ? rawMode
+        : (!isSingleEntity && this.modes.includes(modeStateObj.state)
+            ? modeStateObj.state
+            : "");
 
-      if(this._expectedMode !== null){
-        if(newMode === this._expectedMode){
+      if (this._expectedMode !== null) {
+        if (currentMode === this._expectedMode) {
           this._expectedMode = null;
-          this.selectedMode = newMode;
+          this.selectedMode = currentMode;
         }
       } else {
-        this.selectedMode = newMode || this.selectedMode;
+        // currentMode || сохранённый || первый из списка — никогда не пустой
+        this.selectedMode = currentMode || this.selectedMode || (this.modes[0] ?? "");
       }
     }
   }
@@ -161,18 +174,19 @@ class EmelyaBreezerCard extends LitElement {
       tap_action: { action: "more-info" },
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
+      title: "Бризер",
+      label_on: "Включено",
+      label_off: "Выключено",
       card_mod: {
         style: structuredClone(this.DEFAULT_BREEZER_CARD_MOD)
       },
       ...config,
     };
-    this.base = this.config.base_path || "/local";
 
-    // Предзагружаем фоновое изображение сразу при установке конфига
+    this.base = this.config.base_path || "/local";
     this._preloadBackground();
   }
 
-  // Предзагрузка фона — браузер начинает качать картинку до рендера
   _preloadBackground() {
     const bg = this.config?.background_image
       ? this.config.background_image
@@ -184,7 +198,6 @@ class EmelyaBreezerCard extends LitElement {
       const img = new Image();
       img.onload = () => {
         this._bgPreloaded = true;
-        // Добавляем класс bg-loaded на карточку для плавного появления
         const card = this.renderRoot?.querySelector(".card");
         if (card) card.classList.add("bg-loaded");
       };
@@ -192,7 +205,6 @@ class EmelyaBreezerCard extends LitElement {
     }
   }
 
-  // После рендера проверяем — если картинка уже в кэше, сразу показываем
   updated(changedProps) {
     if (changedProps.has("config")) {
       this._preloadBackground();
@@ -235,16 +247,9 @@ class EmelyaBreezerCard extends LitElement {
       cursor: pointer;
       user-select: none;
       position: relative;
-      /* Базовый фон пока картинка не загружена */
       background: #1C1B1F;
     }
 
-    /*
-      Фон вынесен в ::before — убирает background-blend-mode с самого .card.
-      background-blend-mode на элементе создаёт stacking context,
-      из-за которого position:fixed у дочерних элементов ломается.
-      Плавное появление через opacity: 0 → 1 после загрузки.
-    */
     .card::before {
       content: "";
       position: absolute;
@@ -258,7 +263,6 @@ class EmelyaBreezerCard extends LitElement {
       background-position: center, 105.316px 49.164px, center;
       background-repeat: no-repeat, no-repeat, no-repeat;
       background-blend-mode: normal, luminosity, normal;
-      /* Плавное появление — воспринимается быстрее чем резкий pop-in */
       opacity: 0;
       transition: opacity 0.35s ease;
       pointer-events: none;
@@ -374,7 +378,6 @@ class EmelyaBreezerCard extends LitElement {
     card.addEventListener("pointerup", this._onPointerUp.bind(this));
     card.addEventListener("click", this._onClick.bind(this));
 
-    // Если картинка уже в кэше — сразу показываем без мигания
     if (this._bgPreloaded) card.classList.add("bg-loaded");
   }
 
@@ -441,28 +444,37 @@ class EmelyaBreezerCard extends LitElement {
     this._expectedPower = newPower;
 
     const domain = entity.split(".")[0];
-    
     const service = newPower ? "turn_on" : "turn_off";
     
-    this.hass.callService(domain, service, {
-      entity_id: entity
-    });
+    this.hass.callService(domain, service, { entity_id: entity });
   }
 
   _handleSelectChange(e){
     e.stopPropagation();
     const value = e.target.value;
+    if (!value) return;
+
     this.selectedMode = value;
     this._expectedMode = value;
 
+    const entity = this.config?.entity;
     const modeEntity = this.config?.mode_entity;
-    if(!this.hass?.states?.[modeEntity]) return;
+    const stateObj = this.hass?.states?.[entity];
 
-    const domain = modeEntity.split(".")[0];
-    
-    if(domain === "select" || domain === "input_select") {
+    if (!stateObj) return;
+
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const targetEntity = isSingleEntity ? entity : modeEntity;
+
+    if (isSingleEntity && stateObj.attributes?.preset_modes) {
+      this.hass.callService("fan", "set_preset_mode", {
+        entity_id: targetEntity,
+        preset_mode: value
+      });
+    } else {
+      const domain = targetEntity.split(".")[0];
       this.hass.callService(domain, "select_option", {
-        entity_id: modeEntity,
+        entity_id: targetEntity,
         option: value
       });
     }
@@ -470,9 +482,10 @@ class EmelyaBreezerCard extends LitElement {
 
   _handleSelectDblClick(e){
     e.stopPropagation();
-    if (this.config.mode_entity) {
+    const entityForInfo = this.config?.mode_entity || this.config?.entity;
+    if (entityForInfo) {
       this.dispatchEvent(new CustomEvent("hass-more-info", {
-        detail: { entityId: this.config.mode_entity },
+        detail: { entityId: entityForInfo },
         bubbles: true,
         composed: true
       }));
@@ -480,10 +493,29 @@ class EmelyaBreezerCard extends LitElement {
   }
 
   render(){
-    const modeState = this.hass?.states?.[this.config?.mode_entity];
+    const entity = this.config?.entity;
+    const modeEntity = this.config?.mode_entity;
+    const stateObj = this.hass?.states?.[entity];
+
+    // Определяем источник режимов — та же логика что и в set hass
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeStateObj = isSingleEntity
+      ? stateObj
+      : (this.hass?.states?.[modeEntity] ?? null);
+
+    // Режимы: fan → preset_modes, select → options
+    const modeOptions = modeStateObj?.attributes?.preset_modes
+      || modeStateObj?.attributes?.options
+      || [];
+
     const bg = this.config.background_image
       ? this.config.background_image
       : `${this.base}/images/container-images/breezer.png`;
+
+    // Статус в шапке: если выкл — label_off; если вкл и есть режим — показываем его
+    const stateLabel = this.power
+      ? (this.config?.mode_labels?.[this.selectedMode] || this.selectedMode || this.config?.label_on || "Включено")
+      : (this.config?.label_off || "Выключено");
 
     return html`
     <ha-card>
@@ -493,10 +525,8 @@ class EmelyaBreezerCard extends LitElement {
       >
 
         <div class="header">
-          <div class="title">Бризер</div>
-          <div class="state">
-            ${this.power ? (this.config?.mode_labels?.[this.selectedMode] || this.selectedMode || "Включено") : "Выключено"}
-          </div>
+          <div class="title">${this.config?.title || "Бризер"}</div>
+          <div class="state">${stateLabel}</div>
         </div>
 
         <div class="controls">
@@ -507,15 +537,16 @@ class EmelyaBreezerCard extends LitElement {
           >
             <img src="${this.base}/images/container-images/power_button.png">
           </div>
-          ${modeState ? html`
+
+          ${modeOptions.length ? html`
             <ha-select
-              .label=${modeState.attributes?.friendly_name || "Режим"}
+              .label=${"Режим"}
               .value=${this.selectedMode}
               @pointerdown=${this._stopPropagation}
               @change=${this._handleSelectChange}
               @dblclick=${this._handleSelectDblClick}
             >
-              ${(modeState.attributes?.options || []).map(opt => html`
+              ${modeOptions.map(opt => html`
                 <mwc-list-item .value=${opt}>${this.config?.mode_labels?.[opt] || opt}</mwc-list-item>
               `)}
             </ha-select>
@@ -636,7 +667,7 @@ class EmelyaBreezerCardEditor extends LitElement {
   constructor() {
     super();
     this._tab = 0;
-    this._uploadState = "idle"; // idle | loading | success | error
+    this._uploadState = "idle";
     this._uploadError = "";
     this._dragOver = false;
   }
@@ -658,23 +689,48 @@ class EmelyaBreezerCardEditor extends LitElement {
   }
 
   _objectTab() {
+    const entity = this._config?.entity;
     const modeEntity = this._config?.mode_entity;
-    const modeState  = this.hass?.states?.[modeEntity];
-    const options    = modeState?.attributes?.options || [];
-    const labels     = this._config?.mode_labels || {};
+
+    // Собираем режимы из обеих сущностей — что найдём, то и показываем
+    const modeState = this.hass?.states?.[modeEntity];
+    const fanState  = this.hass?.states?.[entity];
+
+    const options = modeState?.attributes?.options
+      || fanState?.attributes?.preset_modes
+      || fanState?.attributes?.options
+      || [];
+
+    const labels = this._config?.mode_labels || {};
 
     return html`
       ${this._form([
-        { name: "entity",      required: true, selector: { entity: { domain: ["fan", "switch"] } } },
-        { name: "mode_entity", required: true, selector: { entity: { domain: ["select", "input_select"] } } },
-        { name: "base_path",                   selector: { text: {} } }
+        { name: "title",       label: "Название",     selector: { text: {} } },
+        { name: "label_on",    label: "Статус: вкл",  selector: { text: {} } },
+        { name: "label_off",   label: "Статус: выкл", selector: { text: {} } },
+        { 
+          name: "entity",      
+          required: true, 
+          selector: { entity: { domain: ["fan", "switch"] } } 
+        },
+        { 
+          name: "mode_entity", 
+          required: false, 
+          selector: { 
+            entity: { 
+              domain: ["fan", "switch", "select", "input_select"]
+            } 
+          }
+        },
+        { 
+          name: "base_path",
+          selector: { text: {} } 
+        }
       ])}
 
       ${options.length ? html`
-        <div class="mode-labels">
-          <div class="img-label" style="margin-top:16px;margin-bottom:8px;">
-            Названия режимов
-          </div>
+        <div class="mode-labels" style="margin-top: 20px;">
+          <div class="img-label">Названия режимов</div>
           ${options.map(opt => html`
             <div class="mode-label-row">
               <span class="mode-key">${opt}</span>
@@ -690,6 +746,7 @@ class EmelyaBreezerCardEditor extends LitElement {
       ` : ""}
     `;
   }
+
   _updateModeLabel(key, value) {
     const labels = { ...(this._config?.mode_labels || {}) };
     if (value.trim()) {
@@ -791,11 +848,6 @@ class EmelyaBreezerCardEditor extends LitElement {
     e.target.value = "";
   }
 
-  /* ── Нормализация MIME-типа ──
-     HA API отклоняет image/avif (и некоторые другие форматы) с HTTP 400.
-     Подменяем MIME-тип на image/png перед отправкой — байты файла не трогаем.
-     Браузер читает файл по magic bytes, игнорируя Content-Type, поэтому
-     avif корректно отобразится после загрузки. */
   _normalizeFileForUpload(file) {
     const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
     if (unsupportedByHA.includes(file.type)) {
@@ -803,8 +855,6 @@ class EmelyaBreezerCardEditor extends LitElement {
     }
     return file;
   }
-
-  /* ── Загрузка файла ── */
 
   async _uploadFile(file) {
     if (!file.type.startsWith("image/")) {
@@ -818,7 +868,6 @@ class EmelyaBreezerCardEditor extends LitElement {
 
     const uploadFile = this._normalizeFileForUpload(file);
 
-    // Attempt 1 — HA store_image
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -836,7 +885,6 @@ class EmelyaBreezerCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Attempt 2 — /api/image/upload fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
@@ -906,6 +954,9 @@ EmelyaBreezerCard.getConfigElement = function () {
 
 EmelyaBreezerCard.getStubConfig = function () {
   return {
+    title: "Бризер",
+    label_on: "Включено",
+    label_off: "Выключено",
     entity: "",
     mode_entity: "",
     base_path: "/local",

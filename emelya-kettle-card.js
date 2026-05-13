@@ -252,7 +252,7 @@ class EmelyaKettleCard extends LitElement {
       border-radius: 24px;
       background-image:
         linear-gradient(180deg, rgba(28, 27, 31, 0.00) 56.97%, #1C1B1F 88.4%),
-        var(--card-bg, none);
+        var(--card-bg, none), linear-gradient(0deg, #1C1B1F, #1C1B1F);
       background-size: auto, 81.463% 82.494%, auto;
       background-position: center, 53.318px 57.809px, center;
       background-repeat: no-repeat, no-repeat, no-repeat;
@@ -270,6 +270,7 @@ class EmelyaKettleCard extends LitElement {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      z-index:1;
     }
 
     .title { font-size: 16px; font-weight: 600; }

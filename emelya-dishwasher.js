@@ -14,8 +14,8 @@ class EmelyaDishwasherCard extends LitElement {
     power: { type: Boolean },
     modes: { state: true }
   };
+
   DEFAULT_DISHWASHER_CARD_MOD = {
-    // Стили для корневого элемента (.)
     ".": `
       :host {
         border-radius: 24px !important;
@@ -42,7 +42,6 @@ class EmelyaDishwasherCard extends LitElement {
       }
     `,
 
-    // Стили для ha-select и его внутренних элементов
     "ha-select": {
       "$": `
         .mdc-select {
@@ -97,7 +96,6 @@ class EmelyaDishwasherCard extends LitElement {
           visibility: hidden !important;
         }
       `
-
     }
   };
 
@@ -113,39 +111,56 @@ class EmelyaDishwasherCard extends LitElement {
     this._preloadedBg = null;
   }
 
+  // ─── FIX 3: isSingleEntity — та же логика что в бризере ───────────────────
   set hass(hass){
     this._hass = hass;
 
     const entity = this.config?.entity;
     const stateObj = hass.states?.[entity];
 
-    if(stateObj){
-      const newPower = stateObj.state === "on";
+    if (!stateObj) return;
 
-      if(this._expectedPower !== null){
-        if(newPower === this._expectedPower){
-          this._expectedPower = null;
-          this.power = newPower;
-        }
-      } else {
+    // POWER
+    const newPower = stateObj.state === "on";
+
+    if (this._expectedPower !== null) {
+      if (newPower === this._expectedPower) {
+        this._expectedPower = null;
         this.power = newPower;
       }
+    } else {
+      this.power = newPower;
     }
 
+    // MODE — FIX 3: определяем источник режимов как в бризере
     const modeEntity = this.config?.mode_entity;
-    const modeState = hass.states?.[modeEntity];
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeStateObj = isSingleEntity
+      ? stateObj
+      : (hass.states?.[modeEntity] ?? null);
 
-    if(modeState){
-      this.modes = modeState.attributes?.options || [];
-      const newMode = modeState.state;
+    if (modeStateObj) {
+      // FIX 2: фолбек на preset_modes (для fan) помимо options
+      this.modes = modeStateObj.attributes?.preset_modes
+        || modeStateObj.attributes?.options
+        || [];
 
-      if(this._expectedMode !== null){
-        if(newMode === this._expectedMode){
+      // fan хранит текущий режим в preset_mode, select — в state
+      const rawMode = modeStateObj.attributes?.preset_mode ?? "";
+      const currentMode = (rawMode && this.modes.includes(rawMode))
+        ? rawMode
+        : (!isSingleEntity && this.modes.includes(modeStateObj.state)
+            ? modeStateObj.state
+            : "");
+
+      if (this._expectedMode !== null) {
+        if (currentMode === this._expectedMode) {
           this._expectedMode = null;
-          this.selectedMode = newMode;
+          this.selectedMode = currentMode;
         }
       } else {
-        this.selectedMode = newMode;
+        // FIX 4: никогда не оставляем селект пустым — подставляем первый режим
+        this.selectedMode = currentMode || this.selectedMode || (this.modes[0] ?? "");
       }
     }
   }
@@ -170,6 +185,7 @@ class EmelyaDishwasherCard extends LitElement {
     this.base = this.config.base_path || "/local";
     this._preloadBackground();
   }
+
   updated() {
     const card = this.renderRoot?.querySelector(".card[data-bg]");
     if (!card) return;
@@ -181,6 +197,7 @@ class EmelyaDishwasherCard extends LitElement {
     img.onload = () => card.classList.add("bg-loaded");
     img.src = bgUrl;
   }
+
   _preloadBackground() {
     const bg = this.config.background_image
       ? this.config.background_image
@@ -192,6 +209,7 @@ class EmelyaDishwasherCard extends LitElement {
       img.src = bg;
     }
   }
+
   static styles = css`
     :host { 
       display: block; 
@@ -402,53 +420,64 @@ class EmelyaDishwasherCard extends LitElement {
   _togglePower(e){
     e.stopPropagation();
     const entity = this.config?.entity;
-    if(!entity || !this.hass) return;
+    if (!entity || !this.hass) return;
 
     const newPower = !this.power;
     this.power = newPower;
     this._expectedPower = newPower;
 
     const domain = entity.split(".")[0];
-    
-    if(domain === "switch") {
-      this.hass.callService("switch", "toggle", { entity_id: entity });
-    } else if(domain === "fan") {
-      this.hass.callService("fan", "toggle", { entity_id: entity });
-    } else {
-      this.hass.callService(domain, "toggle", { entity_id: entity });
-    }
+    const service = newPower ? "turn_on" : "turn_off";
+    this.hass.callService(domain, service, { entity_id: entity });
   }
 
   _handleSelectChange(e){
     e.stopPropagation();
     const value = e.target.value;
+    if (!value) return;
+
     this.selectedMode = value;
     this._expectedMode = value;
 
+    const entity = this.config?.entity;
     const modeEntity = this.config?.mode_entity;
-    if(!this.hass?.states?.[modeEntity]) return;
+    const stateObj = this.hass?.states?.[entity];
 
-    const domain = modeEntity.split(".")[0];
-    if(domain === "select" || domain === "input_select") {
-      this.hass.callService(domain, "select_option", {
-        entity_id: modeEntity,
-        option: value
-      });
-    } else if(domain === "fan") {
+    if (!stateObj) return;
+
+    // FIX 3: та же логика isSingleEntity что в set hass
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const targetEntity = isSingleEntity ? entity : modeEntity;
+
+    if (isSingleEntity && stateObj.attributes?.preset_modes) {
+      // fan с preset_modes — одна сущность
       this.hass.callService("fan", "set_preset_mode", {
-        entity_id: modeEntity,
+        entity_id: targetEntity,
         preset_mode: value
       });
     } else {
-      console.warn(`Unsupported domain for mode_entity: ${domain}`);
+      // FIX 2: отдельная mode_entity — select или fan
+      const domain = targetEntity.split(".")[0];
+      if (domain === "fan") {
+        this.hass.callService("fan", "set_preset_mode", {
+          entity_id: targetEntity,
+          preset_mode: value
+        });
+      } else {
+        this.hass.callService(domain, "select_option", {
+          entity_id: targetEntity,
+          option: value
+        });
+      }
     }
   }
 
   _handleSelectDblClick(e){
     e.stopPropagation();
-    if (this.config.mode_entity) {
+    const entityForInfo = this.config?.mode_entity || this.config?.entity;
+    if (entityForInfo) {
       this.dispatchEvent(new CustomEvent("hass-more-info", {
-        detail: { entityId: this.config.mode_entity },
+        detail: { entityId: entityForInfo },
         bubbles: true,
         composed: true
       }));
@@ -456,7 +485,20 @@ class EmelyaDishwasherCard extends LitElement {
   }
 
   render(){
-    const modeState = this.hass?.states?.[this.config.mode_entity];
+    const entity = this.config?.entity;
+    const modeEntity = this.config?.mode_entity;
+
+    // FIX 3: та же логика isSingleEntity для render
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeStateObj = isSingleEntity
+      ? this.hass?.states?.[entity]
+      : (this.hass?.states?.[modeEntity] ?? null);
+
+    // FIX 2: preset_modes или options
+    const modeOptions = modeStateObj?.attributes?.preset_modes
+      || modeStateObj?.attributes?.options
+      || [];
+
     const bg = this.config.background_image
       ? this.config.background_image
       : `${this.base}/images/container-images/dishwasher.png`;
@@ -479,15 +521,16 @@ class EmelyaDishwasherCard extends LitElement {
           >
             <img src="${this.base}/images/container-images/power_button.png">
           </div>
-          ${modeState ? html`
+
+          ${modeOptions.length ? html`
             <ha-select
-              .label=${modeState.attributes?.friendly_name || ""}
+              .label=${"Режим"}
               .value=${this.selectedMode}
               @pointerdown=${this._stopPropagation}
               @change=${this._handleSelectChange}
               @dblclick=${this._handleSelectDblClick}
             >
-              ${(modeState.attributes?.options || []).map(opt => html`
+              ${modeOptions.map(opt => html`
                 <mwc-list-item .value=${opt}>${this.config?.mode_labels?.[opt] || opt}</mwc-list-item>
               `)}
             </ha-select>
@@ -608,7 +651,7 @@ class EmelyaDishwasherCardEditor extends LitElement {
   constructor() {
     super();
     this._tab = 0;
-    this._uploadState = "idle"; // idle | loading | success | error
+    this._uploadState = "idle";
     this._uploadError = "";
     this._dragOver = false;
   }
@@ -617,14 +660,12 @@ class EmelyaDishwasherCardEditor extends LitElement {
 
   render() {
     if (!this._config) return html``;
-
     return html`
       <div class="tabs">
         ${["Объект", "Внешний вид", "Взаимодействия"].map((t, i) => html`
           <div class="tab ${this._tab === i ? "active" : ""}" @click=${() => this._tab = i}>${t}</div>
         `)}
       </div>
-
       ${this._tab === 0 ? this._objectTab() : ""}
       ${this._tab === 1 ? this._appearanceTab() : ""}
       ${this._tab === 2 ? this._actionsTab() : ""}
@@ -632,26 +673,48 @@ class EmelyaDishwasherCardEditor extends LitElement {
   }
 
   _objectTab() {
+    const entity     = this._config?.entity;
     const modeEntity = this._config?.mode_entity;
-    const modeState  = this.hass?.states?.[modeEntity];
-    const options    = modeState?.attributes?.options || [];
-    const labels     = this._config?.mode_labels || {};
+
+    // FIX 3: собираем режимы с учётом isSingleEntity
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeStateObj = isSingleEntity
+      ? this.hass?.states?.[entity]
+      : (this.hass?.states?.[modeEntity] ?? null);
+
+    // FIX 2: preset_modes или options
+    const options = modeStateObj?.attributes?.preset_modes
+      || modeStateObj?.attributes?.options
+      || [];
+
+    const labels = this._config?.mode_labels || {};
 
     return html`
       ${this._form([
         { name: "title",       label: "Название",     selector: { text: {} } },
         { name: "label_on",    label: "Статус: вкл",  selector: { text: {} } },
         { name: "label_off",   label: "Статус: выкл", selector: { text: {} } },
-        { name: "entity",      required: true, selector: { entity: { domain: ["switch", "fan"] } } },
-        { name: "mode_entity", required: true, selector: { entity: { domain: ["select", "input_select"] } } },
-        { name: "base_path",   selector: { text: {} } }
+        {
+          name: "entity",
+          required: true,
+          selector: { entity: { domain: ["switch", "fan"] } }
+        },
+        {
+          // FIX 1: mode_entity необязателен (убран required: true)
+          name: "mode_entity",
+          required: false,
+          selector: {
+            entity: {
+              domain: ["fan", "switch", "select", "input_select"]
+            }
+          }
+        },
+        { name: "base_path", selector: { text: {} } }
       ])}
 
       ${options.length ? html`
-        <div class="mode-labels">
-          <div class="img-label" style="margin-top:16px;margin-bottom:8px;">
-            Названия режимов
-          </div>
+        <div class="mode-labels" style="margin-top: 20px;">
+          <div class="img-label">Названия режимов</div>
           ${options.map(opt => html`
             <div class="mode-label-row">
               <span class="mode-key">${opt}</span>
@@ -667,6 +730,7 @@ class EmelyaDishwasherCardEditor extends LitElement {
       ` : ""}
     `;
   }
+
   _updateModeLabel(key, value) {
     const labels = { ...(this._config?.mode_labels || {}) };
     if (value.trim()) {
@@ -741,12 +805,9 @@ class EmelyaDishwasherCardEditor extends LitElement {
             <button class="path-clear" @click=${this._clearImage}>✕</button>
           </div>
         ` : ""}
-
       </div>
     `;
   }
-
-  /* ── Drag & Drop ── */
 
   _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
   _onDragLeave()  { this._dragOver = false; }
@@ -768,6 +829,7 @@ class EmelyaDishwasherCardEditor extends LitElement {
     if (file) this._uploadFile(file);
     e.target.value = "";
   }
+
   _normalizeFileForUpload(file) {
     const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
     if (unsupportedByHA.includes(file.type)) {
@@ -775,8 +837,6 @@ class EmelyaDishwasherCardEditor extends LitElement {
     }
     return file;
   }
-
-  /* ── Загрузка файла ── */
 
   async _uploadFile(file) {
     if (!file.type.startsWith("image/")) {
@@ -787,6 +847,7 @@ class EmelyaDishwasherCardEditor extends LitElement {
 
     this._uploadState = "loading";
     this._uploadError = "";
+
     const uploadFile = this._normalizeFileForUpload(file);
 
     try {
@@ -806,7 +867,6 @@ class EmelyaDishwasherCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
@@ -883,7 +943,7 @@ EmelyaDishwasherCard.getStubConfig = function () {
     mode_entity: "",
     base_path: "/local",
   };
-};;
+};
 
 customElements.define("emelya-dishwasher-card-editor", EmelyaDishwasherCardEditor);
 customElements.define("emelya-dishwasher", EmelyaDishwasherCard);

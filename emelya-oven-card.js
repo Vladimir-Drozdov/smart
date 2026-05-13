@@ -625,7 +625,7 @@ class EmelyaOvenCardEditor extends LitElement {
     ]);
   }
 
-  /* ── Drag & Drop ── */
+  /* Drag & Drop */
 
   _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
   _onDragLeave() { this._dragOver = false; }
@@ -739,7 +739,7 @@ class EmelyaOvenCardEditor extends LitElement {
   }
 
   _valueChanged = (e) => {
-    this._config = e.detail.value;
+    this._config = e.detail.value; //e.detail.value - это (объект) значений всех полей формы, а не одного измененного селекта
     this._fire();
   };
 
