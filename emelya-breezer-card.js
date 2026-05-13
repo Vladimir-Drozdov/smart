@@ -512,9 +512,9 @@ class EmelyaBreezerCard extends LitElement {
       ? this.config.background_image
       : `${this.base}/images/container-images/breezer.png`;
 
-    // Статус в шапке: если выкл — label_off; если вкл и есть режим — показываем его
+    // Статус в шапке: если выкл — label_off; если вкл и label_on, то label_on; если вкл и без label_on и есть режим — показываем режим
     const stateLabel = this.power
-      ? (this.config?.mode_labels?.[this.selectedMode] || this.selectedMode || this.config?.label_on || "Включено")
+      ? (this.config?.label_on || this.config?.mode_labels?.[this.selectedMode] || this.selectedMode || "Включено")
       : (this.config?.label_off || "Выключено");
 
     return html`

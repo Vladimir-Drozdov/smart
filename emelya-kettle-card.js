@@ -244,6 +244,7 @@ class EmelyaKettleCard extends LitElement {
       -webkit-mask-composite: xor !important;
       mask-composite: exclude !important;
       pointer-events: none;
+      z-index: 1;
     }
     .card::after {
       content: "";

@@ -510,7 +510,7 @@ class EmelyaDishwasherCard extends LitElement {
 
         <div class="header">
           <div class="title">${this.config?.title || ""}</div>
-          <div class="state">${this.power ? (this.config?.label_on || "") : (this.config?.label_off || "")}</div>
+          <div class="state">${this.power ? (this.config?.label_on || this.config?.mode_labels?.[this.selectedMode] || this.selectedMode || "Включено") : (this.config?.label_off || "Выключено")}</div>
         </div>
 
         <div class="controls">
