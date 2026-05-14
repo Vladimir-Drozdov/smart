@@ -481,7 +481,7 @@ class EmelyaHumidifierCard extends LitElement {
       this.dispatchEvent(new CustomEvent("hass-more-info", {
         detail: { entityId: this.config.mode_entity },
         bubbles: true,
-        composed: true
+        composed: true 
       }));
     }
   }

@@ -46,33 +46,14 @@ class MyElement extends LitElement {
     const helpers = await window.loadCardHelpers();
     if (token !== this.#token) return;
 
-    this._cards = await Promise.all(
+    const cards = await Promise.all(
       this.config.cards.map(c => this._createCard(c, helpers))
     );
-
-    // Точка 1: сразу после создания (до DOM)
-    this._spreadHass();
-
-    // Точка 2: после того как Lit вставил карточки в DOM
-    await this.updateComplete;
     if (token !== this.#token) return;
-    this._spreadHass();
-    // ЖДЁМ пока ВСЕ карточки дорендерятся
-    await Promise.all(
-      this._cards.map(c => c.updateComplete?.catch(() => {}))
-    );
 
-    // форсим перерисовку контейнера
-    this.requestUpdate();
-    await this.updateComplete;
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    this._cards = cards;
     this._spreadHass();
     this.requestUpdate();
-    // Точка 3: следующий кадр — для карточек с отложенной инициализацией
-    requestAnimationFrame(() => {
-      if (token !== this.#token) return;
-      this._spreadHass();
-    });
   }
 
   _spreadHass() {
@@ -83,13 +64,15 @@ class MyElement extends LitElement {
 
   set hass(hass) {
     this._hass = hass;
-    this._spreadHass(); // карточки уже существуют — раздаём сразу
+    if (this._cards?.length) this._spreadHass();
   }
   get hass() { return this._hass; }
 
   // Страховка: после каждого рендера (например смена _cards)
-  updated() {
-    this._spreadHass();
+  updated(changedProps) {
+    if (changedProps.has('_cards')) {
+      this._spreadHass();
+    }
   }
 
 
