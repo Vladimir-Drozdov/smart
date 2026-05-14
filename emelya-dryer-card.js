@@ -119,8 +119,12 @@ class EmelyaDryerCard extends LitElement {
     const stateObj = hass.states?.[entity];
 
     // POWER
-    if(stateObj){
-      const newPower = stateObj.state === "on";
+    const powerEntity = this.config?.power_entity || entity;
+    const powerStateObj = hass.states?.[powerEntity] || stateObj;
+
+    if(powerStateObj){
+      const offStates = this.config?.off_states || ["off", "standby", "end", "unavailable", "unknown"];
+      const newPower = !offStates.includes(powerStateObj.state);
 
       if(this._expectedPower !== null){
         if(newPower === this._expectedPower){
@@ -134,21 +138,28 @@ class EmelyaDryerCard extends LitElement {
 
     // MODE
     const modeEntity = this.config?.mode_entity;
-    const modeState = hass.states?.[modeEntity];
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeStateObj = isSingleEntity
+      ? stateObj
+      : (hass.states?.[modeEntity] ?? null);
 
-    if(modeState){
-      const newMode = modeState.state;
-      const options = modeState.attributes?.options || [];
+    if(modeStateObj){
+      this.modes = modeStateObj.attributes?.preset_modes
+        || modeStateObj.attributes?.options
+        || [];
 
-      this.modes = options;
+      const rawMode = modeStateObj.attributes?.preset_mode ?? "";
+      const currentMode = (rawMode && this.modes.includes(rawMode))
+        ? rawMode
+        : (this.modes.includes(modeStateObj.state) ? modeStateObj.state : "");
 
       if(this._expectedMode !== null){
-        if(newMode === this._expectedMode){
+        if(currentMode === this._expectedMode){
           this._expectedMode = null;
-          this.selectedMode = newMode;
+          this.selectedMode = currentMode;
         }
       } else {
-        this.selectedMode = newMode;
+        this.selectedMode = currentMode || this.selectedMode || (this.modes[0] ?? "");
       }
     }
   }
@@ -165,6 +176,7 @@ class EmelyaDryerCard extends LitElement {
       title: "Сушильная машина",
       label_on: "Включено",
       label_off: "Выключено",
+      off_states: ["off", "standby", "end", "unavailable", "unknown"],
       card_mod: { style: structuredClone(this.DEFAULT_DRYER_CARD_MOD) },
       ...config,
     };
@@ -414,21 +426,22 @@ class EmelyaDryerCard extends LitElement {
   _togglePower(e){
     e.stopPropagation();
     const entity = this.config?.entity;
-    if(!this.hass || !entity) return;
+    const powerEntity = this.config?.power_entity || entity;
+    if(!this.hass || !powerEntity) return;
+
+    const powerDomain = powerEntity.split(".")[0];
+    const readOnlyDomains = ["sensor", "binary_sensor"];
+    if(readOnlyDomains.includes(powerDomain)) {
+      console.warn("emelya-dryer: power entity is read-only:", powerEntity);
+      return;
+    }
 
     const newPower = !this.power;
     this.power = newPower;
     this._expectedPower = newPower;
 
-    const domain = entity.split(".")[0];
     const service = newPower ? "turn_on" : "turn_off";
-    
-    // Для switch можно использовать toggle, для остальных - turn_on/turn_off
-    if(domain === "switch") {
-      this.hass.callService("switch", "toggle", { entity_id: entity });
-    } else {
-      this.hass.callService(domain, service, { entity_id: entity });
-    }
+    this.hass.callService(powerDomain, service, { entity_id: powerEntity });
   }
 
   _handleSelectChange(e){
@@ -476,7 +489,9 @@ class EmelyaDryerCard extends LitElement {
         <div class="header">
           <div class="title">${this.config?.title || ""}</div>
           <div class="state">
-            ${this.power ? (this.config?.label_on || "") : (this.config?.label_off || "")}
+            ${this.power 
+              ? (this.config?.label_on || this.config?.mode_labels?.[this.selectedMode] || this.selectedMode || "Включено") 
+              : (this.config?.label_off || "Выключено")}
           </div>
         </div>
 
@@ -649,9 +664,11 @@ class EmelyaDryerCardEditor extends LitElement {
         { name: "title",       label: "Название",     selector: { text: {} } },
         { name: "label_on",    label: "Статус: вкл",  selector: { text: {} } },
         { name: "label_off",   label: "Статус: выкл", selector: { text: {} } },
-        { name: "entity",      required: true, selector: { entity: { domain: ["switch", "fan"] } } },
-        { name: "mode_entity", required: true, selector: { entity: { domain: ["select", "input_select"] } } },
-        { name: "base_path",   selector: { text: {} } }
+        { name: "entity",        required: true,  selector: { entity: { domain: ["switch", "fan", "sensor", "binary_sensor", "input_boolean"] } } },
+        { name: "power_entity",  required: false, selector: { entity: { domain: ["switch", "input_boolean", "binary_sensor"] } } },
+        { name: "mode_entity",   required: false, selector: { entity: { domain: ["select", "input_select", "fan"] } } },
+        { name: "off_states",    required: false, selector: { text: {} } },
+        { name: "base_path",     selector: { text: {} } }
       ])}
 
       ${options.length ? html`
@@ -878,6 +895,7 @@ EmelyaDryerCard.getStubConfig = function () {
     label_on: "Включено",
     label_off: "Выключено",
     entity: "",
+    power_entity: "",
     mode_entity: "",
     base_path: "/local",
   };

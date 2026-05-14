@@ -121,7 +121,10 @@ class EmelyaBreezerCard extends LitElement {
     if (!stateObj) return;
 
     // POWER
-    const newPower = stateObj.state === "on";
+    const powerEntity = this.config?.power_entity || entity;
+    const powerStateObj = hass.states?.[powerEntity] || stateObj;
+    const offStates = ["off", "unavailable", "unknown"];
+    const newPower = !offStates.includes(powerStateObj.state);
 
     if (this._expectedPower !== null) {
       if (newPower === this._expectedPower) {
@@ -437,16 +440,22 @@ class EmelyaBreezerCard extends LitElement {
   _togglePower(e){
     e.stopPropagation();
     const entity = this.config?.entity;
-    if(!this.hass?.states?.[entity]) return;
+    const powerEntity = this.config?.power_entity || entity;
+    if (!powerEntity || !this.hass) return;
 
     const newPower = !this.power;
     this.power = newPower;
     this._expectedPower = newPower;
 
-    const domain = entity.split(".")[0];
+    const powerDomain = powerEntity.split(".")[0];
+    const readOnlyDomains = ["sensor", "binary_sensor"];
+    if (readOnlyDomains.includes(powerDomain)) {
+      console.warn("emelya-breezer: power entity is read-only:", powerEntity);
+      return;
+    }
+
     const service = newPower ? "turn_on" : "turn_off";
-    
-    this.hass.callService(domain, service, { entity_id: entity });
+    this.hass.callService(powerDomain, service, { entity_id: powerEntity });
   }
 
   _handleSelectChange(e){
@@ -722,6 +731,15 @@ class EmelyaBreezerCardEditor extends LitElement {
             } 
           }
         },
+        {
+          name: "power_entity",
+          required: false,
+          selector: {
+            entity: {
+              domain: ["switch", "input_boolean", "binary_sensor"]
+            }
+          }
+        },
         { 
           name: "base_path",
           selector: { text: {} } 
@@ -955,7 +973,7 @@ EmelyaBreezerCard.getConfigElement = function () {
 EmelyaBreezerCard.getStubConfig = function () {
   return {
     title: "Бризер",
-    label_on: "Включено",
+    label_on: "",
     label_off: "Выключено",
     entity: "",
     mode_entity: "",

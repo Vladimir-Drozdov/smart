@@ -13,7 +13,6 @@ class EmelyaCoffeeCard extends LitElement {
     coffeeTypes: { state: true }
   }; 
   DEFAULT_COFFEE_CARD_MOD = {
-    // Стили для корневого элемента (.)
     ".": `
       :host {
         border-radius: 24px !important;
@@ -41,7 +40,6 @@ class EmelyaCoffeeCard extends LitElement {
       }
     `,
 
-    // Стили для ha-select и его внутренних элементов
     "ha-select": {
       "$": `
         .mdc-select {
@@ -118,7 +116,10 @@ class EmelyaCoffeeCard extends LitElement {
     const stateObj = hass?.states?.[entity];
 
     if (stateObj) {
-      const newPower = stateObj.state === "on";
+      // Для climate-чайников "on" — это любое состояние кроме "off"/"unavailable"/"unknown"
+      const offStates = ["off", "unavailable", "unknown"];
+      const newPower = !offStates.includes(stateObj.state);
+
       if (this._expectedPower !== null) {
         if (newPower === this._expectedPower) {
           this._expectedPower = null;
@@ -130,19 +131,29 @@ class EmelyaCoffeeCard extends LitElement {
     }
 
     const coffeeEntity = this.config?.coffee_entity;
-    const coffeeState = hass?.states?.[coffeeEntity];
+    const isSingleEntity = !coffeeEntity || coffeeEntity === entity;
+    const modeStateObj = isSingleEntity
+      ? stateObj
+      : (hass?.states?.[coffeeEntity] ?? null);
 
-    if (coffeeState) {
-      this.coffeeTypes = coffeeState.attributes?.options || [];
-      const newCoffee = coffeeState.state;
+    if (modeStateObj) {
+      this.coffeeTypes = modeStateObj.attributes?.preset_modes
+        || modeStateObj.attributes?.options
+        || [];
+
+      // fan/climate хранят режим в preset_mode, select — в state
+      const rawMode = modeStateObj.attributes?.preset_mode ?? "";
+      const currentCoffee = (rawMode && this.coffeeTypes.includes(rawMode))
+        ? rawMode
+        : (this.coffeeTypes.includes(modeStateObj.state) ? modeStateObj.state : "");
 
       if (this._expectedCoffee !== null) {
-        if (newCoffee === this._expectedCoffee) {
+        if (currentCoffee === this._expectedCoffee) {
           this._expectedCoffee = null;
-          this.selectedCoffee = newCoffee;
+          this.selectedCoffee = currentCoffee;
         }
       } else {
-        this.selectedCoffee = newCoffee || "";
+        this.selectedCoffee = currentCoffee || this.selectedCoffee || (this.coffeeTypes[0] ?? "");
       }
     }
   }
@@ -157,7 +168,9 @@ class EmelyaCoffeeCard extends LitElement {
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
       title: "Кофеварка",
-      label_on: "Включено",
+      // ИЗМЕНЕНИЕ: label_on по умолчанию пустой — тогда трюк показывает текущий режим.
+      // Если задать явно ("Включено") — перекрывает режим, как в оригинале.
+      label_on: "",
       label_off: "Выключено",
       entity: "",
       coffee_entity: "",
@@ -169,12 +182,9 @@ class EmelyaCoffeeCard extends LitElement {
     };
 
     this.base = this.config.base_path || "/local";
-
-    // Предзагружаем фоновое изображение сразу при установке конфига
     this._preloadBackground();
   }
 
-  // Предзагрузка фона — браузер начинает качать картинку до рендера
   _preloadBackground() {
     const bg = this.config?.background_image
       ? this.config.background_image
@@ -186,7 +196,6 @@ class EmelyaCoffeeCard extends LitElement {
       const img = new Image();
       img.onload = () => {
         this._bgPreloaded = true;
-        // Добавляем класс bg-loaded на карточку для плавного появления
         const card = this.renderRoot?.querySelector(".card");
         if (card) card.classList.add("bg-loaded");
       };
@@ -194,7 +203,6 @@ class EmelyaCoffeeCard extends LitElement {
     }
   }
 
-  // После рендера проверяем — если картинка уже в кэше, сразу показываем
   updated(changedProps) {
     if (changedProps.has("config")) {
       this._preloadBackground();
@@ -240,7 +248,6 @@ class EmelyaCoffeeCard extends LitElement {
       user-select: none;
       position: relative;
       overflow: visible !important;
-      /* Базовый фон пока картинка не загружена */
       background: #1C1B1F;
     }
     :host(:has([aria-expanded="true"])) ha-card {
@@ -248,12 +255,6 @@ class EmelyaCoffeeCard extends LitElement {
       position: relative !important;
     }
 
-    /*
-      Фон вынесен в ::before — убирает background-blend-mode с самого .card.
-      background-blend-mode на элементе создаёт stacking context,
-      из-за которого position:fixed у дочерних элементов ломается.
-      Плавное появление через opacity: 0 → 1 после загрузки.
-    */
     .card::before {
       content: "";
       position: absolute;
@@ -267,7 +268,6 @@ class EmelyaCoffeeCard extends LitElement {
       background-position: center, 88px 53.12px, center;
       background-repeat: no-repeat, no-repeat, no-repeat;
       background-blend-mode: normal, luminosity, normal;
-      /* Плавное появление — воспринимается быстрее чем резкий pop-in */
       opacity: 0;
       transition: opacity 0.35s ease;
       pointer-events: none;
@@ -405,7 +405,6 @@ class EmelyaCoffeeCard extends LitElement {
     card.addEventListener("pointerup", this._onPointerUp.bind(this));
     card.addEventListener("click", this._onClick.bind(this));
 
-    // Если картинка уже в кэше — сразу показываем без мигания
     if (this._bgPreloaded) card.classList.add("bg-loaded");
   }
 
@@ -473,6 +472,7 @@ class EmelyaCoffeeCard extends LitElement {
 
     const domain = entity.split(".")[0];
 
+    // switch — прямой toggle; climate/fan — turn_on/turn_off; остальные — homeassistant
     if (domain === "switch") {
       this.hass.callService("switch", "toggle", { entity_id: entity });
     } else {
@@ -486,22 +486,28 @@ class EmelyaCoffeeCard extends LitElement {
     e.stopPropagation();
 
     const value = e.target.value;
+    if (!value) return;
+
     this.selectedCoffee = value;
     this._expectedCoffee = value;
 
     const coffeeEntity = this.config?.coffee_entity;
-    if (!coffeeEntity || !this.hass?.states?.[coffeeEntity]) return;
+    const isSingleEntity = !coffeeEntity || coffeeEntity === entity;
+    const targetEntity = isSingleEntity ? entity : coffeeEntity;
 
-    const domain = coffeeEntity.split(".")[0];
+    if (!this.hass?.states?.[targetEntity]) return;
 
-    if (domain === "input_select") {
-      this.hass.callService("input_select", "select_option", {
-        entity_id: coffeeEntity,
-        option: value
+    const domain = targetEntity.split(".")[0];
+
+    if (domain === "fan") {
+      this.hass.callService("fan", "set_preset_mode", {
+        entity_id: targetEntity,
+        preset_mode: value
       });
     } else {
-      this.hass.callService("select", "select_option", {
-        entity_id: coffeeEntity,
+      // select, input_select — одинаковый сервис через домен
+      this.hass.callService(domain, "select_option", {
+        entity_id: targetEntity,
         option: value
       });
     }
@@ -520,9 +526,26 @@ class EmelyaCoffeeCard extends LitElement {
   }
 
   render() {
+    const entity = this.config?.entity;
+    const coffeeEntity = this.config?.coffee_entity;
+    const isSingleEntity = !coffeeEntity || coffeeEntity === entity;
+    const modeStateObj = isSingleEntity
+      ? this.hass?.states?.[entity]
+      : (this.hass?.states?.[coffeeEntity] ?? null);
+    const modeOptions = modeStateObj?.attributes?.preset_modes
+      || modeStateObj?.attributes?.options
+      || [];
+
     const bg = this.config.background_image
       ? this.config.background_image
       : `${this.base}/images/container-images/coffee_machine.png`;
+
+    // ИЗМЕНЕНИЕ: тот же трюк что в dishwasher-карточке.
+    // Приоритет: label_on (статичный) → mode_labels[режим] (переименованный) → сырой режим → "Включено"
+    // Если label_on пустой (дефолт) — в правом углу виден текущий режим.
+    const stateLabel = this.power
+      ? (this.config?.label_on || this.config?.mode_labels?.[this.selectedCoffee] || this.selectedCoffee || "Включено")
+      : (this.config?.label_off || "Выключено");
 
     return html`
       <ha-card>
@@ -532,7 +555,7 @@ class EmelyaCoffeeCard extends LitElement {
         >
           <div class="header">
             <div class="title">${this.config?.title || ""}</div>
-            <div class="state">${this.power ? (this.config?.label_on || "") : (this.config?.label_off || "")}</div>
+            <div class="state">${stateLabel}</div>
           </div>
 
           <div class="controls">
@@ -544,15 +567,15 @@ class EmelyaCoffeeCard extends LitElement {
               <img src="${this.base}/images/container-images/power_button.png" alt="power">
             </div>
 
-            ${this.hass?.states?.[this.config?.coffee_entity] ? html`
+            ${modeOptions.length ? html`
               <ha-select
-                .label=${this.hass.states[this.config.coffee_entity].attributes?.friendly_name || ""}
+                .label=${coffeeState?.attributes?.friendly_name || ""}
                 .value=${this.selectedCoffee}
                 @pointerdown=${this._stopPropagation}
                 @change=${this._handleSelectChange}
                 @dblclick=${this._handleSelectDblClick}
               >
-                ${(this.hass.states[this.config.coffee_entity].attributes?.options || []).map(opt => html`
+                ${modeOptions.map(opt => html`
                   <mwc-list-item .value=${opt}>${this.config?.mode_labels?.[opt] || opt}</mwc-list-item>
                 `)}
               </ha-select>
@@ -570,7 +593,7 @@ class EmelyaCoffeeCard extends LitElement {
   static getStubConfig() {
     return {
       title: "Кофеварка",
-      label_on: "Включено",
+      label_on: "",
       label_off: "Выключено",
       entity: "",
       coffee_entity: "",
@@ -692,7 +715,7 @@ class EmelyaCoffeeCardEditor extends LitElement {
   constructor() {
     super();
     this._tab = 0;
-    this._uploadState = "idle"; // idle | loading | success | error
+    this._uploadState = "idle";
     this._uploadError = "";
     this._dragOver = false;
   }
@@ -729,17 +752,26 @@ class EmelyaCoffeeCardEditor extends LitElement {
     return html`
       ${this._form([
         { name: "title",         label: "Название",      selector: { text: {} } },
-        { name: "label_on",      label: "Статус: вкл",   selector: { text: {} } },
+        { name: "label_on",      label: "Статус: вкл (пусто — показывает режим)",   selector: { text: {} } },
         { name: "label_off",     label: "Статус: выкл",  selector: { text: {} } },
-        { name: "entity",        required: true, selector: { entity: { domain: ["switch", "input_boolean"] } } },
-        { name: "coffee_entity", required: true, selector: { entity: { domain: ["input_select", "select"] } } },
+        {
+          name: "entity",
+          required: true,
+          selector: { entity: { domain: ["switch", "input_boolean", "select", "input_select", "fan"] } }
+        },
+        {
+          name: "coffee_entity",
+          // ИЗМЕНЕНИЕ: необязательный — у некоторых кофеварок нет режимов
+          required: false,
+          selector: { entity: { domain: ["input_select", "select"] } }
+        },
         { name: "base_path",     selector: { text: {} } }
       ])}
 
       ${options.length ? html`
         <div class="mode-labels">
           <div class="img-label" style="margin-top:16px;margin-bottom:8px;">
-            Названия типов кофе <span style="font-weight:400;opacity:.6">(оставьте пустым — будет оригинал)</span>
+            Названия режимов
           </div>
           ${options.map(opt => html`
             <div class="mode-label-row">
@@ -756,6 +788,7 @@ class EmelyaCoffeeCardEditor extends LitElement {
       ` : ""}
     `;
   }
+
   _updateModeLabel(key, value) {
     const labels = { ...(this._config?.mode_labels || {}) };
     if (value.trim()) {
@@ -834,8 +867,6 @@ class EmelyaCoffeeCardEditor extends LitElement {
     `;
   }
 
-  /* ── Drag & Drop ── */
-
   _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
   _onDragLeave()  { this._dragOver = false; }
 
@@ -857,11 +888,6 @@ class EmelyaCoffeeCardEditor extends LitElement {
     e.target.value = "";
   }
 
-  /* ── Нормализация MIME-типа ──
-     HA API отклоняет image/avif (и некоторые другие форматы) с HTTP 400.
-     Подменяем MIME-тип на image/png перед отправкой — байты файла не трогаем.
-     Браузер читает файл по magic bytes, игнорируя Content-Type, поэтому
-     avif корректно отобразится после загрузки. */
   _normalizeFileForUpload(file) {
     const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
     if (unsupportedByHA.includes(file.type)) {
@@ -869,8 +895,6 @@ class EmelyaCoffeeCardEditor extends LitElement {
     }
     return file;
   }
-
-  /* ── Загрузка файла ── */
 
   async _uploadFile(file) {
     if (!file.type.startsWith("image/")) {
@@ -884,7 +908,6 @@ class EmelyaCoffeeCardEditor extends LitElement {
 
     const uploadFile = this._normalizeFileForUpload(file);
 
-    // Attempt 1 — HA store_image
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -902,7 +925,6 @@ class EmelyaCoffeeCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Attempt 2 — /api/image/upload fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();

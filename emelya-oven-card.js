@@ -73,8 +73,13 @@ class EmelyaOvenCard extends LitElement {
         newPower = powerStateObj.state !== "off";
       }
       if (this._expectedPower !== null) {
-        if (newPower !== this._expectedPower) return;
-        this._expectedPower = null;
+        if (newPower === this._expectedPower) {
+          this._expectedPower = null;
+          this.power = newPower;
+        }
+        // не return — даём temp и timer обновиться
+      } else {
+        this.power = newPower;
       }
       this.power = newPower;
     }
@@ -85,7 +90,10 @@ class EmelyaOvenCard extends LitElement {
       let newTemp = 0;
       const domain = tempEntity.split(".")[0];
       if (domain === "climate") {
-        newTemp = tempStateObj.attributes?.temperature ?? 0;
+        const useActual = this.config.temp_actual ?? false;
+        newTemp = useActual
+          ? (tempStateObj.attributes?.current_temperature ?? 0)
+          : (tempStateObj.attributes?.temperature ?? 0);
       } else if (domain === "number" || domain === "input_number" || domain === "sensor") {
         newTemp = Number(tempStateObj.state) || 0;
       }
@@ -99,12 +107,29 @@ class EmelyaOvenCard extends LitElement {
         let newTimer = 0;
         const domain = timerEntity.split(".")[0];
         if (domain === "timer") {
-          newTimer = Math.round((timerStateObj.attributes?.duration || 0) / 60);
+          const remaining = timerStateObj.attributes?.remaining;
+          const duration  = timerStateObj.attributes?.duration;
+          const raw = timerStateObj.state === "active" ? remaining : duration;
+          if (raw && raw.includes(":")) {
+            const parts = raw.split(":").map(Number);
+            newTimer = parts[0] * 60 + parts[1]; // HH:MM:SS → минуты
+          } else {
+            newTimer = Math.round((Number(raw) || 0) / 60);
+          }
         } else if (domain === "number" || domain === "input_number") {
           newTimer = Number(timerStateObj.state) || 0;
         } else if (domain === "sensor") {
-          const value = Number(timerStateObj.state) || 0;
-          newTimer = value > 1000 ? Math.round(value / 60) : value;
+          const raw = timerStateObj.state;
+          if (typeof raw === "string" && raw.includes(":")) {
+            // формат "HH:MM:SS" или "MM:SS"
+            const parts = raw.split(":").map(Number);
+            newTimer = parts.length === 3
+              ? parts[0] * 60 + parts[1]   // часы→минуты + минуты
+              : parts[0];                   // просто минуты
+          } else {
+            const value = Number(raw) || 0;
+            newTimer = value > 1000 ? Math.round(value / 60) : value;
+          }
         }
         this.timer = newTimer;
       }
@@ -275,10 +300,13 @@ class EmelyaOvenCard extends LitElement {
         entity_id: entity,
         hvac_mode: newPower ? "heat" : "off"
       });
-    } else if (domain === "switch" || domain === "input_boolean" || domain === "fan") {
-      this.hass.callService("homeassistant", newPower ? "turn_on" : "turn_off", {
+    } else if (["switch", "input_boolean", "fan"].includes(domain)) {
+      this.hass.callService(domain, newPower ? "turn_on" : "turn_off", {
         entity_id: entity
       });
+    } else if (["sensor", "binary_sensor"].includes(domain)) {
+      console.warn("emelya-oven: power entity is read-only:", entity);
+      return;
     } else {
       console.warn("Неизвестный домен для power:", domain);
     }
@@ -369,8 +397,10 @@ class EmelyaOvenCard extends LitElement {
     return html`
       <div class="card" data-bg="${bg}">
         <div class="header">
-          <div class="title">Духовой шкаф</div>
-          <div class="state">${this.power ? "Включено" : "Выключено"}</div>
+          <div class="title">${this.config?.title || "Духовой шкаф"}</div>
+          <div class="state">${this.power 
+            ? (this.config?.label_on || "Включено") 
+            : (this.config?.label_off || "Выключено")}</div>
         </div>
         <div class="controls">
           <div class="box" @click=${this._handleTempClick}>
@@ -531,26 +561,13 @@ class EmelyaOvenCardEditor extends LitElement {
 
   _entitiesTab() {
     return this._form([
-      {
-        name: "entity",
-        label: "Основная сущность духовки",
-        selector: { entity: { domain: ["climate"] } }
-      },
-      {
-        name: "power_entity",
-        label: "Сущность питания",
-        selector: { entity: { domain: ["switch", "input_boolean", "fan", "climate"] } }
-      },
-      {
-        name: "temp_entity",
-        label: "Сущность температуры",
-        selector: { entity: { domain: ["climate", "number", "input_number", "sensor"] } }
-      },
-      {
-        name: "timer_entity",
-        label: "Сущность таймера",
-        selector: { entity: { domain: ["timer", "number", "input_number", "sensor"] } }
-      },
+      { name: "title",     label: "Название",     selector: { text: {} } },
+      { name: "label_on",  label: "Статус: вкл",  selector: { text: {} } },
+      { name: "label_off", label: "Статус: выкл", selector: { text: {} } },
+      { name: "entity",       required: true,  label: "Основная сущность", selector: { entity: { domain: ["climate", "switch", "sensor", "binary_sensor", "input_boolean"] } } },
+      { name: "power_entity", required: false, label: "Сущность питания",   selector: { entity: { domain: ["switch", "input_boolean", "fan", "climate"] } } },
+      { name: "temp_entity",  required: false, label: "Сущность температуры", selector: { entity: { domain: ["climate", "number", "input_number", "sensor"] } } },
+      { name: "timer_entity", required: false, label: "Сущность таймера",   selector: { entity: { domain: ["timer", "number", "input_number", "sensor"] } } },,
       {
         name: "base_path",
         label: "Базовый путь к ресурсам",

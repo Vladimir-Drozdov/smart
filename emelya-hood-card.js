@@ -27,6 +27,8 @@ class EmelyaHoodCard extends LitElement {
     this._holdTimer = null;
     this._lastTap = 0;
     this._preloadedBg = null;
+    this._expectedLevelTimer = null;
+    this._expectedPowerTimer = null;
   }
 
   set hass(hass){
@@ -35,7 +37,10 @@ class EmelyaHoodCard extends LitElement {
     const stateObj = hass.states?.[entity];
     if(!stateObj) return;
 
-    const newPower = stateObj.state === "on";
+    const powerEntity = this.config?.power_entity || entity;
+    const powerStateObj = hass.states?.[powerEntity] || stateObj;
+    const offStates = ["off", "unavailable", "unknown"];
+    const newPower = !offStates.includes(powerStateObj.state);
 
     if(this._expectedPower !== null){
       if(newPower === this._expectedPower){
@@ -48,19 +53,40 @@ class EmelyaHoodCard extends LitElement {
 
     const percentage = stateObj.attributes?.percentage ?? 0;
 
+    const speedEntity = this.config?.speed_entity || entity;
+    const speedStateObj = hass.states?.[speedEntity] || stateObj;
+    const speedDomain = speedEntity.split(".")[0];
+
     let newLevel = 0;
-    if(percentage === 0) newLevel = 0;
-    else if(percentage <= 33) newLevel = 1;
-    else if(percentage <= 67) newLevel = 2;
-    else newLevel = 3;
+
+    if (speedDomain === "select" || speedDomain === "input_select") {
+      // select: low/medium/high → 1/2/3
+      const speedMap = this.config?.speed_map || { low: 1, medium: 2, high: 3 };
+      newLevel = speedMap[speedStateObj.state] ?? 0;
+    } else {
+      // fan: пробуем preset_mode сначала, потом percentage
+      const preset = speedStateObj.attributes?.preset_mode;
+      if (preset) {
+        const speedMap = this.config?.speed_map || { low: 1, medium: 2, high: 3 };
+        newLevel = speedMap[preset] ?? 0;
+      } else {
+        const percentage = speedStateObj.attributes?.percentage ?? 0;
+        if (percentage === 0) newLevel = 0;
+        else if (percentage <= 33) newLevel = 1;
+        else if (percentage <= 67) newLevel = 2;
+        else newLevel = 3;
+      }
+    }
 
     if(this._expectedLevel !== null){
       if(newLevel === this._expectedLevel){
         this._expectedLevel = null;
         this.level = newLevel;
+        this._selectedSlot = newLevel;  // синхронизируем индикатор, теперь изменения в модальном окне будут отображаться в ui
       }
     } else {
       this.level = newLevel;
+      this._selectedSlot = newLevel;  // синхронизируем индикатор
     }
   }
 
@@ -286,10 +312,9 @@ class EmelyaHoodCard extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._holdTimer) {
-      clearTimeout(this._holdTimer);
-      this._holdTimer = null;
-    }
+    if (this._holdTimer) { clearTimeout(this._holdTimer); this._holdTimer = null; }
+    if (this._expectedLevelTimer) { clearTimeout(this._expectedLevelTimer); this._expectedLevelTimer = null; }
+    if (this._expectedPowerTimer) { clearTimeout(this._expectedPowerTimer); this._expectedPowerTimer = null; }
   }
 
   _onPointerDown(e) {
@@ -340,6 +365,10 @@ class EmelyaHoodCard extends LitElement {
 
     this.power = newPower;
     this._expectedPower = newPower;
+    if (this._expectedPowerTimer) clearTimeout(this._expectedPowerTimer);
+    this._expectedPowerTimer = setTimeout(() => {
+      this._expectedPower = null;
+    }, 3000);
 
     if(!newPower){
       this.level = 0;
@@ -347,7 +376,11 @@ class EmelyaHoodCard extends LitElement {
     }
 
     if(!this.hass || !entity) return;
-    this.hass.callService("fan", newPower ? "turn_on" : "turn_off", { entity_id: entity });
+    const powerEntity = this.config?.power_entity || entity;
+    const powerDomain = powerEntity.split(".")[0];
+    const readOnly = ["sensor", "binary_sensor"];
+    if (readOnly.includes(powerDomain)) return;
+    this.hass.callService(powerDomain, newPower ? "turn_on" : "turn_off", { entity_id: powerEntity });
   }
 
   _stopPropagation(e){ e.stopPropagation(); }
@@ -362,14 +395,42 @@ class EmelyaHoodCard extends LitElement {
     }
 
     this._expectedLevel = level;
+    if (this._expectedLevelTimer) clearTimeout(this._expectedLevelTimer);
+    this._expectedLevelTimer = setTimeout(() => {
+      this._expectedLevel = null;
+    }, 3000);
 
     const entity = this.config?.entity;
     if(!this.hass || !entity) return;
 
-    this.hass.callService("fan", "set_percentage", {
-      entity_id: entity,
-      percentage: LEVEL_MAP[level]
-    });
+    const speedEntity = this.config?.speed_entity || entity;
+    const speedDomain = speedEntity.split(".")[0];
+
+    if (speedDomain === "select" || speedDomain === "input_select") {
+      // Ищем ключ по значению в speed_map
+      const speedMap = this.config?.speed_map || { low: 1, medium: 2, high: 3 };
+      const option = Object.keys(speedMap).find(k => speedMap[k] === level);
+      if (option) this.hass.callService(speedDomain, "select_option", {
+        entity_id: speedEntity,
+        option
+      });
+    } else {
+      // fan — пробуем preset_mode, иначе percentage
+      const speedStateObj = this.hass?.states?.[speedEntity];
+      if (speedStateObj?.attributes?.preset_modes?.length) {
+        const speedMap = this.config?.speed_map || { low: 1, medium: 2, high: 3 };
+        const preset = Object.keys(speedMap).find(k => speedMap[k] === level);
+        if (preset) this.hass.callService("fan", "set_preset_mode", {
+          entity_id: speedEntity,
+          preset_mode: preset
+        });
+      } else {
+        this.hass.callService("fan", "set_percentage", {
+          entity_id: speedEntity,
+          percentage: LEVEL_MAP[level]
+        });
+      }
+    }
   }
 
   render(){
@@ -384,7 +445,7 @@ class EmelyaHoodCard extends LitElement {
         data-bg="${bg}"
       >
         <div class="header">
-          <div class="title">Вытяжка</div>
+          <div class="title">${this.config?.title || "Вытяжка"}</div>
           <div class="state">${this.power ? "Включено" : "Выключено"}</div>
         </div>
 
@@ -532,8 +593,11 @@ class EmelyaHoodCardEditor extends LitElement {
 
   _objectTab() {
     return this._form([
-      { name: "entity",    required: true, selector: { entity: { domain: "fan" } } },
-      { name: "base_path",                selector: { text: {} } }
+      { name: "title",        label: "Название",          selector: { text: {} } },
+      { name: "entity",       required: true,  label: "Основная сущность", selector: { entity: { domain: ["fan", "switch", "input_boolean"] } } },
+      { name: "power_entity", required: false, label: "Сущность питания",  selector: { entity: { domain: ["switch", "fan", "input_boolean"] } } },
+      { name: "speed_entity", required: false, label: "Сущность скорости", selector: { entity: { domain: ["select", "input_select", "fan"] } } },
+      { name: "base_path",    selector: { text: {} } }
     ]);
   }
 

@@ -115,35 +115,49 @@ class EmelyaWasherCard extends LitElement {
     const entity = this.config?.entity;
     const stateObj = hass.states?.[entity];
 
-    if(stateObj){
-      const newPower = stateObj.state === "on";
+    if (!stateObj) return;
 
-      if(this._expectedPower !== null){
-        if(newPower === this._expectedPower){
-          this._expectedPower = null;
-          this.power = newPower;
-        }
-      } else {
+    // POWER
+    const powerEntity = this.config?.power_entity || entity;
+    const powerStateObj = hass.states?.[powerEntity] || stateObj;
+    const offStates = ["off", "unavailable", "unknown"];
+    const newPower = !offStates.includes(powerStateObj.state);
+
+    if (this._expectedPower !== null) {
+      if (newPower === this._expectedPower) {
+        this._expectedPower = null;
         this.power = newPower;
       }
+    } else {
+      this.power = newPower;
     }
 
+    // MODE — поддержка как отдельной mode_entity, так и preset_modes на основной
     const modeEntity = this.config?.mode_entity;
-    const modeState = hass.states?.[modeEntity];
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeStateObj = isSingleEntity
+      ? stateObj
+      : (hass.states?.[modeEntity] ?? null);
 
-    if(modeState){
-      const newMode = modeState.state;
-      const options = modeState.attributes?.options || [];
+    if (modeStateObj) {
+      this.modes = modeStateObj.attributes?.preset_modes
+        || modeStateObj.attributes?.options
+        || [];
 
-      this.modes = options;
+      const rawMode = modeStateObj.attributes?.preset_mode ?? "";
+      const currentMode = (rawMode && this.modes.includes(rawMode))
+        ? rawMode
+        : (!isSingleEntity && this.modes.includes(modeStateObj.state)
+            ? modeStateObj.state
+            : "");
 
-      if(this._expectedMode !== null){
-        if(newMode === this._expectedMode){
+      if (this._expectedMode !== null) {
+        if (currentMode === this._expectedMode) {
           this._expectedMode = null;
-          this.selectedMode = newMode;
+          this.selectedMode = currentMode;
         }
       } else {
-        this.selectedMode = newMode;
+        this.selectedMode = currentMode || this.selectedMode || (this.modes[0] ?? "");
       }
     }
   }
@@ -158,7 +172,7 @@ class EmelyaWasherCard extends LitElement {
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
       title: "Стиральная машина",
-      label_on: "Включено",
+      label_on: "",
       label_off: "Выключено",
       card_mod: { style: structuredClone(this.DEFAULT_WASHER_CARD_MOD) },
       ...config,
@@ -412,37 +426,58 @@ class EmelyaWasherCard extends LitElement {
   _togglePower(e){
     e.stopPropagation();
     const entity = this.config?.entity;
-    if(!this.hass || !entity) return;
+    const powerEntity = this.config?.power_entity || entity;
+    if (!powerEntity || !this.hass) return;
 
     const newPower = !this.power;
     this.power = newPower;
     this._expectedPower = newPower;
 
-    const domain = entity.split(".")[0];
-    
-    if(domain === "switch" || domain === "input_boolean") {
-      this.hass.callService(domain, "toggle", { entity_id: entity });
-    } else {
-      this.hass.callService("homeassistant", newPower ? "turn_on" : "turn_off", { entity_id: entity });
+    const powerDomain = powerEntity.split(".")[0];
+    const readOnlyDomains = ["sensor", "binary_sensor"];
+    if (readOnlyDomains.includes(powerDomain)) {
+      console.warn("emelya-washer: power entity is read-only:", powerEntity);
+      return;
     }
+
+    const service = newPower ? "turn_on" : "turn_off";
+    this.hass.callService(powerDomain, service, { entity_id: powerEntity });
   }
 
   _handleSelectChange(e){
     e.stopPropagation();
     const value = e.target.value;
+    if (!value) return;
+
     this.selectedMode = value;
     this._expectedMode = value;
 
+    const entity = this.config?.entity;
     const modeEntity = this.config?.mode_entity;
-    if(!this.hass?.states?.[modeEntity]) return;
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const targetEntity = isSingleEntity ? entity : modeEntity;
+    const stateObj = this.hass?.states?.[entity];
 
-    const domain = modeEntity.split(".")[0];
-    
-    if(domain === "select" || domain === "input_select") {
-      this.hass.callService(domain, "select_option", {
-        entity_id: modeEntity,
-        option: value
+    if (!stateObj) return;
+
+    if (isSingleEntity && stateObj.attributes?.preset_modes) {
+      this.hass.callService("fan", "set_preset_mode", {
+        entity_id: targetEntity,
+        preset_mode: value
       });
+    } else {
+      const domain = targetEntity.split(".")[0];
+      if (domain === "fan") {
+        this.hass.callService("fan", "set_preset_mode", {
+          entity_id: targetEntity,
+          preset_mode: value
+        });
+      } else {
+        this.hass.callService(domain, "select_option", {
+          entity_id: targetEntity,
+          option: value
+        });
+      }
     }
   }
 
@@ -458,22 +493,30 @@ class EmelyaWasherCard extends LitElement {
   }
 
   render(){
+    const entity = this.config?.entity;
+    const modeEntity = this.config?.mode_entity;
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeStateObj = isSingleEntity
+      ? this.hass?.states?.[entity]
+      : (this.hass?.states?.[modeEntity] ?? null);
+
+    const modeOptions = modeStateObj?.attributes?.preset_modes
+      || modeStateObj?.attributes?.options
+      || [];
+
     const bg = this.config.background_image
       ? this.config.background_image
       : `${this.base}/images/container-images/washing_machine.png`;
-    const modeState = this.hass?.states?.[this.config.mode_entity];
 
     return html`
     <ha-card>
-      <div
-        class="card"
-        data-bg="${bg}"
-      >
-
+      <div class="card" data-bg="${bg}">
         <div class="header">
           <div class="title">${this.config?.title || ""}</div>
           <div class="state">
-            ${this.power ? (this.config?.label_on || "") : (this.config?.label_off || "")}
+            ${this.power
+              ? (this.config?.label_on || this.config?.mode_labels?.[this.selectedMode] || this.selectedMode || "Включено")
+              : (this.config?.label_off || "Выключено")}
           </div>
         </div>
 
@@ -485,21 +528,20 @@ class EmelyaWasherCard extends LitElement {
           >
             <img src="${this.base}/images/container-images/power_button.png">
           </div>
-          ${modeState ? html`
+          ${modeOptions.length ? html`
             <ha-select
-              .label=${modeState.attributes?.friendly_name || ""}
+              .label=${"Режим"}
               .value=${this.selectedMode}
               @pointerdown=${this._stopPropagation}
               @change=${this._handleSelectChange}
               @dblclick=${this._handleSelectDblClick}
             >
-              ${(modeState.attributes?.options || []).map(opt => html`
+              ${modeOptions.map(opt => html`
                 <mwc-list-item .value=${opt}>${this.config?.mode_labels?.[opt] || opt}</mwc-list-item>
               `)}
             </ha-select>
           ` : ""}
         </div>
-
       </div>
     </ha-card>
     `;
@@ -666,8 +708,15 @@ class EmelyaWasherCardEditor extends LitElement {
         { name: "title",       label: "Название",     selector: { text: {} } },
         { name: "label_on",    label: "Статус: вкл",  selector: { text: {} } },
         { name: "label_off",   label: "Статус: выкл", selector: { text: {} } },
-        { name: "entity",      required: true, selector: { entity: { domain: ["switch", "input_boolean"] } } },
-        { name: "mode_entity", required: true, selector: { entity: { domain: ["select", "input_select"] } } },
+        { name: "entity", required: true,
+          selector: { entity: { domain: ["switch", "fan", "sensor", "binary_sensor", "input_boolean"] } }
+        },
+        { name: "mode_entity", required: false,
+          selector: { entity: { domain: ["fan", "switch", "select", "input_select"] } }
+        },
+        { name: "power_entity", required: false,
+          selector: { entity: { domain: ["switch", "input_boolean", "binary_sensor"] } }
+        },
         { name: "base_path",   selector: { text: {} } }
       ])}
 
@@ -909,7 +958,7 @@ EmelyaWasherCard.getConfigElement = function () {
 EmelyaWasherCard.getStubConfig = function () {
   return {
     title: "Стиральная машина",
-    label_on: "Включено",
+    label_on: "",
     label_off: "Выключено",
     entity: "",
     mode_entity: "",

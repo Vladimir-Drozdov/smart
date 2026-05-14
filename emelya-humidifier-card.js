@@ -103,7 +103,8 @@ class EmelyaHumidifierCard extends LitElement {
     const stateObj = hass.states?.[entity];
 
     if(stateObj){
-      const newPower = stateObj.state === "on";
+      const offStates = ["off", "unavailable", "unknown"];
+      const newPower = !offStates.includes(stateObj.state);
       if(this._expectedPower !== null){
         if(newPower === this._expectedPower){
           this._expectedPower = null;
@@ -115,11 +116,23 @@ class EmelyaHumidifierCard extends LitElement {
     }
 
     const modeEntity = this.config?.mode_entity;
-    const modeObj = hass.states?.[modeEntity];
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeObj = isSingleEntity ? stateObj : hass.states?.[modeEntity];
 
     if(modeObj){
-      const newMode = modeObj.state;
-      const options = modeObj.attributes?.options || [];
+      const domain = (isSingleEntity ? entity : modeEntity)?.split(".")[0];
+      
+      // humidifier хранит режимы в available_modes, fan — в preset_modes, select — в options
+      const options = modeObj.attributes?.available_modes
+        || modeObj.attributes?.preset_modes
+        || modeObj.attributes?.options
+        || [];
+      
+      // текущий режим: humidifier/fan — в атрибуте, select — в state
+      const newMode = modeObj.attributes?.mode
+        ?? modeObj.attributes?.preset_mode
+        ?? modeObj.state
+        ?? "";
 
       this.modes = options.length ? options : this.modes;
 
@@ -129,7 +142,7 @@ class EmelyaHumidifierCard extends LitElement {
           this.mode = newMode;
         }
       } else {
-        this.mode = newMode;
+        this.mode = newMode || this.mode || (options[0] ?? "");
       }
     }
   }
@@ -477,8 +490,12 @@ class EmelyaHumidifierCard extends LitElement {
     const bg = this.config.background_image 
       ? this.config.background_image 
       : `${this.base}/images/container-images/humidifier.png`;
-
-    const modeState = this.hass?.states?.[this.config.mode_entity];
+    const entity     = this._config?.entity;
+    const modeEntity = this.config?.mode_entity;
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeState = isSingleEntity
+      ? this.hass?.states?.[this.config.entity]
+      : this.hass?.states?.[modeEntity];
 
     return html`
     <ha-card>
@@ -487,9 +504,11 @@ class EmelyaHumidifierCard extends LitElement {
         style="--humidifier-bg: url('${bg}'); border: none; border-radius: 24px !important;"
       >
         <div class="header">
-          <div class="title">Увлажнитель</div>
+          <div class="title">${this.config?.title || "Увлажнитель"}</div>
           <div class="state">
-            ${this.power ? (this.config?.mode_labels?.[this.mode] || this.mode || "Включено") : "Выключено"}
+            ${this.power 
+              ? (this.config?.label_on || this.config?.mode_labels?.[this.mode] || this.mode || "Включено") 
+              : (this.config?.label_off || "Выключено")}
 
           </div>
         </div>
@@ -511,7 +530,10 @@ class EmelyaHumidifierCard extends LitElement {
               @change=${this._handleSelectChange}
               @dblclick=${this._handleSelectDblClick}
             >
-              ${(modeState.attributes?.options || []).map(opt => html`
+              ${(modeState.attributes?.available_modes
+                || modeState.attributes?.preset_modes
+                || modeState.attributes?.options
+                || []).map(opt => html`
                 <mwc-list-item .value=${opt}>${this.config?.mode_labels?.[opt] || opt}</mwc-list-item>
               `)}
             </ha-select>
@@ -660,15 +682,25 @@ class EmelyaHumidifierCardEditor extends LitElement {
 
   _objectTab() {
     const modeEntity = this._config?.mode_entity;
-    const modeState  = this.hass?.states?.[modeEntity];
-    const options    = modeState?.attributes?.options || [];
+    const entity     = this._config?.entity;
+    const isSingleEntity = !modeEntity || modeEntity === entity;
+    const modeState  = isSingleEntity
+      ? this.hass?.states?.[entity]
+      : this.hass?.states?.[modeEntity];
+    const options = modeState?.attributes?.available_modes
+      || modeState?.attributes?.preset_modes
+      || modeState?.attributes?.options
+      || [];
     const labels     = this._config?.mode_labels || {};
 
     return html`
       ${this._form([
-        { name: "entity",      required: true, selector: { entity: { domain: ["switch", "fan", "humidifier"] } } },
-        { name: "mode_entity", required: true, selector: { entity: { domain: ["select", "input_select", "fan", "humidifier"] } } },
-        { name: "base_path",                   selector: { text: {} } }
+        { name: "title",       label: "Название",     selector: { text: {} } },
+        { name: "label_on",    label: "Статус: вкл",  selector: { text: {} } },
+        { name: "label_off",   label: "Статус: выкл", selector: { text: {} } },
+        { name: "entity",      required: true,  label: "Сущность питания",  selector: { entity: { domain: ["switch", "fan", "humidifier", "input_boolean"] } } },
+        { name: "mode_entity", required: false, label: "Сущность режимов",  selector: { entity: { domain: ["select", "input_select", "fan", "humidifier"] } } },
+        { name: "base_path",   selector: { text: {} } }
       ])}
 
       ${options.length ? html`

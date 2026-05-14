@@ -436,12 +436,14 @@ class EmelyaMediaColumns extends LitElement {
     const newState = !this.tvOn;
     this.tvOn = newState;
     this._expectedTv = newState;
-    this.hass.callService("media_player", "toggle", { entity_id: entity });
+    const service = newState ? "turn_on" : "turn_off";
+    this.hass.callService("media_player", service, { entity_id: entity });
   }
 
   toggleTvPlay() {
     const entity = this.config?.tv;
     if (!entity || !this.hass?.states?.[entity]) return;
+    if (!this.tvOn) return;
     if (this.tvPlaying) {
       this.tvPlaying = false;
       this.hass.callService("media_player", "media_pause", { entity_id: entity });
@@ -465,6 +467,7 @@ class EmelyaMediaColumns extends LitElement {
   toggleSpeakerPlay() {
     const entity = this.config?.speaker;
     if (!entity || !this.hass?.states?.[entity]) return;
+    if (!this.speakerOn) return;
     if (this.speakerPlaying) {
       this.speakerPlaying = false;
       this.hass.callService("media_player", "media_pause", { entity_id: entity });
@@ -477,6 +480,7 @@ class EmelyaMediaColumns extends LitElement {
   toggleSpeakerMute() {
     const entity = this.config?.speaker;
     if (!entity || !this.hass?.states?.[entity]) return;
+    if (!this.speakerOn) return;
     const newMuted = !this.speakerMuted;
     this.speakerMuted = newMuted;
     this.hass.callService("media_player", "volume_mute", {
@@ -741,8 +745,8 @@ class EmelyaMediaColumnsEditor extends LitElement {
 
   _objectTab() {
     return this._form([
-      { name: "tv",       required: true, selector: { entity: { domain: "media_player" } } },
-      { name: "speaker",  required: true, selector: { entity: { domain: "media_player" } } },
+      { name: "tv",      required: true, label: "Телевизор",      selector: { entity: { domain: "media_player" } } },
+      { name: "speaker", required: true, label: "Колонка / Алиса", selector: { entity: { domain: "media_player" } } },
       { name: "base_path", selector: { text: {} } }
     ]);
   }
