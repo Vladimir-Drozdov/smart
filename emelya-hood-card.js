@@ -204,30 +204,8 @@ class EmelyaHoodCard extends LitElement {
     }
 
     /* ── заливка-индикатор ── */
-    .indicator {
-      position: absolute;
-      top: 4px;
-      height: calc(100% - 8px);
+    .btn.active {
       background: rgba(255, 255, 255, 0.18);
-      border-radius: 12px;
-      pointer-events: none;
-      z-index: 0;
-      transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                  width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .indicator::before {
-      content: "" !important;
-      position: absolute !important;
-      inset: 0 !important;
-      padding: 1px !important;
-      border-radius: inherit !important;
-      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
-      pointer-events: none !important;
-      -webkit-mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor !important;
-      mask-composite: exclude !important;
     }
 
     .btn {
@@ -262,26 +240,6 @@ class EmelyaHoodCard extends LitElement {
     return this._selectedSlot ?? 0;
   }
 
-  _updateIndicator() {
-    const root = this.shadowRoot;
-    if (!root) return;
-
-    const controls      = root.querySelector(".controls");
-    const indicator     = root.getElementById("indicator");
-    const activeBtn     = root.getElementById(`btn-${this._activeSlot}`);
-
-    if (!controls || !indicator || !activeBtn) return;
-
-    const cRect = controls.getBoundingClientRect();
-    const bRect = activeBtn.getBoundingClientRect();
-
-    const left  = `${bRect.left - cRect.left}px`;
-    const width = `${bRect.width}px`;
-
-    indicator.style.left  = left;
-    indicator.style.width = width;
-  }
-
   firstUpdated() {
     const frame = this.shadowRoot?.querySelector(".frame");
     if (!frame) return;
@@ -290,7 +248,6 @@ class EmelyaHoodCard extends LitElement {
     frame.addEventListener("pointerup",   this._onPointerUp.bind(this));
     frame.addEventListener("click",       this._onClick.bind(this));
 
-    requestAnimationFrame(() => this._updateIndicator());
   }
 
   updated() {
@@ -306,8 +263,6 @@ class EmelyaHoodCard extends LitElement {
         img.src = bgUrl;
       }
     }
-    // Индикатор
-    this._updateIndicator();
   }
 
   disconnectedCallback() {
@@ -450,27 +405,25 @@ class EmelyaHoodCard extends LitElement {
         </div>
 
         <div class="controls">
-          <div class="indicator" id="indicator"></div>
-
-          <div class="btn power" id="btn-0"
+          <div class="btn power ${this._activeSlot === 0 ? 'active' : ''}" id="btn-0"
               @pointerdown=${this._stopPropagation}
               @click=${this._togglePower}>
             <img class="icon" src="${this.base}/images/container-images/power_button.png">
           </div>
 
-          <div class="btn" id="btn-1"
+          <div class="btn ${this._activeSlot === 1 ? 'active' : ''}" id="btn-1"
               @pointerdown=${this._stopPropagation}
               @click=${()=>this._setLevel(1)}>
             <div class="circle small"></div>
           </div>
 
-          <div class="btn" id="btn-2"
+          <div class="btn ${this._activeSlot === 2 ? 'active' : ''}" id="btn-2"
               @pointerdown=${this._stopPropagation}
               @click=${()=>this._setLevel(2)}>
             <div class="circle medium"></div>
           </div>
 
-          <div class="btn" id="btn-3"
+          <div class="btn ${this._activeSlot === 3 ? 'active' : ''}" id="btn-3"
               @pointerdown=${this._stopPropagation}
               @click=${()=>this._setLevel(3)}>
             <div class="circle big"></div>

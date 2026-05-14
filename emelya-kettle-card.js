@@ -1,13 +1,71 @@
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 import { handleAction, hasAction } from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
 
+// Helpers
+
+/** Возвращает домен из entity_id */
+function domain(entityId = "") { return entityId.split(".")[0]; }
+
+/**
+ * Считывает ТЕКУЩУЮ (фактическую) температуру из сущности HA.
+ * Используется только для отображения.
+ * Поддерживает: sensor, water_heater, climate, number, input_number
+ */
+function readCurrentTemp(state) {
+  if (!state) return null;
+  const d = domain(state.entity_id);
+  let val;
+  if (d === "water_heater" || d === "climate") {
+    // current_temperature — фактическая температура (датчик внутри устройства)
+    val = state.attributes?.current_temperature;
+  } else {
+    val = parseFloat(state.state);
+  }
+  const parsed = parseFloat(val);
+  return isNaN(parsed) ? null : parsed;
+}
+
+/**
+ * Считывает ЦЕЛЕВУЮ (установленную) температуру из сущности HA.
+ * Используется для определения активного режима (подогрев / кипяток).
+ *
+ * Для climate и water_heater — это attributes.temperature (то, что пользователь
+ * установил), а не current_temperature (то, что сейчас внутри).
+ * Для number / input_number / sensor — state (они и есть целевое значение).
+ */
+function readTargetTemp(state) {
+  if (!state) return null;
+  const d = domain(state.entity_id);
+  let val;
+  if (d === "climate" || d === "water_heater") {
+    val = state.attributes?.temperature;
+  } else {
+    val = parseFloat(state.state);
+  }
+  const parsed = parseFloat(val);
+  return isNaN(parsed) ? null : parsed;
+}
+
+/**
+ * Определяет включён ли чайник.
+ */
+function readPowerState(state) {
+  if (!state) return false;
+  const d = domain(state.entity_id);
+  if (d === "water_heater") return state.state !== "off";
+  return state.state === "on" || state.state === "heat";
+}
+
+// Card
+
 class EmelyaKettleCard extends LitElement {
 
   static properties = {
     hass: { attribute: false },
     config: { attribute: false },
     power: { type: Boolean, state: true },
-    _currentTemp: { state: true },
+    _currentTemp: { state: true },   // фактическая температура (для отображения)
+    _targetTemp:  { state: true },   // целевая температура (для определения режима)
     _selectedSlot: { state: true }
   };
 
@@ -15,6 +73,7 @@ class EmelyaKettleCard extends LitElement {
     super();
     this.power = false;
     this._currentTemp = null;
+    this._targetTemp  = null;
     this._selectedSlot = 1;
     this._holdTimer = null;
     this._lastTap = 0;
@@ -29,11 +88,15 @@ class EmelyaKettleCard extends LitElement {
       title: "Чайник",
       preheat_temp: 80,
       boil_temp: 100,
+      // preheat_mode / boil_mode  — для water_heater (operation_mode)
+      // preheat_option / boil_option — для select / input_select
+      // mode_entity — select/input_select entity для переключения режимов
       ...config,
     };
     this.base = this.config.base_path || "/local";
     this._preloadBackground();
   }
+
   _preloadBackground() {
     const bg = this.config.background_image
       ? this.config.background_image
@@ -47,99 +110,190 @@ class EmelyaKettleCard extends LitElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (!hass) return;
 
-    if (hass) {
-      const powerEntity = this.config.power_entity || this.config.entity;
-      const powerState = hass.states?.[powerEntity];
-      this.power = powerState
-        ? (powerState.state === "on" || powerState.state === "heat" || powerState.state !== "off")
-        : false;
+    // Power state
+    const powerEntityId = this.config.power_entity || this.config.entity;
+    const powerState = hass.states?.[powerEntityId];
+    this.power = readPowerState(powerState);
 
-      const tempEntity = this.config.temp_entity;
-      if (tempEntity && hass.states?.[tempEntity]) {
-        const parsed = parseFloat(hass.states[tempEntity].state);
-        this._currentTemp = isNaN(parsed) ? null : parsed;
-      } else {
-        this._currentTemp = null;
-      }
+    // ── Температуры ──
+    const tempEntityId = this.config.temp_entity;
+    if (tempEntityId && hass.states?.[tempEntityId]) {
+      const tempState = hass.states[tempEntityId];
+      this._currentTemp = readCurrentTemp(tempState);
+      this._targetTemp  = readTargetTemp(tempState);
+    } else {
+      this._currentTemp = null;
+      this._targetTemp  = null;
     }
   }
 
   get hass() { return this._hass; }
 
+  /**
+   * Активен ли режим «Подогрев».
+   * Сравниваем ЦЕЛЕВУЮ температуру, а не фактическую:
+   * пользователь выставил 80 °C → режим считается активным сразу,
+   * независимо от того, нагрелся ли чайник до 80 °C.
+   */
   get _isPreheatActive() {
-    if (this._currentTemp === null) return false;
-    return Math.abs(this._currentTemp - (this.config.preheat_temp || 80)) < 0.5;
+    const temp = this._targetTemp ?? this._currentTemp;
+    if (temp === null) return false;
+    return Math.abs(temp - (this.config.preheat_temp || 80)) < 0.5;
   }
 
+  /**
+   * Активен ли режим «Кипяток».
+   */
   get _isBoilActive() {
-    if (this._currentTemp === null) return false;
-    return Math.abs(this._currentTemp - (this.config.boil_temp || 100)) < 0.5;
+    const temp = this._targetTemp ?? this._currentTemp;
+    if (temp === null) return false;
+    return Math.abs(temp - (this.config.boil_temp || 100)) < 0.5;
   }
 
   _stopPropagation(e) { e.stopPropagation(); }
 
+  // Управление питанием
+
   _togglePower(e) {
     e.stopPropagation();
     this._selectedSlot = 1;
-    const entity = this.config.power_entity || this.config.entity;
-    if (!entity || !this.hass) return;
+    const entityId = this.config.power_entity || this.config.entity;
+    if (!entityId || !this.hass) return;
 
     const newPower = !this.power;
-    const domain = entity.split(".")[0];
+    const d = domain(entityId);
 
-    if (domain === "climate") {
+    if (d === "water_heater") {
+      this.hass.callService("water_heater", newPower ? "turn_on" : "turn_off", { entity_id: entityId });
+    } else if (d === "climate") {
       this.hass.callService("climate", "set_hvac_mode", {
-        entity_id: entity,
+        entity_id: entityId,
         hvac_mode: newPower ? "heat" : "off"
       });
-    } else if (domain === "switch" || domain === "input_boolean") {
-      this.hass.callService(domain, newPower ? "turn_on" : "turn_off", { entity_id: entity });
+    } else if (d === "switch" || d === "input_boolean") {
+      this.hass.callService(d, newPower ? "turn_on" : "turn_off", { entity_id: entityId });
     } else {
-      this.hass.callService("homeassistant", newPower ? "turn_on" : "turn_off", { entity_id: entity });
+      this.hass.callService("homeassistant", newPower ? "turn_on" : "turn_off", { entity_id: entityId });
     }
   }
 
+  // Управление температурой
+
   _setTemperature(temp) {
-    const entity = this.config.temp_entity;
-    if (!entity || !this.hass) return;
+    const entityId = this.config.temp_entity;
+    if (!entityId || !this.hass) return;
 
-    const domain = entity.split(".")[0];
+    const d = domain(entityId);
 
-    if (domain === "climate") {
-      this.hass.callService("climate", "set_temperature", {
-        entity_id: entity,
+    if (d === "water_heater") {
+      this.hass.callService("water_heater", "set_temperature", {
+        entity_id: entityId,
         temperature: temp
       });
-    } else if (domain === "number" || domain === "input_number") {
-      this.hass.callService(domain, "set_value", {
-        entity_id: entity,
+    } else if (d === "climate") {
+      this.hass.callService("climate", "set_temperature", {
+        entity_id: entityId,
+        temperature: temp
+      });
+    } else if (d === "number" || d === "input_number") {
+      this.hass.callService(d, "set_value", {
+        entity_id: entityId,
         value: temp
       });
     }
+    // sensor — read-only, ничего не делаем
   }
+
+  /**
+   * Устанавливает режим water_heater.
+   */
+  _setWaterHeaterMode(mode) {
+    const entityId = this.config.power_entity || this.config.entity;
+    if (!entityId || !this.hass) return;
+    if (domain(entityId) !== "water_heater") return;
+    this.hass.callService("water_heater", "set_operation_mode", {
+      entity_id: entityId,
+      operation_mode: mode
+    });
+  }
+
+  /**
+   * Устанавливает опцию select / input_select для режима.
+   * Используется когда задан config.mode_entity домена select или input_select.
+   */
+  _setSelectMode(option) {
+    const entityId = this.config.mode_entity;
+    if (!entityId || !this.hass || !option) return;
+    const d = domain(entityId);
+    if (d !== "select" && d !== "input_select") return;
+
+    const service = d === "input_select" ? "select_option" : "select_option";
+    this.hass.callService(d, service, {
+      entity_id: entityId,
+      option
+    });
+  }
+
+  // Кнопки режимов
 
   _handlePreheat(e) {
     e.stopPropagation();
     this._selectedSlot = 0;
-    this._setTemperature(this.config.preheat_temp || 80);
-    this._currentTemp = this.config.preheat_temp || 80;
+
+    const powerEntityId = this.config.power_entity || this.config.entity;
+
+    // water_heater: переключаем operation_mode
+    if (domain(powerEntityId) === "water_heater" && this.config.preheat_mode) {
+      this._setWaterHeaterMode(this.config.preheat_mode);
+    }
+
+    // select / input_select: выбираем опцию из mode_entity
+    if (this.config.mode_entity && this.config.preheat_option) {
+      this._setSelectMode(this.config.preheat_option);
+    }
+
+    // Устанавливаем целевую температуру
+    const preheatTemp = this.config.preheat_temp || 80;
+    this._setTemperature(preheatTemp);
+
+    // Оптимистично обновляем целевую температуру локально,
+    // чтобы активный слот подсветился сразу, не дожидаясь ответа HA
+    this._targetTemp = preheatTemp;
   }
 
   _handleBoil(e) {
     e.stopPropagation();
     this._selectedSlot = 2;
-    this._setTemperature(this.config.boil_temp || 100);
-    this._currentTemp = this.config.boil_temp || 100;
+
+    const powerEntityId = this.config.power_entity || this.config.entity;
+
+    // water_heater: переключаем operation_mode
+    if (domain(powerEntityId) === "water_heater" && this.config.boil_mode) {
+      this._setWaterHeaterMode(this.config.boil_mode);
+    }
+
+    // select / input_select: выбираем опцию из mode_entity
+    if (this.config.mode_entity && this.config.boil_option) {
+      this._setSelectMode(this.config.boil_option);
+    }
+
+    // Устанавливаем целевую температуру
+    const boilTemp = this.config.boil_temp || 100;
+    this._setTemperature(boilTemp);
+
+    // Оптимистичное обновление
+    this._targetTemp = boilTemp;
   }
 
   _handleControlsClick(e) {
     if (e.target.closest('.power-btn')) return;
 
-    const tempEntity = this.config.temp_entity;
-    if (tempEntity && this.hass) {
+    const tempEntityId = this.config.temp_entity;
+    if (tempEntityId && this.hass) {
       this.dispatchEvent(new CustomEvent("hass-more-info", {
-        detail: { entityId: tempEntity },
+        detail: { entityId: tempEntityId },
         bubbles: true,
         composed: true
       }));
@@ -151,17 +305,12 @@ class EmelyaKettleCard extends LitElement {
     handleAction(this, this.hass, this.config, actionType);
   }
 
-  // Единственный firstUpdated — слушатели + индикатор
   firstUpdated() {
     const card = this.shadowRoot?.querySelector(".card");
     if (!card) return;
-
     card.addEventListener("pointerdown", this._onPointerDown.bind(this));
     card.addEventListener("pointerup", this._onPointerUp.bind(this));
     card.addEventListener("click", this._onClick.bind(this));
-
-    // Позиционируем индикатор после того как браузер посчитал layout
-    requestAnimationFrame(() => this._updateIndicator());
   }
 
   disconnectedCallback() {
@@ -185,7 +334,6 @@ class EmelyaKettleCard extends LitElement {
 
   _onClick(e) {
     if (e.target.closest(".controls")) return;
-
     const now = Date.now();
     if (this._lastTap && now - this._lastTap < 300) {
       if (hasAction(this.config, "double_tap_action")) {
@@ -195,15 +343,20 @@ class EmelyaKettleCard extends LitElement {
       }
     }
     this._lastTap = now;
-
     setTimeout(() => {
       if (this._lastTap === now) this._performAction("tap");
     }, 320);
   }
 
-  get _activeSlot() {
-    return this._selectedSlot ?? 1;
+  get _activeSlot() { return this._selectedSlot ?? 1; }
+
+  // Состояние отображаемое в заголовке
+
+  get _stateLabel() {
+    return this.power ? "Включено" : "Выключено";
   }
+
+  // Styles
 
   static styles = css`
     :host, ha-card {
@@ -246,6 +399,7 @@ class EmelyaKettleCard extends LitElement {
       pointer-events: none;
       z-index: 1;
     }
+
     .card::after {
       content: "";
       position: absolute;
@@ -263,15 +417,14 @@ class EmelyaKettleCard extends LitElement {
       pointer-events: none;
       z-index: 0;
     }
-    .card.bg-loaded::after {
-      opacity: 1;
-    }
+
+    .card.bg-loaded::after { opacity: 1; }
 
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      z-index:1;
+      z-index: 1;
     }
 
     .title { font-size: 16px; font-weight: 600; }
@@ -325,26 +478,15 @@ class EmelyaKettleCard extends LitElement {
       z-index: 1;
     }
 
-    .power-btn img {
-      width: 28px;
-      height: 28px;
-    }
+    .power-btn img { width: 28px; height: 28px; }
 
-    .indicator {
-      position: absolute;
-      top: 4px;
-      height: calc(100% - 8px);
-      background: rgba(255,255,255,0.18);
-      border-radius: 12px;
-      pointer-events: none;
-      z-index: 0;
-      transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                  width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    .mode-btn.active,
+    .power-btn.active {
+      background: rgba(255, 255, 255, 0.18);
     }
   `;
 
   updated() {
-    // Фон
     const card = this.renderRoot?.querySelector(".card[data-bg]");
     if (card) {
       const bgUrl = card.dataset.bg;
@@ -356,25 +498,6 @@ class EmelyaKettleCard extends LitElement {
         img.src = bgUrl;
       }
     }
-    // Индикатор
-    this._updateIndicator();
-  }
-
-  _updateIndicator() {
-    const root = this.shadowRoot;
-    if (!root) return;
-
-    const controls = root.querySelector(".controls");
-    const indicator = root.getElementById("indicator");
-    const activeBtn = root.getElementById(`btn-${this._activeSlot}`);
-
-    if (!controls || !indicator || !activeBtn) return;
-
-    const cRect = controls.getBoundingClientRect();
-    const bRect = activeBtn.getBoundingClientRect();
-
-    indicator.style.left = `${bRect.left - cRect.left}px`;
-    indicator.style.width = `${bRect.width}px`;
   }
 
   render() {
@@ -387,23 +510,29 @@ class EmelyaKettleCard extends LitElement {
         <div class="card" data-bg="${bg}">
           <div class="header">
             <div class="title">${this.config?.title || "Чайник"}</div>
-            <div class="state">${this.power ? "Включено" : "Выключено"}</div>
+            <div class="state">${this._stateLabel}</div>
           </div>
 
           <div class="controls" @click=${this._handleControlsClick}>
-            <div class="indicator" id="indicator"></div>
+            <button
+              class="mode-btn ${this._activeSlot === 0 ? 'active' : ''}"
+              @pointerdown=${this._stopPropagation}
+              @click=${this._handlePreheat}
+            >Подогрев</button>
 
-            <button class="mode-btn" id="btn-0" @pointerdown=${this._stopPropagation} @click=${this._handlePreheat}>
-              Подогрев
-            </button>
-
-            <button class="power-btn" id="btn-1" @pointerdown=${this._stopPropagation} @click=${this._togglePower}>
+            <button
+              class="power-btn ${this._activeSlot === 1 ? 'active' : ''}"
+              @pointerdown=${this._stopPropagation}
+              @click=${this._togglePower}
+            >
               <img src="${this.base}/images/container-images/power_button.png" alt="power">
             </button>
 
-            <button class="mode-btn" id="btn-2" @pointerdown=${this._stopPropagation} @click=${this._handleBoil}>
-              Кипяток
-            </button>
+            <button
+              class="mode-btn ${this._activeSlot === 2 ? 'active' : ''}"
+              @pointerdown=${this._stopPropagation}
+              @click=${this._handleBoil}
+            >Кипяток</button>
           </div>
         </div>
       </ha-card>
@@ -411,7 +540,7 @@ class EmelyaKettleCard extends LitElement {
   }
 }
 
-/* EDITOR */
+// Editor
 
 class EmelyaKettleCardEditor extends LitElement {
   static properties = {
@@ -495,7 +624,6 @@ class EmelyaKettleCardEditor extends LitElement {
       cursor: pointer; font-size: 14px;
     }
     .path-clear:hover { color: var(--error-color, #db4437); }
-
     input[type="file"] { display: none; }
   `;
 
@@ -507,23 +635,22 @@ class EmelyaKettleCardEditor extends LitElement {
     this._dragOver = false;
   }
 
-  setConfig(config) {
-    this._config = { ...config };
-  }
+  setConfig(config) { this._config = { ...config }; }
 
   render() {
     if (!this._config) return html``;
 
     return html`
       <div class="tabs">
-        ${["Основное", "Внешний вид", "Действия"].map((t, i) => html`
+        ${["Основное", "Режимы", "Внешний вид", "Действия"].map((t, i) => html`
           <div class="tab ${this._tab === i ? "active" : ""}" @click=${() => this._tab = i}>${t}</div>
         `)}
       </div>
 
       ${this._tab === 0 ? this._mainTab() : ""}
-      ${this._tab === 1 ? this._appearanceTab() : ""}
-      ${this._tab === 2 ? this._actionsTab() : ""}
+      ${this._tab === 1 ? this._modesTab() : ""}
+      ${this._tab === 2 ? this._appearanceTab() : ""}
+      ${this._tab === 3 ? this._actionsTab() : ""}
     `;
   }
 
@@ -533,13 +660,43 @@ class EmelyaKettleCardEditor extends LitElement {
         .hass=${this.hass}
         .data=${this._config}
         .schema=${[
-          { name: "title",        label: "Заголовок",                  selector: { text: {} } },
+          { name: "title",        label: "Заголовок",    selector: { text: {} } },
           { name: "entity",       label: "Основная entity (опционально)", selector: { entity: {} } },
-          { name: "power_entity", label: "Power Entity",  required: true, selector: { entity: { domain: ["switch", "climate", "input_boolean"] } } },
-          { name: "temp_entity",  label: "Temperature Entity", required: true, selector: { entity: { domain: ["climate", "number", "input_number"] } } },
-          { name: "base_path",    label: "Base Path",          selector: { text: {} } },
-          { name: "preheat_temp", label: "Температура Подогрева (°C)", selector: { number: { min: 30, max: 100, step: 1 } } },
-          { name: "boil_temp",    label: "Температура Кипятка (°C)",  selector: { number: { min: 90, max: 100, step: 1 } } }
+          {
+            name: "power_entity",
+            label: "Power Entity (включение/выключение)",
+            required: true,
+            selector: { entity: { domain: ["switch", "climate", "input_boolean", "water_heater"] } }
+          },
+          {
+            name: "temp_entity",
+            label: "Temperature Entity (температура)",
+            required: true,
+            selector: { entity: { domain: ["climate", "number", "input_number", "sensor", "water_heater"] } }
+          },
+          {
+            name: "mode_entity",
+            label: "Mode Entity — select/input_select (опционально)",
+            selector: { entity: { domain: ["select", "input_select"] } }
+          },
+          { name: "base_path", label: "Base Path", selector: { text: {} } },
+        ]}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
+    `;
+  }
+
+  _modesTab() {
+    const hasModeEntity = !!(this._config?.mode_entity);
+    const isPowerWaterHeater = domain(this._config?.power_entity || this._config?.entity || "") === "water_heater";
+
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${this._config}
+        .schema=${[
+          { name: "preheat_temp", label: "Температура подогрева (°C)", selector: { number: { min: 30, max: 99,  step: 1 } } },
+          { name: "boil_temp",    label: "Температура кипятка (°C)",   selector: { number: { min: 90, max: 100, step: 1 } } },
         ]}
         @value-changed=${this._valueChanged}
       ></ha-form>
@@ -628,9 +785,10 @@ class EmelyaKettleCardEditor extends LitElement {
     if (file) this._uploadFile(file);
     e.target.value = "";
   }
+
   _normalizeFileForUpload(file) {
-    const unsupportedByHA = ["image/avif", "image/jxl", "image/heic", "image/heif"];
-    if (unsupportedByHA.includes(file.type)) {
+    const unsupported = ["image/avif", "image/jxl", "image/heic", "image/heif"];
+    if (unsupported.includes(file.type)) {
       return new File([file], file.name, { type: "image/png" });
     }
     return file;
@@ -650,12 +808,10 @@ class EmelyaKettleCardEditor extends LitElement {
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
-
       const resp = await this.hass.fetchWithAuth("/api/config/core/store_image", {
         method: "POST",
         body: formData
       });
-
       if (resp.ok) {
         const json = await resp.json();
         this._setImage(json.url || `/local/${file.name}`);
@@ -664,25 +820,21 @@ class EmelyaKettleCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
       formData.append("file", uploadFile);
-
       const resp = await fetch(`${window.location.origin}/api/image/upload`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData
       });
-
       if (resp.ok) {
         const json = await resp.json();
         this._setImage(`/api/image/serve/${json.id}/original`);
         this._uploadState = "success";
         return;
       }
-
       throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
       this._uploadState = "error";
@@ -718,7 +870,9 @@ class EmelyaKettleCardEditor extends LitElement {
   }
 }
 
-/* ── Регистрация ── */
+// ─────────────────────────────────────────────────────────────────
+// Регистрация
+// ─────────────────────────────────────────────────────────────────
 
 EmelyaKettleCard.getConfigElement = function () {
   return document.createElement("emelya-kettle-card-editor");
@@ -741,7 +895,6 @@ EmelyaKettleCard.getStubConfig = function () {
 if (!customElements.get("emelya-kettle-card-editor")) {
   customElements.define("emelya-kettle-card-editor", EmelyaKettleCardEditor);
 }
-
 if (!customElements.get("emelya-kettle")) {
   customElements.define("emelya-kettle", EmelyaKettleCard);
 }

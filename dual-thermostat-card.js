@@ -325,7 +325,8 @@ class DualThermostatCard extends LitElement {
   `;
 
   buildDualThermostatCardMods(config = {}) {
-    const entity1 = config.entity1 || "climate.heatpump";
+    const entity1 = config.entity1;
+    const entity2 = config.entity2;
 
     const circularSliderStyle = `
       :host {
@@ -438,9 +439,9 @@ class DualThermostatCard extends LitElement {
       }
     `;
 
-    const firstButtonStyle = `
+    const makeFirstButtonStyle = (entity) => `
       .icon-button.outlined::after {
-        content: "{{ state_attr('${entity1}','min_temp')|round(0) }}°C";
+        content: "{{ state_attr('${entity}','min_temp')|round(0) }}°C";
         position: absolute;
         left: -35px;
         top: 30%;
@@ -455,9 +456,9 @@ class DualThermostatCard extends LitElement {
       #button { background: #323135 !important; }
     `;
 
-    const lastButtonStyle = `
+    const makeLastButtonStyle = (entity) => `
       .icon-button.outlined::after {
-        content: "{{ state_attr('${entity1}','max_temp')|round(0) }}°C";
+        content: "{{ state_attr('${entity}','max_temp')|round(0) }}°C";
         position: absolute;
         right: -45px;
         top: 30%;
@@ -471,7 +472,6 @@ class DualThermostatCard extends LitElement {
       }
       #button { background: #323135 !important; }
     `;
-
     const hideSecondaryIconStyle = `
       :host { display: none !important; }
     `;
@@ -501,59 +501,57 @@ class DualThermostatCard extends LitElement {
       }
     `;
 
-    return {
-      card_mod1: {
-        style: {
-          "ha-state-control-climate-temperature": {
-            "$": {
-              "ha-control-circular-slider": {
-                "$": circularSliderStyle
+    const commonButtonsStyle = {
+      style: {
+        "ha-state-control-climate-temperature": {
+          ".": climateRootStyle,
+          "$": {
+            ".buttons": {
+              ".": buttonsStyle,
+              "ha-outlined-icon-button": {
+                "$": outlinedButtonStyle
               }
-            }
+              // ← убрали first-child и last-of-type отсюда
+            },
+            "p.label.secondary ha-svg-icon": {
+              "$": hideSecondaryIconStyle
+            },
+            "ha-big-number": {
+              "$": bigNumberStyle
+            },
+            ".": climateMiscStyle
           }
-        }
-      },
-      card_mod2: {
-        style: {
-          "ha-state-control-climate-temperature": {
-            "$": {
-              "ha-control-circular-slider": {
-                "$": circularSliderStyle
+        },
+        ".": mainCardStyle
+      }
+    };
+
+    // Фабрика card_mod для конкретного entity
+    const makeEntityCardMod = (entity) => ({
+      style: {
+        "ha-state-control-climate-temperature": {
+          "$": {
+            ".buttons": {
+              "ha-outlined-icon-button:first-child": {
+                "$": makeFirstButtonStyle(entity)  // ← своя entity
+              },
+              "ha-outlined-icon-button:last-of-type": {
+                "$": makeLastButtonStyle(entity)   // ← своя entity
               }
-            }
-          }
-        }
-      },
-      card_mod: {
-        style: {
-          ".": mainCardStyle,
-          "ha-state-control-climate-temperature": {
-            ".": climateRootStyle,
-            "$": {
-              ".buttons": {
-                ".": buttonsStyle,
-                "ha-outlined-icon-button": {
-                  "$": outlinedButtonStyle
-                },
-                "ha-outlined-icon-button:first-child": {
-                  "$": firstButtonStyle
-                },
-                "ha-outlined-icon-button:last-child": {
-                  "$": lastButtonStyle
-                }
-              },
-              "p.label.secondary ha-svg-icon": {
-                "$": hideSecondaryIconStyle
-              },
-              "ha-big-number": {
-                "$": bigNumberStyle
-              },
-              ".": climateMiscStyle
+            },
+            "ha-control-circular-slider": {
+              "$": circularSliderStyle
             }
           }
         }
       }
-    };
+    });
+    return {
+          card_mod: commonButtonsStyle,
+          card_mod1: makeEntityCardMod(entity1),  // entity1 для card1
+          card_mod2: makeEntityCardMod(entity2),  // entity2 для card2
+        };
+    
   }
   firstUpdated() {
     const frame = this.shadowRoot.querySelector(".card");
@@ -570,8 +568,6 @@ class DualThermostatCard extends LitElement {
     const card = this.active === 0 ? this.card1 : this.card2;
     if (!card) { this._visible = true; return; }
 
-    // card-mod добавляет <style> тег в shadowRoot карточки.
-    // Ждём его появления — это сигнал что стили применены.
     const checkShadow = () => {
       const shadow = card.shadowRoot;
       if (!shadow) return false;

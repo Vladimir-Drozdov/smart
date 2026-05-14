@@ -1110,7 +1110,7 @@ class EmelyaLampCardEditor extends LitElement {
     `;
   }
 
-  /* ── Drag & Drop для фона ── */
+  /* Drag & Drop для фона */
 
   _onBgDragOver(e) { e.preventDefault(); this._bgDragOver = true; }
   _onBgDragLeave()  { this._bgDragOver = false; }
