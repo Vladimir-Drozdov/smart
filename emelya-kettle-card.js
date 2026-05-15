@@ -25,6 +25,7 @@ function readCurrentTemp(state) {
   return isNaN(parsed) ? null : parsed;
 }
 
+
 /**
  * Считывает ЦЕЛЕВУЮ (установленную) температуру из сущности HA.
  * Используется для определения активного режима (подогрев / кипяток).
@@ -66,7 +67,7 @@ class EmelyaKettleCard extends LitElement {
     power: { type: Boolean, state: true },
     _currentTemp: { state: true },   // фактическая температура (для отображения)
     _targetTemp:  { state: true },   // целевая температура (для определения режима)
-    _selectedSlot: { state: true }
+    _selectedSlot: { state: true },
   };
 
   constructor() {
@@ -219,23 +220,6 @@ class EmelyaKettleCard extends LitElement {
     });
   }
 
-  /**
-   * Устанавливает опцию select / input_select для режима.
-   * Используется когда задан config.mode_entity домена select или input_select.
-   */
-  _setSelectMode(option) {
-    const entityId = this.config.mode_entity;
-    if (!entityId || !this.hass || !option) return;
-    const d = domain(entityId);
-    if (d !== "select" && d !== "input_select") return;
-
-    const service = d === "input_select" ? "select_option" : "select_option";
-    this.hass.callService(d, service, {
-      entity_id: entityId,
-      option
-    });
-  }
-
   // Кнопки режимов
 
   _handlePreheat(e) {
@@ -249,18 +233,13 @@ class EmelyaKettleCard extends LitElement {
       this._setWaterHeaterMode(this.config.preheat_mode);
     }
 
-    // select / input_select: выбираем опцию из mode_entity
-    if (this.config.mode_entity && this.config.preheat_option) {
-      this._setSelectMode(this.config.preheat_option);
-    }
-
     // Устанавливаем целевую температуру
     const preheatTemp = this.config.preheat_temp || 80;
     this._setTemperature(preheatTemp);
 
     // Оптимистично обновляем целевую температуру локально,
     // чтобы активный слот подсветился сразу, не дожидаясь ответа HA
-    this._targetTemp = preheatTemp;
+    this._targetTemp = this.config.preheat_temp || 80;
   }
 
   _handleBoil(e) {
@@ -274,17 +253,12 @@ class EmelyaKettleCard extends LitElement {
       this._setWaterHeaterMode(this.config.boil_mode);
     }
 
-    // select / input_select: выбираем опцию из mode_entity
-    if (this.config.mode_entity && this.config.boil_option) {
-      this._setSelectMode(this.config.boil_option);
-    }
-
     // Устанавливаем целевую температуру
     const boilTemp = this.config.boil_temp || 100;
     this._setTemperature(boilTemp);
 
     // Оптимистичное обновление
-    this._targetTemp = boilTemp;
+    this._targetTemp = this.config.boil_temp || 100;
   }
 
   _handleControlsClick(e) {
@@ -674,11 +648,6 @@ class EmelyaKettleCardEditor extends LitElement {
             required: true,
             selector: { entity: { domain: ["climate", "number", "input_number", "sensor", "water_heater"] } }
           },
-          {
-            name: "mode_entity",
-            label: "Mode Entity — select/input_select (опционально)",
-            selector: { entity: { domain: ["select", "input_select"] } }
-          },
           { name: "base_path", label: "Base Path", selector: { text: {} } },
         ]}
         @value-changed=${this._valueChanged}
@@ -687,9 +656,6 @@ class EmelyaKettleCardEditor extends LitElement {
   }
 
   _modesTab() {
-    const hasModeEntity = !!(this._config?.mode_entity);
-    const isPowerWaterHeater = domain(this._config?.power_entity || this._config?.entity || "") === "water_heater";
-
     return html`
       <ha-form
         .hass=${this.hass}
@@ -697,6 +663,8 @@ class EmelyaKettleCardEditor extends LitElement {
         .schema=${[
           { name: "preheat_temp", label: "Температура подогрева (°C)", selector: { number: { min: 30, max: 99,  step: 1 } } },
           { name: "boil_temp",    label: "Температура кипятка (°C)",   selector: { number: { min: 90, max: 100, step: 1 } } },
+          { name: "preheat_mode", label: "Режим «Подогрев» (water_heater operation_mode)", selector: { text: {} } },
+          { name: "boil_mode",    label: "Режим «Кипяток» (water_heater operation_mode)",  selector: { text: {} } },
         ]}
         @value-changed=${this._valueChanged}
       ></ha-form>

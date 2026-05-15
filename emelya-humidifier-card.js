@@ -34,7 +34,7 @@ class EmelyaHumidifierCard extends LitElement {
         --ha-card-border-radius: 16px !important;
         box-sizing: border-box !important;
         backdrop-filter: blur(12px) !important;
-        z-index: 2 !important;
+        z-index: 3 !important;
       }
       ha-card ha-select mwc-list-item{
         z-index: 2 !important;
@@ -136,7 +136,7 @@ class EmelyaHumidifierCard extends LitElement {
 
       this.modes = options.length ? options : this.modes;
 
-      if(this._expectedMode !== null){
+      if(this._expectedMode !== null){ 
         if(newMode === this._expectedMode){
           this._expectedMode = null;
           this.mode = newMode;
@@ -300,7 +300,7 @@ class EmelyaHumidifierCard extends LitElement {
       gap:8px;
       height:56px;
       position: relative;
-      z-index: 2 !important;
+      z-index: 3 !important;
     }
 
     .power{
