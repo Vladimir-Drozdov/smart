@@ -1,8 +1,6 @@
 import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
 
-/* ─────────────────────────────────────────
-   CARD
-───────────────────────────────────────── */
+/* CARD */
 class EmelyaRoomsRow extends LitElement {
   static properties = {
     hass: {},
@@ -366,9 +364,7 @@ class EmelyaRoomsRow extends LitElement {
   }
 }
 
-/* ─────────────────────────────────────────
-   EDITOR
-───────────────────────────────────────── */
+/* EDITOR */
 const ICON_OPTIONS = [
   { label: "Спальня",        value: "/local/images/icons/bedroom.svg" },
   { label: "Гостиная",       value: "/local/images/icons/living_room.svg" },
@@ -638,7 +634,7 @@ class EmelyaRoomsRowEditor extends LitElement {
       throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
       this._uploadState = "error";
-      this._uploadError = `Не удалось загрузить файл (${err.message}). Поместите файл вручную в config/www/ и укажите путь.`;
+      this._uploadError = `Не удалось загрузить файл (${err.message}).`;
     }
   }
 
@@ -669,7 +665,7 @@ class EmelyaRoomsRowEditor extends LitElement {
         <div class="img-preview">
           ${src ? html`
             <img src=${src} alt="preview"
-              @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }} />
+              @error=${() => { this._uploadState = "error"; this._uploadError = "Файл не найден"; }} /> 
           ` : html`
             <div class="img-preview-empty">Фон не задан.<br>Будет использован пустой фон.</div>
           `}
@@ -941,9 +937,7 @@ class EmelyaRoomsRowEditor extends LitElement {
   }
 }
 
-/* ─────────────────────────────────────────
-   REGISTRATION
-───────────────────────────────────────── */
+/* REGISTRATION */
 EmelyaRoomsRow.getConfigElement = function () {
   return document.createElement("emelya-rooms-row-editor");
 };

@@ -219,9 +219,7 @@ class EmelyaKettleCard extends LitElement {
       operation_mode: mode
     });
   }
-
   // Кнопки режимов
-
   _handlePreheat(e) {
     e.stopPropagation();
     this._selectedSlot = 0;
@@ -263,7 +261,6 @@ class EmelyaKettleCard extends LitElement {
 
   _handleControlsClick(e) {
     if (e.target.closest('.power-btn')) return;
-
     const tempEntityId = this.config.temp_entity;
     if (tempEntityId && this.hass) {
       this.dispatchEvent(new CustomEvent("hass-more-info", {
@@ -838,9 +835,7 @@ class EmelyaKettleCardEditor extends LitElement {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────
 // Регистрация
-// ─────────────────────────────────────────────────────────────────
 
 EmelyaKettleCard.getConfigElement = function () {
   return document.createElement("emelya-kettle-card-editor");
