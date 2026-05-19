@@ -116,7 +116,7 @@ class EmelyaCoffeeCard extends LitElement {
     const stateObj = hass?.states?.[entity];
 
     if (stateObj) {
-      // Для climate-чайников "on" — это любое состояние кроме "off"/"unavailable"/"unknown"
+      // Для climate-чайников "on" - это любое состояние кроме "off"/"unavailable"/"unknown"
       const offStates = ["off", "unavailable", "unknown"];
       const newPower = !offStates.includes(stateObj.state);
 
@@ -141,7 +141,7 @@ class EmelyaCoffeeCard extends LitElement {
         || modeStateObj.attributes?.options
         || [];
 
-      // fan/climate хранят режим в preset_mode, select — в state
+      // fan/climate хранят режим в preset_mode, select - в state
       const rawMode = modeStateObj.attributes?.preset_mode ?? "";
       const currentCoffee = (rawMode && this.coffeeTypes.includes(rawMode))
         ? rawMode
@@ -168,8 +168,8 @@ class EmelyaCoffeeCard extends LitElement {
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
       title: "Кофеварка",
-      // ИЗМЕНЕНИЕ: label_on по умолчанию пустой — тогда трюк показывает текущий режим.
-      // Если задать явно ("Включено") — перекрывает режим, как в оригинале.
+      // ИЗМЕНЕНИЕ: label_on по умолчанию пустой - тогда трюк показывает текущий режим.
+      // Если задать явно ("Включено") - перекрывает режим, как в оригинале.
       label_on: "",
       label_off: "Выключено",
       entity: "",
@@ -472,7 +472,7 @@ class EmelyaCoffeeCard extends LitElement {
 
     const domain = entity.split(".")[0];
 
-    // switch — прямой toggle; climate/fan — turn_on/turn_off; остальные — homeassistant
+    // switch - прямой toggle; climate/fan - turn_on/turn_off; остальные - homeassistant
     if (domain === "switch") {
       this.hass.callService("switch", "toggle", { entity_id: entity });
     } else {
@@ -484,16 +484,15 @@ class EmelyaCoffeeCard extends LitElement {
 
   _handleSelectChange(e) {
     e.stopPropagation();
-
     const value = e.target.value;
     if (!value) return;
 
     this.selectedCoffee = value;
     this._expectedCoffee = value;
 
+    const entity = this.config?.entity;
     const coffeeEntity = this.config?.coffee_entity;
-    const isSingleEntity = !coffeeEntity || coffeeEntity === entity;
-    const targetEntity = isSingleEntity ? entity : coffeeEntity;
+    const targetEntity = (coffeeEntity && coffeeEntity !== entity) ? coffeeEntity : entity;
 
     if (!this.hass?.states?.[targetEntity]) return;
 
@@ -505,7 +504,6 @@ class EmelyaCoffeeCard extends LitElement {
         preset_mode: value
       });
     } else {
-      // select, input_select — одинаковый сервис через домен
       this.hass.callService(domain, "select_option", {
         entity_id: targetEntity,
         option: value
@@ -528,6 +526,7 @@ class EmelyaCoffeeCard extends LitElement {
   render() {
     const entity = this.config?.entity;
     const coffeeEntity = this.config?.coffee_entity;
+    const coffeeState = this.hass?.states?.[coffeeEntity];
     const isSingleEntity = !coffeeEntity || coffeeEntity === entity;
     const modeStateObj = isSingleEntity
       ? this.hass?.states?.[entity]
@@ -542,7 +541,7 @@ class EmelyaCoffeeCard extends LitElement {
 
     // ИЗМЕНЕНИЕ: тот же трюк что в dishwasher-карточке.
     // Приоритет: label_on (статичный) → mode_labels[режим] (переименованный) → сырой режим → "Включено"
-    // Если label_on пустой (дефолт) — в правом углу виден текущий режим.
+    // Если label_on пустой (дефолт) - в правом углу виден текущий режим.
     const stateLabel = this.power
       ? (this.config?.label_on || this.config?.mode_labels?.[this.selectedCoffee] || this.selectedCoffee || "Включено")
       : (this.config?.label_off || "Выключено");
@@ -564,7 +563,7 @@ class EmelyaCoffeeCard extends LitElement {
               @pointerdown=${this._stopPropagation}
               @click=${this._togglePower}
             >
-              <img src="${this.base}/images/container-images/power_button.png" alt="power">
+              <img src="${this.base}/images/power.png" alt="power">
             </div>
 
             ${modeOptions.length ? html`
@@ -745,14 +744,18 @@ class EmelyaCoffeeCardEditor extends LitElement {
 
   _objectTab() {
     const coffeeEntity = this._config?.coffee_entity;
-    const coffeeState  = this.hass?.states?.[coffeeEntity];
-    const options      = coffeeState?.attributes?.options || [];
+    const mainEntity   = this._config?.entity;
+    const sourceEntity = (coffeeEntity && coffeeEntity !== mainEntity) ? coffeeEntity : mainEntity;
+    const sourceState  = this.hass?.states?.[sourceEntity];
+    const options = sourceState?.attributes?.preset_modes
+      || sourceState?.attributes?.options
+      || [];
     const labels       = this._config?.mode_labels || {};
 
     return html`
       ${this._form([
         { name: "title",         label: "Название",      selector: { text: {} } },
-        { name: "label_on",      label: "Статус: вкл (пусто — показывает режим)",   selector: { text: {} } },
+        { name: "label_on",      label: "Статус: вкл (пусто - показывает режим)",   selector: { text: {} } },
         { name: "label_off",     label: "Статус: выкл",  selector: { text: {} } },
         {
           name: "entity",
@@ -761,9 +764,9 @@ class EmelyaCoffeeCardEditor extends LitElement {
         },
         {
           name: "coffee_entity",
-          // ИЗМЕНЕНИЕ: необязательный — у некоторых кофеварок нет режимов
+          // ИЗМЕНЕНИЕ: необязательный - у некоторых кофеварок нет режимов
           required: false,
-          selector: { entity: { domain: ["input_select", "select"] } }
+          selector: { entity: { domain: ["input_select", "select", "fan"] } }
         },
         { name: "base_path",     selector: { text: {} } }
       ])}

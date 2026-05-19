@@ -135,7 +135,7 @@ class EmelyaBreezerCard extends LitElement {
       this.power = newPower;
     }
 
-    // MODE — определяем источник режимов
+    // MODE - определяем источник режимов
     const modeEntity = this.config?.mode_entity;
     const isSingleEntity = !modeEntity || modeEntity === entity;
     const modeStateObj = isSingleEntity
@@ -143,11 +143,11 @@ class EmelyaBreezerCard extends LitElement {
       : (hass.states?.[modeEntity] ?? null);
 
     if (modeStateObj) {
-      // fan хранит режимы в preset_modes, select/input_select — в options
+      // fan хранит режимы в preset_modes, select/input_select - в options
       this.modes = modeStateObj.attributes?.preset_modes
         || modeStateObj.attributes?.options
         || [];
-      // fan хранит текущий режим в preset_mode, select — в state
+      // fan хранит текущий режим в preset_mode, select - в state
       const rawMode = modeStateObj.attributes?.preset_mode ?? "";
       // берём state только для select/input_select (не для fan в off)
       const currentMode = (rawMode && this.modes.includes(rawMode))
@@ -162,7 +162,7 @@ class EmelyaBreezerCard extends LitElement {
           this.selectedMode = currentMode;
         }
       } else {
-        // currentMode || сохранённый || первый из списка — никогда не пустой
+        // currentMode || сохранённый || первый из списка - никогда не пустой
         this.selectedMode = currentMode || this.selectedMode || (this.modes[0] ?? "");
       }
     }
@@ -472,16 +472,15 @@ class EmelyaBreezerCard extends LitElement {
 
     if (!stateObj) return;
 
-    const isSingleEntity = !modeEntity || modeEntity === entity;
-    const targetEntity = isSingleEntity ? entity : modeEntity;
+    const targetEntity = (modeEntity && modeEntity !== entity) ? modeEntity : entity;
+    const domain = targetEntity.split(".")[0];
 
-    if (isSingleEntity && stateObj.attributes?.preset_modes) {
+    if (domain === "fan") {
       this.hass.callService("fan", "set_preset_mode", {
         entity_id: targetEntity,
         preset_mode: value
       });
     } else {
-      const domain = targetEntity.split(".")[0];
       this.hass.callService(domain, "select_option", {
         entity_id: targetEntity,
         option: value
@@ -506,7 +505,7 @@ class EmelyaBreezerCard extends LitElement {
     const modeEntity = this.config?.mode_entity;
     const stateObj = this.hass?.states?.[entity];
 
-    // Определяем источник режимов — та же логика что и в set hass
+    // Определяем источник режимов - та же логика что и в set hass
     const isSingleEntity = !modeEntity || modeEntity === entity;
     const modeStateObj = isSingleEntity
       ? stateObj
@@ -521,7 +520,7 @@ class EmelyaBreezerCard extends LitElement {
       ? this.config.background_image
       : `${this.base}/images/container-images/breezer.png`;
 
-    // Статус в шапке: если выкл — label_off; если вкл и label_on, то label_on; если вкл и без label_on и есть режим — показываем режим
+    // Статус в шапке: если выкл - label_off; если вкл и label_on, то label_on; если вкл и без label_on и есть режим - показываем режим
     const stateLabel = this.power
       ? (this.config?.label_on || this.config?.mode_labels?.[this.selectedMode] || this.selectedMode || "Включено")
       : (this.config?.label_off || "Выключено");
@@ -544,7 +543,7 @@ class EmelyaBreezerCard extends LitElement {
             @pointerdown=${this._stopPropagation}
             @click=${this._togglePower}
           >
-            <img src="${this.base}/images/container-images/power_button.png">
+            <img src="${this.base}/images/power.png">
           </div>
 
           ${modeOptions.length ? html`
@@ -696,12 +695,11 @@ class EmelyaBreezerCardEditor extends LitElement {
       ${this._tab === 2 ? this._actionsTab() : ""}
     `;
   }
-
   _objectTab() {
     const entity = this._config?.entity;
     const modeEntity = this._config?.mode_entity;
 
-    // Собираем режимы из обеих сущностей — что найдём, то и показываем
+    // Собираем режимы из обеих сущностей - что найдём, то и показываем
     const modeState = this.hass?.states?.[modeEntity];
     const fanState  = this.hass?.states?.[entity];
 
@@ -843,7 +841,7 @@ class EmelyaBreezerCardEditor extends LitElement {
     `;
   }
 
-  /* ── Drag & Drop ── */
+  /* Drag & Drop */
 
   _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
   _onDragLeave()  { this._dragOver = false; }

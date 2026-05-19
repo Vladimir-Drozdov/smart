@@ -132,7 +132,7 @@ class EmelyaWasherCard extends LitElement {
       this.power = newPower;
     }
 
-    // MODE — поддержка как отдельной mode_entity, так и preset_modes на основной
+    // MODE - поддержка как отдельной mode_entity, так и preset_modes на основной
     const modeEntity = this.config?.mode_entity;
     const isSingleEntity = !modeEntity || modeEntity === entity;
     const modeStateObj = isSingleEntity
@@ -179,7 +179,7 @@ class EmelyaWasherCard extends LitElement {
     };
     this.base = this.config.base_path || "/local";
 
-    // Предзагрузка фона — браузер начинает качать картинку до рендера
+    // Предзагрузка фона - браузер начинает качать картинку до рендера
     this._preloadBackground();
   }
 
@@ -208,7 +208,7 @@ class EmelyaWasherCard extends LitElement {
 
     const img = new Image();
     img.onload = () => card.classList.add("bg-loaded");
-    // Если картинка уже в кэше — onload стреляет синхронно, без мигания
+    // Если картинка уже в кэше - onload стреляет синхронно, без мигания
     img.src = bgUrl;
   }
 
@@ -245,7 +245,7 @@ class EmelyaWasherCard extends LitElement {
     }
 
     /*
-      Фон вынесен в ::before — убирает background-blend-mode с самого .card.
+      Фон вынесен в ::before - убирает background-blend-mode с самого .card.
       background-blend-mode на элементе создаёт stacking context,
       из-за которого position:fixed у дочерних элементов ломается.
     */
@@ -262,7 +262,7 @@ class EmelyaWasherCard extends LitElement {
       background-position: center, 46.698px 62.07px, center;
       background-repeat: no-repeat, no-repeat, no-repeat;
       background-blend-mode: normal, luminosity, normal;
-      /* Плавное появление — воспринимается быстрее чем резкий pop-in */
+      /* Плавное появление - воспринимается быстрее чем резкий pop-in */
       opacity: 0;
       transition: opacity 0.35s ease;
       pointer-events: none;
@@ -372,10 +372,9 @@ class EmelyaWasherCard extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._holdTimer) {
-      clearTimeout(this._holdTimer);
-      this._holdTimer = null;
-    }
+    if (this._holdTimer)       clearTimeout(this._holdTimer);
+    if (this._expectPowerTimer) clearTimeout(this._expectPowerTimer);
+    if (this._expectModeTimer)  clearTimeout(this._expectModeTimer);
   }
 
   _onPointerDown(e) {
@@ -425,13 +424,13 @@ class EmelyaWasherCard extends LitElement {
 
   _togglePower(e){
     e.stopPropagation();
+
+    // Игнорируем клик пока ждём подтверждения от HA
+    if (this._expectedPower !== null) return;
+
     const entity = this.config?.entity;
     const powerEntity = this.config?.power_entity || entity;
     if (!powerEntity || !this.hass) return;
-
-    const newPower = !this.power;
-    this.power = newPower;
-    this._expectedPower = newPower;
 
     const powerDomain = powerEntity.split(".")[0];
     const readOnlyDomains = ["sensor", "binary_sensor"];
@@ -440,8 +439,17 @@ class EmelyaWasherCard extends LitElement {
       return;
     }
 
-    const service = newPower ? "turn_on" : "turn_off";
-    this.hass.callService(powerDomain, service, { entity_id: powerEntity });
+    // Только _expectedPower - this.power обновится через set hass когда HA подтвердит
+    this._expectedPower = !this.power;
+
+    clearTimeout(this._expectPowerTimer);
+    this._expectPowerTimer = setTimeout(() => {
+      this._expectedPower = null;
+    }, 5000);
+
+    const service = this._expectedPower ? "turn_on" : "turn_off";
+    this.hass.callService(powerDomain, service, { entity_id: powerEntity })
+      .catch(() => { this._expectedPower = null; });
   }
 
   _handleSelectChange(e){
@@ -452,33 +460,35 @@ class EmelyaWasherCard extends LitElement {
     this.selectedMode = value;
     this._expectedMode = value;
 
+    clearTimeout(this._expectModeTimer);
+    this._expectModeTimer = setTimeout(() => {
+      this._expectedMode = null;
+    }, 5000);
+
     const entity = this.config?.entity;
     const modeEntity = this.config?.mode_entity;
     const isSingleEntity = !modeEntity || modeEntity === entity;
     const targetEntity = isSingleEntity ? entity : modeEntity;
-    const stateObj = this.hass?.states?.[entity];
 
-    if (!stateObj) return;
+    // Берём stateObj именно targetEntity, а не entity
+    const targetStateObj = this.hass?.states?.[targetEntity];
+    if (!targetStateObj) return;
 
-    if (isSingleEntity && stateObj.attributes?.preset_modes) {
-      this.hass.callService("fan", "set_preset_mode", {
-        entity_id: targetEntity,
-        preset_mode: value
-      });
-    } else {
-      const domain = targetEntity.split(".")[0];
-      if (domain === "fan") {
-        this.hass.callService("fan", "set_preset_mode", {
+    const domain = targetEntity.split(".")[0];
+    // set_preset_mode если у targetEntity есть preset_modes, иначе select_option
+    const hasPresetModes = !!targetStateObj.attributes?.preset_modes;
+
+    const call = hasPresetModes
+      ? this.hass.callService(domain, "set_preset_mode", {
           entity_id: targetEntity,
           preset_mode: value
-        });
-      } else {
-        this.hass.callService(domain, "select_option", {
+        })
+      : this.hass.callService(domain, "select_option", {
           entity_id: targetEntity,
           option: value
         });
-      }
-    }
+
+    call.catch(() => { this._expectedMode = null; });
   }
 
   _handleSelectDblClick(e){
@@ -526,7 +536,7 @@ class EmelyaWasherCard extends LitElement {
             @pointerdown=${this._stopPropagation}
             @click=${this._togglePower}
           >
-            <img src="${this.base}/images/container-images/power_button.png">
+            <img src="${this.base}/images/power.png">
           </div>
           ${modeOptions.length ? html`
             <ha-select
@@ -699,15 +709,17 @@ class EmelyaWasherCardEditor extends LitElement {
 
   _objectTab() {
     const modeEntity = this._config?.mode_entity;
-    const modeState  = this.hass?.states?.[modeEntity];
-    const options    = modeState?.attributes?.options || [];
-    const labels     = this._config?.mode_labels || {};
+    const modeState = this.hass?.states?.[modeEntity];
+    const options = modeState?.attributes?.preset_modes
+      || modeState?.attributes?.options
+      || [];
+    const labels = this._config?.mode_labels || {};
 
     return html`
       ${this._form([
-        { name: "title",       label: "Название",     selector: { text: {} } },
-        { name: "label_on",    label: "Статус: вкл",  selector: { text: {} } },
-        { name: "label_off",   label: "Статус: выкл", selector: { text: {} } },
+        { name: "title", label: "Название",     selector: { text: {} } },
+        { name: "label_on", label: "Статус: вкл",  selector: { text: {} } },
+        { name: "label_off", label: "Статус: выкл", selector: { text: {} } },
         { name: "entity", required: true,
           selector: { entity: { domain: ["switch", "fan", "sensor", "binary_sensor", "input_boolean"] } }
         },
@@ -717,7 +729,7 @@ class EmelyaWasherCardEditor extends LitElement {
         { name: "power_entity", required: false,
           selector: { entity: { domain: ["switch", "input_boolean", "binary_sensor"] } }
         },
-        { name: "base_path",   selector: { text: {} } }
+        { name: "base_path", selector: { text: {} } }
       ])}
 
       ${options.length ? html`
@@ -820,10 +832,10 @@ class EmelyaWasherCardEditor extends LitElement {
     ]);
   }
 
-  /* ── Drag & Drop ── */
+  /* Drag & Drop */
 
   _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
-  _onDragLeave()  { this._dragOver = false; }
+  _onDragLeave() { this._dragOver = false; }
 
   _onDrop(e) {
     e.preventDefault();
@@ -866,7 +878,7 @@ class EmelyaWasherCardEditor extends LitElement {
 
     const uploadFile = this._normalizeFileForUpload(file);
 
-    // Attempt 1 — HA store_image
+    // Attempt 1 - HA store_image
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -884,15 +896,13 @@ class EmelyaWasherCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Attempt 2 — /api/image/upload fallback
+    // Attempt 2 - /api/image/upload fallback
     try {
-      const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
       formData.append("file", uploadFile);
 
-      const resp = await fetch(`${window.location.origin}/api/image/upload`, {
+      const resp = await this.hass.fetchWithAuth("/api/image/upload", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: formData
       });
 

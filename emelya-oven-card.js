@@ -23,8 +23,6 @@ class EmelyaOvenCard extends LitElement {
     this.temp = 0;
     this.timer = 0;
     this._expectedPower = null;
-    this._expectedTemp = null;
-    this._expectedTimer = null;
     this._preloadedBg = null;
   }
 
@@ -51,7 +49,8 @@ class EmelyaOvenCard extends LitElement {
     const bgUrl = card.dataset.bg;
     if (!bgUrl || card._bgInitialized === bgUrl) return;
     card._bgInitialized = bgUrl;
-    card.style.setProperty("--card-bg", `url("${bgUrl}")`);
+    const safeUrl = encodeURI(bgUrl).replace(/\(/g, "%28").replace(/\)/g, "%29");
+    card.style.setProperty("--card-bg", `url("${safeUrl}")`);
     const img = new Image();
     img.onload = () => card.classList.add("bg-loaded");
     img.src = bgUrl;
@@ -75,13 +74,16 @@ class EmelyaOvenCard extends LitElement {
       if (this._expectedPower !== null) {
         if (newPower === this._expectedPower) {
           this._expectedPower = null;
+          if (this._expectedPowerTimer) {
+              clearTimeout(this._expectedPowerTimer);
+              this._expectedPowerTimer = null;
+          }
           this.power = newPower;
         }
-        // не return — даём temp и timer обновиться
+        // не return - даём temp и timer обновиться
       } else {
         this.power = newPower;
       }
-      this.power = newPower;
     }
 
     const tempEntity = this.config.temp_entity || this.config.entity;
@@ -112,7 +114,9 @@ class EmelyaOvenCard extends LitElement {
           const raw = timerStateObj.state === "active" ? remaining : duration;
           if (raw && raw.includes(":")) {
             const parts = raw.split(":").map(Number);
-            newTimer = parts[0] * 60 + parts[1]; // HH:MM:SS → минуты
+            newTimer = parts.length === 3
+                ? parts[0] * 60 + parts[1]  // HH:MM:SS → минуты
+                : parts[0];                  // MM:SS → минуты (секунды отбрасываем)
           } else {
             newTimer = Math.round((Number(raw) || 0) / 60);
           }
@@ -288,12 +292,17 @@ class EmelyaOvenCard extends LitElement {
   _togglePower(e) {
     e.stopPropagation();
     const newPower = !this.power;
-    this.power = newPower;
 
     const entity = this.config.power_entity || this.config.entity;
     if (!this.hass?.states?.[entity]) return;
-    this._expectedPower = newPower;
 
+    this.power = newPower;
+    this._expectedPower = newPower;
+    if (this._expectedPowerTimer) clearTimeout(this._expectedPowerTimer);
+    this._expectedPowerTimer = setTimeout(() => {
+        this._expectedPower = null;
+        this._expectedPowerTimer = null;
+    }, 7000);
     const domain = entity.split(".")[0];
     if (domain === "climate") {
       this.hass.callService("climate", "set_hvac_mode", {
@@ -306,6 +315,8 @@ class EmelyaOvenCard extends LitElement {
       });
     } else if (["sensor", "binary_sensor"].includes(domain)) {
       console.warn("emelya-oven: power entity is read-only:", entity);
+      this._expectedPower = null;
+      this.power = !newPower; // откатываем оптимистичный апдейт
       return;
     } else {
       console.warn("Неизвестный домен для power:", domain);
@@ -325,6 +336,10 @@ class EmelyaOvenCard extends LitElement {
     if (this._holdTimer) {
       clearTimeout(this._holdTimer);
       this._holdTimer = null;
+    }
+    if (this._expectedPowerTimer) {
+        clearTimeout(this._expectedPowerTimer);
+        this._expectedPowerTimer = null;
     }
   }
 
@@ -410,7 +425,7 @@ class EmelyaOvenCard extends LitElement {
             <div class="value">${this.timer} мин</div>
           </div>
           <div class="power ${this.power ? "active" : ""}" @click=${this._togglePower}>
-            <img src="${this.base}/images/container-images/power_button.png">
+            <img src="${this.base}/images/power.png">
           </div>
         </div>
       </div>
@@ -567,7 +582,8 @@ class EmelyaOvenCardEditor extends LitElement {
       { name: "entity",       required: true,  label: "Основная сущность", selector: { entity: { domain: ["climate", "switch", "sensor", "binary_sensor", "input_boolean"] } } },
       { name: "power_entity", required: false, label: "Сущность питания",   selector: { entity: { domain: ["switch", "input_boolean", "fan", "climate"] } } },
       { name: "temp_entity",  required: false, label: "Сущность температуры", selector: { entity: { domain: ["climate", "number", "input_number", "sensor"] } } },
-      { name: "timer_entity", required: false, label: "Сущность таймера",   selector: { entity: { domain: ["timer", "number", "input_number", "sensor"] } } },,
+      { name: "temp_actual", label: "Показывать фактическую температуру (не целевую)", selector: { boolean: {} } },
+      { name: "timer_entity", required: false, label: "Сущность таймера",   selector: { entity: { domain: ["timer", "number", "input_number", "sensor"] } } },
       {
         name: "base_path",
         label: "Базовый путь к ресурсам",
@@ -778,9 +794,6 @@ EmelyaOvenCard.getConfigElement = function () {
 EmelyaOvenCard.getStubConfig = function () {
   return {
     entity: "",
-    power_entity: "",
-    temp_entity: "",
-    timer_entity: "",
     base_path: "/local"
   };
 };

@@ -379,7 +379,6 @@ class EmelyaDryerCard extends LitElement {
 
   _onPointerDown(e) {
     if (e.target.closest('ha-select') || e.target.closest('.power')) return;
-
     if (hasAction(this.config, 'hold_action')) {
       this._holdTimer = setTimeout(() => {
         this._performAction('hold');
@@ -418,7 +417,6 @@ class EmelyaDryerCard extends LitElement {
   }
 
   _performAction(actionType) {
-    console.log(`Action performed: ${actionType}`);
     if (!this.hass || !this.config) return;
     handleAction(this, this.hass, this.config, actionType);
   }
@@ -447,21 +445,31 @@ class EmelyaDryerCard extends LitElement {
   _handleSelectChange(e){
     e.stopPropagation();
     const value = e.target.value;
+    if (!value) return;
+
     this.selectedMode = value;
     this._expectedMode = value;
 
+    const entity = this.config?.entity;
     const modeEntity = this.config?.mode_entity;
-    if(!this.hass?.states?.[modeEntity]) return;
+    const targetEntity = (modeEntity && modeEntity !== entity) ? modeEntity : entity;
 
-    const domain = modeEntity.split(".")[0];
-    
-    if(domain === "select" || domain === "input_select") {
+    if (!this.hass?.states?.[targetEntity]) return;
+
+    const domain = targetEntity.split(".")[0];
+
+    if (domain === "fan") {
+      this.hass.callService("fan", "set_preset_mode", {
+        entity_id: targetEntity,
+        preset_mode: value
+      });
+    } else if (domain === "select" || domain === "input_select") {
       this.hass.callService(domain, "select_option", {
-        entity_id: modeEntity,
+        entity_id: targetEntity,
         option: value
       });
     } else {
-      console.warn(`Unsupported domain for mode_entity: ${domain}`);
+      console.warn("emelya-dryer: unsupported mode_entity domain:", domain);
     }
   }
 
@@ -496,12 +504,12 @@ class EmelyaDryerCard extends LitElement {
         </div>
 
         <div class="controls">
-          <div 
+          <div
             class="power ${this.power ? "active" : ""}" 
             @pointerdown=${this._stopPropagation}
             @click=${this._togglePower}
           >
-            <img src="${this.base}/images/container-images/power_button.png">
+            <img src="${this.base}/images/power.png">
           </div>
           ${modeState ? html`
             <ha-select
@@ -511,7 +519,7 @@ class EmelyaDryerCard extends LitElement {
               @change=${this._handleSelectChange}
               @dblclick=${this._handleSelectDblClick}
             >
-              ${(modeState.attributes?.options || []).map(opt => html`
+              ${(modeState.attributes?.preset_modes || modeState.attributes?.options || []).map(opt => html`
                 <mwc-list-item .value=${opt}>${this.config?.mode_labels?.[opt] || opt}</mwc-list-item>
               `)}
             </ha-select>
@@ -655,8 +663,12 @@ class EmelyaDryerCardEditor extends LitElement {
 
   _objectTab() {
     const modeEntity = this._config?.mode_entity;
-    const modeState  = this.hass?.states?.[modeEntity];
-    const options    = modeState?.attributes?.options || [];
+    const mainEntity = this._config?.entity;
+    const sourceEntity = (modeEntity && modeEntity !== mainEntity) ? modeEntity : mainEntity;
+    const modeState = this.hass?.states?.[sourceEntity];
+    const options = modeState?.attributes?.preset_modes
+      || modeState?.attributes?.options
+      || [];
     const labels     = this._config?.mode_labels || {};
 
     return html`
@@ -758,7 +770,7 @@ class EmelyaDryerCardEditor extends LitElement {
     `;
   }
 
-  /* ── Drag & Drop ── */
+  /* Drag & Drop */
 
   _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
   _onDragLeave()  { this._dragOver = false; }
@@ -788,7 +800,7 @@ class EmelyaDryerCardEditor extends LitElement {
     return file;
   }
 
-  /* ── Загрузка файла ── */
+  /* Загрузка файла */
 
   async _uploadFile(file) {
     if (!file.type.startsWith("image/")) {
@@ -802,9 +814,6 @@ class EmelyaDryerCardEditor extends LitElement {
     const uploadFile = this._normalizeFileForUpload(file);
 
     try {
-      const token = this.hass?.auth?.data?.access_token;
-      const haUrl = window.location.origin;
-
       const formData = new FormData();
       formData.append("file", uploadFile);
 

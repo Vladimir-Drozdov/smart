@@ -1,9 +1,7 @@
 // /config/www/emelya-header-card.js
 import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
 
-/* ─────────────────────────────────────────
-   HELPERS
-───────────────────────────────────────── */
+/* HELPERS */
 function fireMoreInfo(element, entityId) {
   element.dispatchEvent(new CustomEvent("hass-more-info", {
     detail: { entityId },
@@ -38,12 +36,10 @@ function handleAction(element, hass, config, actionConfig) {
       composed: true,
     }));
   }
-  // "none" → do nothing
+  // "none" - do nothing
 }
 
-/* ─────────────────────────────────────────
-   CARD
-───────────────────────────────────────── */
+/* CARD */
 class EmelyaHeaderCard extends LitElement {
 
   static properties = {
@@ -158,7 +154,7 @@ class EmelyaHeaderCard extends LitElement {
     this.requestUpdate();
   }
 
-  /* ── Styles ── */
+  /* Styles */
   static styles = css`
     :host { display: block; }
 
@@ -349,7 +345,7 @@ class EmelyaHeaderCard extends LitElement {
     }
   `;
 
-  /* ── Helpers ── */
+  /* Helpers */
   _mapWeather(condition) {
     const map = {
       rainy:        `${this.base}/images/rain.png`,
@@ -477,9 +473,7 @@ class EmelyaHeaderCard extends LitElement {
   }
 }
 
-/* ─────────────────────────────────────────
-   EDITOR
-───────────────────────────────────────── */
+/* EDITOR */
 class EmelyaHeaderCardEditor extends LitElement {
   static properties = {
     hass:          {},
@@ -571,7 +565,7 @@ class EmelyaHeaderCardEditor extends LitElement {
       margin-bottom: 4px;
     }
 
-    /* ── Appearance tab ── */
+    /* Appearance tab */
     .img-field { display: flex; flex-direction: column; gap: 12px; }
     .img-label { font-size: 13px; font-weight: 600; color: var(--primary-text-color); }
 
@@ -697,7 +691,7 @@ class EmelyaHeaderCardEditor extends LitElement {
     this._emit();
   };
 
-  /* ── Tabs ── */
+  /* Tabs */
   _renderTabs() {
     const tabs = ["Объект", "Внешний вид", "Взаимодействия"];
     return html`
@@ -712,7 +706,7 @@ class EmelyaHeaderCardEditor extends LitElement {
     `;
   }
 
-  /* ── Tab 0: Entity settings ── */
+  /* Tab 0: Entity settings */
   _objectTab() {
     const persons = this._persons;
     return html`
@@ -829,7 +823,7 @@ class EmelyaHeaderCardEditor extends LitElement {
     `;
   }
 
-  /* ── Tab 1: Appearance ── */
+  /* Tab 1: Appearance */
   _appearanceTab() {
     const src = this._config?.background_image;
     return html`
@@ -888,7 +882,7 @@ class EmelyaHeaderCardEditor extends LitElement {
     `;
   }
 
-  /* ── Tab 2: Actions ── */
+  /* Tab 2: Actions */
   _actionsTab() {
     return html`
       <ha-form
@@ -916,7 +910,7 @@ class EmelyaHeaderCardEditor extends LitElement {
     `;
   }
 
-  /* ── Drag & Drop ── */
+  /* Drag & Drop */
 
   _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
   _onDragLeave()  { this._dragOver = false; }
@@ -946,7 +940,7 @@ class EmelyaHeaderCardEditor extends LitElement {
     return file;
   }
 
-  /* ── File upload ── */
+  /* File upload */
 
   async _uploadFile(file) {
     if (!file.type.startsWith("image/")) {
@@ -976,7 +970,7 @@ class EmelyaHeaderCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Fallback — /api/image/upload
+    // Fallback - /api/image/upload
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
@@ -1028,9 +1022,7 @@ class EmelyaHeaderCardEditor extends LitElement {
   }
 }
 
-/* ─────────────────────────────────────────
-   REGISTRATION
-───────────────────────────────────────── */
+/* REGISTRATION */
 EmelyaHeaderCard.getConfigElement = function () {
   return document.createElement("emelya-header-card-editor");
 };

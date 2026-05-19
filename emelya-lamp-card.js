@@ -250,7 +250,7 @@ const getCardMod = (base = "/local", entity = "") => ({
   }
 });
 
-// entity передаётся в getCardMod — Jinja2-шаблоны знают за каким объектом следить
+// entity передаётся в getCardMod - Jinja2-шаблоны знают за каким объектом следить
 // supportedColorModes определяет какой слайдер показывать:
 // - если лампа поддерживает brightness → только light-brightness
 // - если нет brightness, но есть color_temp → только light-color-temp
@@ -263,7 +263,7 @@ function normalizeTileConfig(entity, base = "/local", hass = null) {
     // brightness доступна если есть хотя бы один режим кроме "onoff" и "unknown"
     const hasBrightness = modes.some(m => !["onoff", "unknown"].includes(m));
     if (!hasBrightness) {
-      // нет brightness — пробуем color_temp
+      // нет brightness - пробуем color_temp
       const hasColorTemp = modes.includes("color_temp");
       features = hasColorTemp ? [{ type: "light-color-temp" }] : [];
     }
@@ -488,12 +488,12 @@ class EmelyaLampCard extends LitElement {
     // Сначала сохраняем brightness из старого hass (пока свет ещё "on")
     // Это критично: когда приходит новый hass с state:"off", brightness уже null
     this._saveBrightness(this._hass);
-    // Из нового hass тоже сохраняем — если свет включён и brightness положительный
+    // Из нового hass тоже сохраняем - если свет включён и brightness положительный
     this._saveBrightness(hass);
     this._hass = hass;
 
     if (this._sliderCard) {
-      // Карточка находится в shadow root — обновляем hass прямо там.
+      // Карточка находится в shadow root - обновляем hass прямо там.
       // _buildHassForCard патчит brightness когда свет выключен,
       // чтобы слайдер визуально не сбрасывался.
       this._sliderCard.hass = this._buildHassForCard(hass);
@@ -647,7 +647,7 @@ class EmelyaLampCard extends LitElement {
 
   /**
    * Вешаем MutationObserver на shadow-root каждого ha-control-slider.
-   * При любом изменении атрибутов или дочерних узлов — принудительно
+   * При любом изменении атрибутов или дочерних узлов - принудительно
    * восстанавливаем нужный background через setProperty("background", color, "important").
    * Это гарантирует что ни card_mod, ни HA не смогут перезаписать цвет.
    */
@@ -865,7 +865,6 @@ class EmelyaLampCard extends LitElement {
     const name = this.config?.name || stateObj?.attributes?.friendly_name || "Лампа";
     const statusText = isOn ? "Включено" : "Выключено";
     const base = this.base || "/local";
-    const bgImage = this.config?.background_image || "";
 
     return html`
     <ha-card>

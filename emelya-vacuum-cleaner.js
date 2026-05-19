@@ -152,7 +152,7 @@ class EmelyaVacuumCleaner extends LitElement {
     this._preloadBackground();
   }
 
-  // Предзагрузка фона — браузер начинает качать картинку до рендера
+  // Предзагрузка фона - браузер начинает качать картинку до рендера
   _preloadBackground() {
     const bg = this.config?.background_image
       ? this.config.background_image
@@ -172,12 +172,8 @@ class EmelyaVacuumCleaner extends LitElement {
     }
   }
 
-  // После рендера проверяем — если картинка уже в кэше, сразу показываем
+  // После рендера проверяем - если картинка уже в кэше, сразу показываем
   updated(changedProps) {
-    if (changedProps.has("config")) {
-      this._preloadBackground();
-    }
-
     const frame = this.renderRoot?.querySelector(".frame");
     if (!frame) return;
 
@@ -214,7 +210,7 @@ class EmelyaVacuumCleaner extends LitElement {
     }
 
     /*
-      Фон вынесен в ::before — убирает background-blend-mode с самого .frame.
+      Фон вынесен в ::before - убирает background-blend-mode с самого .frame.
       background-blend-mode на элементе создаёт stacking context,
       из-за которого position:fixed у дочерних элементов ломается.
       Плавное появление через opacity: 0 → 1 после загрузки.
@@ -232,7 +228,7 @@ class EmelyaVacuumCleaner extends LitElement {
       background-position: center, 9.86px -113.795px, center;
       background-repeat: no-repeat, no-repeat, no-repeat;
       background-blend-mode: normal, luminosity, normal;
-      /* Плавное появление — воспринимается быстрее чем резкий pop-in */
+      /* Плавное появление - воспринимается быстрее чем резкий pop-in */
       opacity: 0;
       transition: opacity 0.35s ease;
       pointer-events: none;
@@ -339,15 +335,22 @@ class EmelyaVacuumCleaner extends LitElement {
     }
   `;
 
-  _toggleCleaning(e){
+  _toggleCleaning(e) {
     e.stopPropagation();
     const entity = this.config?.entity;
-    if(!this.hass?.states?.[entity]) return;
+    if (!this.hass?.states?.[entity]) return;
 
     const service = this.cleaning ? "stop" : "start";
     this._expectedCleaning = !this.cleaning;
 
-    this.hass.callService("vacuum", service, { entity_id: entity });
+    // Сброс через 5 сек если HA не подтвердил
+    clearTimeout(this._expectTimer);
+    this._expectTimer = setTimeout(() => {
+      this._expectedCleaning = null;
+    }, 5000);
+
+    this.hass.callService("vacuum", service, { entity_id: entity })
+      .catch(() => { this._expectedCleaning = null; });
   }
 
   _stopPropagation(e){
@@ -362,13 +365,15 @@ class EmelyaVacuumCleaner extends LitElement {
     frame.addEventListener("pointerup", this._onPointerUp.bind(this));
     frame.addEventListener("click", this._onClick.bind(this));
 
-    // Если картинка уже в кэше — сразу показываем без мигания
+    // Если картинка уже в кэше - сразу показываем без мигания
     if (this._bgPreloaded) frame.classList.add("bg-loaded");
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._holdTimer) clearTimeout(this._holdTimer);
+    if (this._holdTimer)     clearTimeout(this._holdTimer);
+    if (this._expectTimer)   clearTimeout(this._expectTimer);
+    if (this._expectFanTimer) clearTimeout(this._expectFanTimer);
   }
 
   _onPointerDown(e) {
@@ -436,16 +441,21 @@ class EmelyaVacuumCleaner extends LitElement {
               .value=${this.selectedMode}
               @pointerdown=${this._stopPropagation}
               @change=${(e) => {
-              e.stopPropagation();
-              const fanSpeed = e.target.value;
-              this.selectedMode = fanSpeed;
-              this._expectedFan = fanSpeed;
+                e.stopPropagation();
+                const fanSpeed = e.target.value;
+                this.selectedMode = fanSpeed;
+                this._expectedFan = fanSpeed;
 
-              this.hass.callService("vacuum", "set_fan_speed", {
-                entity_id: this.config.entity,
-                fan_speed: fanSpeed
-              });
-            }}
+                clearTimeout(this._expectFanTimer);
+                this._expectFanTimer = setTimeout(() => {
+                  this._expectedFan = null;
+                }, 5000);
+
+                this.hass.callService("vacuum", "set_fan_speed", {
+                  entity_id: this.config.entity,
+                  fan_speed: fanSpeed
+                }).catch(() => { this._expectedFan = null; });
+              }}
             >
               ${fanList.map(f => html`
                 <mwc-list-item .value=${f}>${this.config?.mode_labels?.[f] || f}</mwc-list-item>
@@ -750,7 +760,7 @@ class EmelyaVacuumCleanerEditor extends LitElement {
 
   /* ── Нормализация MIME-типа ──
      HA API отклоняет image/avif (и некоторые другие форматы) с HTTP 400.
-     Подменяем MIME-тип на image/png перед отправкой — байты файла не трогаем.
+     Подменяем MIME-тип на image/png перед отправкой - байты файла не трогаем.
      Браузер читает файл по magic bytes, игнорируя Content-Type, поэтому
      avif корректно отобразится после загрузки. */
   _normalizeFileForUpload(file) {
@@ -773,7 +783,7 @@ class EmelyaVacuumCleanerEditor extends LitElement {
 
     const uploadFile = this._normalizeFileForUpload(file);
 
-    // Attempt 1 — HA store_image
+    // Attempt 1 - HA store_image
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -790,15 +800,13 @@ class EmelyaVacuumCleanerEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Attempt 2 — /api/image/upload fallback
+    // Attempt 2 - /api/image/upload fallback
     try {
-      const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();
       formData.append("file", uploadFile);
 
-      const resp = await fetch(`${window.location.origin}/api/image/upload`, {
+      const resp = await this.hass.fetchWithAuth("/api/image/upload", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: formData
       });
 

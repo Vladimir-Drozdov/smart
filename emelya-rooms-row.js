@@ -10,7 +10,6 @@ class EmelyaRoomsRow extends LitElement {
 
   constructor() {
     super();
-    this.isDragging = false;
     this.dragStarted = false;
     this.startX = 0;
     this.startScrollLeft = 0;
@@ -18,6 +17,7 @@ class EmelyaRoomsRow extends LitElement {
     this._activeIndex = 0;
     this._hassInitialized = false;
     this._hass = null;
+    this._wasDragging = false;
   }
 
   set hass(hass) {
@@ -46,7 +46,7 @@ class EmelyaRoomsRow extends LitElement {
         return;
       }
     }
-    // Если ни одна не совпала — оставляем 0
+    // Если ни одна не совпала - оставляем 0
   }
 
   setConfig(config) {
@@ -75,7 +75,8 @@ class EmelyaRoomsRow extends LitElement {
       if (!bgUrl || el._bgInitialized === bgUrl) return;
       el._bgInitialized = bgUrl;
 
-      el.style.setProperty("--room-bg", `url("${bgUrl}")`);
+      const safeUrl = encodeURI(bgUrl).replace(/\(/g, "%28").replace(/\)/g, "%29");
+      el.style.setProperty("--room-bg", `url("${safeUrl}")`);
 
       const img = new Image();
       img.onload = () => el.classList.add("bg-loaded");
@@ -112,11 +113,11 @@ class EmelyaRoomsRow extends LitElement {
       cursor: grab;
       scrollbar-width: none;
       /*
-       * Резервируем по 6px сверху и снизу — ровно столько,
+       * Резервируем по 6px сверху и снизу - ровно столько,
        * на сколько active-карточка вылезает за пределы базовой высоты.
        * Это предотвращает сдвиг соседних элементов.
        */
-      padding-top: 16px; /* 16 + 6 */
+      padding-top: 16px;
       padding-bottom: 16px;
     }
 
@@ -145,7 +146,7 @@ class EmelyaRoomsRow extends LitElement {
       user-select: none;
       transition: height 0.2s ease, margin-block 0.2s ease;
       /*
-       * margin-block: 0 — базовое состояние.
+       * margin-block: 0 - базовое состояние.
        * Карточка занимает ровно свою высоту, соседи не двигаются.
        */
       margin-block: 0;
@@ -154,7 +155,7 @@ class EmelyaRoomsRow extends LitElement {
     /*
      * Активная карточка растёт на 12px (6 вверх + 6 вниз).
      * margin-block: -6px «съедает» по 6px пространства сверху и снизу,
-     * которое мы заранее зарезервировали через padding контейнера —
+     * которое мы заранее зарезервировали через padding контейнера -
      * поэтому внешний layout не сдвигается.
      */
     .card.active {
@@ -174,6 +175,8 @@ class EmelyaRoomsRow extends LitElement {
       background-position: center, -25px -77.399px;
       background-repeat: no-repeat, no-repeat;
       background-blend-mode: normal, luminosity;
+      opacity: 0;
+      transition: opacity 0.35s ease;
     }
 
     .card.bg-loaded::before {
@@ -266,8 +269,7 @@ class EmelyaRoomsRow extends LitElement {
     const container = this.renderRoot.querySelector('.container');
     if (!container) return;
     const moveX = Math.abs(e.pageX - this._dragStartX);
-    const moveTime = Date.now() - this._dragStartTime;
-    if (!this.dragStarted && (moveX > 5 || moveTime > 200)) {
+    if (!this.dragStarted && moveX > 5) {
       this.dragStarted = true;
       container.classList.add("dragging");
     }
@@ -283,9 +285,18 @@ class EmelyaRoomsRow extends LitElement {
     if (container) container.classList.remove("dragging");
     document.removeEventListener("mousemove", this._onMouseMove);
     document.removeEventListener("mouseup", this._onMouseUp);
+    this._wasDragging = this.dragStarted;
     this._dragStartTime = null;
     this.dragStarted = false;
+    if (this._wasDragging) {
+        setTimeout(() => { this._wasDragging = false; }, 50);
+    }
   };
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    document.removeEventListener("mousemove", this._onMouseMove);
+    document.removeEventListener("mouseup", this._onMouseUp);
+  }
 
   _fireMoreInfo(entityId) {
     this.dispatchEvent(new CustomEvent("hass-more-info", {
@@ -298,7 +309,7 @@ class EmelyaRoomsRow extends LitElement {
   _navigate(path) {
     if (!path) return;
     history.pushState(null, "", path);
-    window.dispatchEvent(new Event("location-changed"));
+    window.dispatchEvent(new CustomEvent("location-changed", { bubbles: true, composed: true }));
   }
 
   _handleAction(actionConfig, room) {
@@ -314,12 +325,13 @@ class EmelyaRoomsRow extends LitElement {
       case "url":
         if (actionConfig.url_path) window.open(actionConfig.url_path, "_blank");
         break;
-      case "call-service":
+      case "call-service": {
         if (!actionConfig.service) return;
         const [domain, service] = actionConfig.service.split(".");
         if (!domain || !service) return;
         this.hass.callService(domain, service, { ...(actionConfig.data || {}) });
         break;
+      }
       case "none":
       default:
         break;
@@ -327,7 +339,7 @@ class EmelyaRoomsRow extends LitElement {
   }
 
   _onRoomClick(room, index) {
-    if (this.dragStarted) return;
+    if (this._wasDragging) return;
     this._activeIndex = index;
     this._handleAction(room.tap_action, room);
   }
@@ -339,9 +351,14 @@ class EmelyaRoomsRow extends LitElement {
     return html`
       <div class="container" @mousedown=${this._onMouseDown}>
         ${rooms.map((room, index) => {
-          const temp = room.entity
-            ? this.hass?.states[room.entity]?.state
-            : null;
+          const tempStateObj = room.entity ? this.hass?.states[room.entity] : null;
+          let temp = null;
+          if (tempStateObj) {
+              const domain = room.entity.split(".")[0];
+              temp = domain === "climate"
+                  ? (tempStateObj.attributes?.current_temperature ?? null)
+                  : tempStateObj.state;
+          }
 
           return html`
             <div
@@ -350,7 +367,7 @@ class EmelyaRoomsRow extends LitElement {
               @click=${() => this._onRoomClick(room, index)}
             >
               <div class="icon">
-                <img src="${room.icon}">
+                <img src="${room.icon}" alt="">
               </div>
               <div class="info">
                 <div class="title">${room.name}</div>
@@ -754,7 +771,7 @@ class EmelyaRoomsRowEditor extends LitElement {
                   </div>
                 ` : ''}
                 <select style="flex:1;" .value=${selected.icon || ""} @change=${this._onIconChange}>
-                  <option value="">— Выберите иконку —</option>
+                  <option value="">Выберите иконку</option>
                   ${ICON_OPTIONS.map(opt => html`
                     <option value=${opt.value} ?selected=${selected.icon === opt.value}>${opt.label}</option>
                   `)}

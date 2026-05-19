@@ -32,7 +32,7 @@ const getDefaultTileCardMod = (base = "/local", entity = "") => ({
         mask-composite: exclude !important;
       }
 
-      /* Hide the entire tile header (icon + name + state) — we render our own */
+      /* Hide the entire tile header (icon + name + state) - we render our own */
       ha-card ha-tile-container ha-tile-icon {
         display: none !important;
       }

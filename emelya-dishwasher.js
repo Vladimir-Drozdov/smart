@@ -134,7 +134,7 @@ class EmelyaDishwasherCard extends LitElement {
       this.power = newPower;
     }
 
-    // MODE — FIX 3: определяем источник режимов как в бризере
+    // MODE - FIX 3: определяем источник режимов как в бризере
     const modeEntity = this.config?.mode_entity;
     const isSingleEntity = !modeEntity || modeEntity === entity;
     const modeStateObj = isSingleEntity
@@ -147,7 +147,7 @@ class EmelyaDishwasherCard extends LitElement {
         || modeStateObj.attributes?.options
         || [];
 
-      // fan хранит текущий режим в preset_mode, select — в state
+      // fan хранит текущий режим в preset_mode, select - в state
       const rawMode = modeStateObj.attributes?.preset_mode ?? "";
       const currentMode = (rawMode && this.modes.includes(rawMode))
         ? rawMode
@@ -161,7 +161,7 @@ class EmelyaDishwasherCard extends LitElement {
           this.selectedMode = currentMode;
         }
       } else {
-        // FIX 4: никогда не оставляем селект пустым — подставляем первый режим
+        // FIX 4: никогда не оставляем селект пустым - подставляем первый режим
         this.selectedMode = currentMode || this.selectedMode || (this.modes[0] ?? "");
       }
     }
@@ -460,13 +460,13 @@ class EmelyaDishwasherCard extends LitElement {
     const targetEntity = isSingleEntity ? entity : modeEntity;
 
     if (isSingleEntity && stateObj.attributes?.preset_modes) {
-      // fan с preset_modes — одна сущность
+      // fan с preset_modes - одна сущность
       this.hass.callService("fan", "set_preset_mode", {
         entity_id: targetEntity,
         preset_mode: value
       });
     } else {
-      // FIX 2: отдельная mode_entity — select или fan
+      // FIX 2: отдельная mode_entity - select или fan
       const domain = targetEntity.split(".")[0];
       if (domain === "fan") {
         this.hass.callService("fan", "set_preset_mode", {
@@ -529,7 +529,7 @@ class EmelyaDishwasherCard extends LitElement {
             @pointerdown=${this._stopPropagation}
             @click=${this._togglePower}
           >
-            <img src="${this.base}/images/container-images/power_button.png">
+            <img src="${this.base}/images/power.png">
           </div>
 
           ${modeOptions.length ? html`
@@ -715,7 +715,7 @@ class EmelyaDishwasherCardEditor extends LitElement {
           required: false,
           selector: {
             entity: {
-              domain: ["fan", "switch", "select", "input_select"]
+              domain: ["fan", "select", "input_select"]
             }
           }
         },

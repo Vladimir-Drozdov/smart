@@ -51,8 +51,6 @@ class EmelyaHoodCard extends LitElement {
       this.power = newPower;
     }
 
-    const percentage = stateObj.attributes?.percentage ?? 0;
-
     const speedEntity = this.config?.speed_entity || entity;
     const speedStateObj = hass.states?.[speedEntity] || stateObj;
     const speedDomain = speedEntity.split(".")[0];
@@ -203,7 +201,7 @@ class EmelyaHoodCard extends LitElement {
       mask-composite: exclude !important;
     }
 
-    /* ── заливка-индикатор ── */
+    /* заливка-индикатор */
     .btn.active {
       background: rgba(255, 255, 255, 0.18);
     }
@@ -370,7 +368,10 @@ class EmelyaHoodCard extends LitElement {
         option
       });
     } else {
-      // fan — пробуем preset_mode, иначе percentage
+      if (speedDomain !== "fan") {
+        console.warn("emelya-hood: speed_entity domain not supported:", speedDomain);
+        return;
+      }
       const speedStateObj = this.hass?.states?.[speedEntity];
       if (speedStateObj?.attributes?.preset_modes?.length) {
         const speedMap = this.config?.speed_map || { low: 1, medium: 2, high: 3 };
@@ -408,7 +409,7 @@ class EmelyaHoodCard extends LitElement {
           <div class="btn power ${this._activeSlot === 0 ? 'active' : ''}" id="btn-0"
               @pointerdown=${this._stopPropagation}
               @click=${this._togglePower}>
-            <img class="icon" src="${this.base}/images/container-images/power_button.png">
+            <img class="icon" src="${this.base}/images/power.png">
           </div>
 
           <div class="btn ${this._activeSlot === 1 ? 'active' : ''}" id="btn-1"
@@ -606,7 +607,7 @@ class EmelyaHoodCardEditor extends LitElement {
     `;
   }
 
-  /* ── Drag & Drop ── */
+  /* Drag & Drop */
 
   _onDragOver(e) { e.preventDefault(); this._dragOver = true; }
   _onDragLeave()  { this._dragOver = false; }
@@ -636,7 +637,7 @@ class EmelyaHoodCardEditor extends LitElement {
     return file;
   }
 
-  /* ── Загрузка файла ── */
+  /* Загрузка файла */
 
   async _uploadFile(file) {
     if (!file.type.startsWith("image/")) {

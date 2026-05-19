@@ -34,6 +34,8 @@ class EmelyaMediaColumns extends LitElement {
     this._lastTap = 0;
     // Предзагрузка
     this._preloadedBgs = new Set();
+    this._expectedTvPlaying = null;
+    this._expectedSpeakerPlaying = null;
   }
 
   setConfig(config) {
@@ -95,7 +97,14 @@ class EmelyaMediaColumns extends LitElement {
           this.tvOn = newTvOn;
         }
 
-        this.tvPlaying = newTvPlaying;
+        if (this._expectedTvPlaying !== null) {
+          if (newTvPlaying === this._expectedTvPlaying) {
+            this._expectedTvPlaying = null;
+            this.tvPlaying = newTvPlaying;
+          }
+        } else {
+          this.tvPlaying = newTvPlaying;
+        }
 
         const volume = tvState.attributes?.volume_level;
         if (volume !== undefined) this.tvVolume = Math.round(volume * 100);
@@ -119,7 +128,14 @@ class EmelyaMediaColumns extends LitElement {
           this.speakerOn = newSpeakerOn;
         }
 
-        this.speakerPlaying = newSpeakerPlaying;
+        if (this._expectedSpeakerPlaying !== null) {
+          if (newSpeakerPlaying === this._expectedSpeakerPlaying) {
+            this._expectedSpeakerPlaying = null;
+            this.speakerPlaying = newSpeakerPlaying;
+          }
+        } else {
+          this.speakerPlaying = newSpeakerPlaying;
+        }
         this.speakerMuted = speakerState.attributes?.is_volume_muted ?? false;
 
         const volume = speakerState.attributes?.volume_level;
@@ -170,7 +186,7 @@ class EmelyaMediaColumns extends LitElement {
     }
 
     /*
-      Фон вынесен в ::before — убирает background-blend-mode с самого .column.
+      Фон вынесен в ::before - убирает background-blend-mode с самого .column.
       background-blend-mode на элементе создаёт stacking context,
       из-за которого position:fixed у дочерних элементов ломается.
     */
@@ -214,7 +230,7 @@ class EmelyaMediaColumns extends LitElement {
       z-index: 0;
     }
 
-    /* ТВ-колонка — другой градиент поверх фона */
+    /* ТВ-колонка - другой градиент поверх фона */
     .column.tv::before {
       background-image:
         linear-gradient(180deg, rgba(0,0,0,0) 0%, #000000 100%),
@@ -446,14 +462,16 @@ class EmelyaMediaColumns extends LitElement {
     if (!this.tvOn) return;
     if (this.tvPlaying) {
       this.tvPlaying = false;
+      this._expectedTvPlaying = false;
       this.hass.callService("media_player", "media_pause", { entity_id: entity });
     } else {
       this.tvPlaying = true;
+      this._expectedTvPlaying = true;
       this.hass.callService("media_player", "media_play", { entity_id: entity });
     }
   }
 
-  /* ── Speaker Actions ── */
+  /* Speaker Actions */
   toggleSpeaker() {
     const entity = this.config?.speaker;
     if (!entity || !this.hass?.states?.[entity]) return;
@@ -470,9 +488,11 @@ class EmelyaMediaColumns extends LitElement {
     if (!this.speakerOn) return;
     if (this.speakerPlaying) {
       this.speakerPlaying = false;
+      this._expectedSpeakerPlaying = false;
       this.hass.callService("media_player", "media_pause", { entity_id: entity });
     } else {
       this.speakerPlaying = true;
+      this._expectedSpeakerPlaying = true;
       this.hass.callService("media_player", "media_play", { entity_id: entity });
     }
   }
@@ -867,7 +887,7 @@ class EmelyaMediaColumnsEditor extends LitElement {
 
     const uploadFile = this._normalizeFileForUpload(file);
 
-    // Attempt 1 — HA store_image
+    // Attempt 1 - HA store_image
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -885,7 +905,7 @@ class EmelyaMediaColumnsEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Attempt 2 — /api/image/upload fallback
+    // Attempt 2 - /api/image/upload fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();

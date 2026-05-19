@@ -122,13 +122,13 @@ class EmelyaHumidifierCard extends LitElement {
     if(modeObj){
       const domain = (isSingleEntity ? entity : modeEntity)?.split(".")[0];
       
-      // humidifier хранит режимы в available_modes, fan — в preset_modes, select — в options
+      // humidifier хранит режимы в available_modes, fan - в preset_modes, select - в options
       const options = modeObj.attributes?.available_modes
         || modeObj.attributes?.preset_modes
         || modeObj.attributes?.options
         || [];
       
-      // текущий режим: humidifier/fan — в атрибуте, select — в state
+      // текущий режим: humidifier/fan - в атрибуте, select - в state
       const newMode = modeObj.attributes?.mode
         ?? modeObj.attributes?.preset_mode
         ?? modeObj.state
@@ -167,7 +167,7 @@ class EmelyaHumidifierCard extends LitElement {
     this._preloadBackground();
   }
 
-  // Предзагрузка фона — браузер начинает качать картинку до рендера
+  // Предзагрузка фона - браузер начинает качать картинку до рендера
   _preloadBackground() {
     const bg = this.config?.background_image
       ? this.config.background_image
@@ -187,7 +187,7 @@ class EmelyaHumidifierCard extends LitElement {
     }
   }
 
-  // После рендера проверяем — если картинка уже в кэше, сразу показываем
+  // После рендера проверяем - если картинка уже в кэше, сразу показываем
   updated(changedProps) {
     if (changedProps.has("config")) {
       this._preloadBackground();
@@ -234,7 +234,7 @@ class EmelyaHumidifierCard extends LitElement {
     }
 
     /*
-      Фон вынесен в ::before — убирает background-blend-mode с самого .card.
+      Фон вынесен в ::before - убирает background-blend-mode с самого .card.
       background-blend-mode на элементе создаёт stacking context,
       из-за которого position:fixed у дочерних элементов ломается.
       Плавное появление через opacity: 0 → 1 после загрузки.
@@ -252,7 +252,7 @@ class EmelyaHumidifierCard extends LitElement {
       background-position: center, -22.849px 67.463px, center;
       background-repeat: no-repeat, no-repeat, no-repeat;
       background-blend-mode: normal, luminosity, normal;
-      /* Плавное появление — воспринимается быстрее чем резкий pop-in */
+      /* Плавное появление - воспринимается быстрее чем резкий pop-in */
       opacity: 0;
       transition: opacity 0.35s ease;
       pointer-events: none;
@@ -376,7 +376,7 @@ class EmelyaHumidifierCard extends LitElement {
     card.addEventListener("pointerup", this._onPointerUp.bind(this));
     card.addEventListener("click", this._onClick.bind(this));
 
-    // Если картинка уже в кэше — сразу показываем без мигания
+    // Если картинка уже в кэше - сразу показываем без мигания
     if (this._bgPreloaded) card.classList.add("bg-loaded");
   }
 
@@ -443,35 +443,35 @@ class EmelyaHumidifierCard extends LitElement {
   _handleSelectChange(e){
     e.stopPropagation();
     const value = e.target.value;
+    if (!value) return;
+
     this.mode = value;
     this._expectedMode = value;
 
+    const entity = this.config?.entity;
     const modeEntity = this.config?.mode_entity;
-    if(!this.hass?.states?.[modeEntity]) return;
+    const targetEntity = (modeEntity && modeEntity !== entity) ? modeEntity : entity;
 
-    const domain = modeEntity.split(".")[0];
-    
+    if (!this.hass?.states?.[targetEntity]) return;
+
+    const domain = targetEntity.split(".")[0];
+
     const serviceMap = {
-      "select": { service: "select_option", param: "option" },
-      "input_select": { service: "select_option", param: "option" },
-      "fan": { service: "set_preset_mode", param: "preset_mode" },
-      "humidifier": { service: "set_mode", param: "mode" }
+      "select":       { service: "select_option",  param: "option" },
+      "input_select": { service: "select_option",  param: "option" },
+      "fan":          { service: "set_preset_mode", param: "preset_mode" },
+      "humidifier":   { service: "set_mode",        param: "mode" }
     };
-    
+
     const mapping = serviceMap[domain];
-    
-    if(mapping) {
+
+    if (mapping) {
       this.hass.callService(domain, mapping.service, {
-        entity_id: modeEntity,
+        entity_id: targetEntity,
         [mapping.param]: value
       });
-    } else if(domain === "number") {
-      this.hass.callService("number", "set_value", {
-        entity_id: modeEntity,
-        value: parseFloat(value)
-      });
     } else {
-      console.warn(`Unsupported domain for mode_entity: ${domain}`);
+      console.warn("emelya-humidifier: unsupported mode entity domain:", domain);
     }
   }
 
@@ -490,7 +490,7 @@ class EmelyaHumidifierCard extends LitElement {
     const bg = this.config.background_image 
       ? this.config.background_image 
       : `${this.base}/images/container-images/humidifier.png`;
-    const entity     = this._config?.entity;
+    const entity = this.config?.entity; 
     const modeEntity = this.config?.mode_entity;
     const isSingleEntity = !modeEntity || modeEntity === entity;
     const modeState = isSingleEntity
@@ -519,7 +519,7 @@ class EmelyaHumidifierCard extends LitElement {
             @pointerdown=${this._stopPropagation}
             @click=${this._togglePower}
           >
-            <img src="${this.base}/images/container-images/power_button.png">
+            <img src="${this.base}/images/power.png">
           </div>
           
           ${modeState ? html`
@@ -545,7 +545,7 @@ class EmelyaHumidifierCard extends LitElement {
   }
 }
 
-/* ==================== EDITOR ==================== */
+/* EDITOR */
 
 class EmelyaHumidifierCardEditor extends LitElement {
   static properties = {
@@ -813,7 +813,7 @@ class EmelyaHumidifierCardEditor extends LitElement {
 
   /* ── Нормализация MIME-типа ──
      HA API отклоняет image/avif (и некоторые другие форматы) с HTTP 400.
-     Подменяем MIME-тип на image/png перед отправкой — байты файла не трогаем.
+     Подменяем MIME-тип на image/png перед отправкой - байты файла не трогаем.
      Браузер читает файл по magic bytes, игнорируя Content-Type, поэтому
      avif корректно отобразится после загрузки. */
   _normalizeFileForUpload(file) {
@@ -837,7 +837,7 @@ class EmelyaHumidifierCardEditor extends LitElement {
 
     const uploadFile = this._normalizeFileForUpload(file);
 
-    // Attempt 1 — HA store_image
+    // Attempt 1 - HA store_image
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -855,7 +855,7 @@ class EmelyaHumidifierCardEditor extends LitElement {
       }
     } catch (_) {}
 
-    // Attempt 2 — /api/image/upload fallback
+    // Attempt 2 - /api/image/upload fallback
     try {
       const token = this.hass?.auth?.data?.access_token;
       const formData = new FormData();

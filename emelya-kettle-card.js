@@ -16,7 +16,7 @@ function readCurrentTemp(state) {
   const d = domain(state.entity_id);
   let val;
   if (d === "water_heater" || d === "climate") {
-    // current_temperature — фактическая температура (датчик внутри устройства)
+    // current_temperature - фактическая температура (датчик внутри устройства)
     val = state.attributes?.current_temperature;
   } else {
     val = parseFloat(state.state);
@@ -30,9 +30,9 @@ function readCurrentTemp(state) {
  * Считывает ЦЕЛЕВУЮ (установленную) температуру из сущности HA.
  * Используется для определения активного режима (подогрев / кипяток).
  *
- * Для climate и water_heater — это attributes.temperature (то, что пользователь
+ * Для climate и water_heater - это attributes.temperature (то, что пользователь
  * установил), а не current_temperature (то, что сейчас внутри).
- * Для number / input_number / sensor — state (они и есть целевое значение).
+ * Для number / input_number / sensor - state (они и есть целевое значение).
  */
 function readTargetTemp(state) {
   if (!state) return null;
@@ -79,6 +79,7 @@ class EmelyaKettleCard extends LitElement {
     this._holdTimer = null;
     this._lastTap = 0;
     this._preloadedBg = null;
+    this._expectedPower = null;
   }
 
   setConfig(config) {
@@ -89,9 +90,9 @@ class EmelyaKettleCard extends LitElement {
       title: "Чайник",
       preheat_temp: 80,
       boil_temp: 100,
-      // preheat_mode / boil_mode  — для water_heater (operation_mode)
-      // preheat_option / boil_option — для select / input_select
-      // mode_entity — select/input_select entity для переключения режимов
+      // preheat_mode / boil_mode  - для water_heater (operation_mode)
+      // preheat_option / boil_option - для select / input_select
+      // mode_entity - select/input_select entity для переключения режимов
       ...config,
     };
     this.base = this.config.base_path || "/local";
@@ -116,7 +117,15 @@ class EmelyaKettleCard extends LitElement {
     // Power state
     const powerEntityId = this.config.power_entity || this.config.entity;
     const powerState = hass.states?.[powerEntityId];
-    this.power = readPowerState(powerState);
+    const newPower = readPowerState(powerState);
+    if (this._expectedPower !== null) {
+      if (newPower === this._expectedPower) {
+        this._expectedPower = null;
+        this.power = newPower;
+      }
+    } else {
+      this.power = newPower;
+    }
 
     // ── Температуры ──
     const tempEntityId = this.config.temp_entity;
@@ -164,6 +173,8 @@ class EmelyaKettleCard extends LitElement {
     if (!entityId || !this.hass) return;
 
     const newPower = !this.power;
+    this.power = newPower;           // оптимистичное обновление
+    this._expectedPower = newPower;  // ждём подтверждения от HA
     const d = domain(entityId);
 
     if (d === "water_heater") {
@@ -204,7 +215,7 @@ class EmelyaKettleCard extends LitElement {
         value: temp
       });
     }
-    // sensor — read-only, ничего не делаем
+    // sensor - read-only, ничего не делаем
   }
 
   /**
@@ -496,7 +507,7 @@ class EmelyaKettleCard extends LitElement {
               @pointerdown=${this._stopPropagation}
               @click=${this._togglePower}
             >
-              <img src="${this.base}/images/container-images/power_button.png" alt="power">
+              <img src="${this.base}/images/power.png" alt="power">
             </button>
 
             <button

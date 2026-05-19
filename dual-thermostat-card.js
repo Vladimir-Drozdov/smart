@@ -27,6 +27,7 @@ class DualThermostatCard extends LitElement {
     this._lastTap = 0;
     this.card1 = null;
     this.card2 = null;
+    this._expectedPower = null;
   }
 
   clone(value) {
@@ -98,7 +99,7 @@ class DualThermostatCard extends LitElement {
       return merged;
     };
 
-    // Offscreen контейнер — карточки греются здесь пока card-mod не отработает
+    // Offscreen контейнер - карточки греются здесь пока card-mod не отработает
     if (!this._offscreen) {
       this._offscreen = document.createElement("div");
       this._offscreen.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:400px;visibility:hidden;pointer-events:none;";
@@ -125,7 +126,7 @@ class DualThermostatCard extends LitElement {
         card2.hass = this._hass;
       }
 
-      // Вставляем в offscreen — card-mod начинает работать
+      // Вставляем в offscreen - card-mod начинает работать
       this._offscreen.appendChild(card1);
       this._offscreen.appendChild(card2);
 
@@ -142,7 +143,7 @@ class DualThermostatCard extends LitElement {
       ]).then(() => {
         this._cardReady = true;
         this.requestUpdate();
-        // После того как Lit вставит карточку в основной DOM — показываем
+        // После того как Lit вставит карточку в основной DOM - показываем
         this.updateComplete.then(() => {
           requestAnimationFrame(() => requestAnimationFrame(() => {
             this._visible = true;
@@ -216,7 +217,7 @@ class DualThermostatCard extends LitElement {
       border-radius: 24px 24px 0 0;
       flex: 1;
       opacity: 0;
-      /* Нет transition — появление мгновенное, без анимации поверх старых стилей */
+      /* Нет transition - появление мгновенное, без анимации поверх старых стилей */
     }
 
     .thermo-wrapper.visible {
@@ -511,7 +512,7 @@ class DualThermostatCard extends LitElement {
               "ha-outlined-icon-button": {
                 "$": outlinedButtonStyle
               }
-              // ← убрали first-child и last-of-type отсюда
+              // убрали first-child и last-of-type отсюда
             },
             "p.label.secondary ha-svg-icon": {
               "$": hideSecondaryIconStyle
@@ -533,10 +534,10 @@ class DualThermostatCard extends LitElement {
           "$": {
             ".buttons": {
               "ha-outlined-icon-button:first-child": {
-                "$": makeFirstButtonStyle(entity)  // ← своя entity
+                "$": makeFirstButtonStyle(entity)  // - своя entity
               },
               "ha-outlined-icon-button:last-of-type": {
-                "$": makeLastButtonStyle(entity)   // ← своя entity
+                "$": makeLastButtonStyle(entity)   // - своя entity
               }
             },
             "ha-control-circular-slider": {
@@ -588,7 +589,7 @@ class DualThermostatCard extends LitElement {
       const card = this.active === 0 ? this.card1 : this.card2;
       if (!card) { resolve(); return; }
       if (card.shadowRoot) { resolve(card.shadowRoot); return; }
-      // shadowRoot ещё не создан — ждём через customElements upgrade
+      // shadowRoot ещё не создан - ждём через customElements upgrade
       setTimeout(() => waitForShadow(resolve), 20);
     };
 
@@ -620,7 +621,17 @@ class DualThermostatCard extends LitElement {
   updatePowerState() {
     if (!this._hass || !this.config?.entity1) return;
     const state = this._hass.states[this.config.entity1];
-    this.powerOn = state ? state.state !== "off" : false;
+    const newPower = state ? state.state !== "off" : false;
+
+    if (this._expectedPower !== null) {
+      if (newPower === this._expectedPower) {
+        this._expectedPower = null;
+        this.powerOn = newPower;
+      }
+      // иначе ждём - не перезаписываем оптимистичное значение
+    } else {
+      this.powerOn = newPower;
+    }
   }
 
   _onPointerDown(e) {
@@ -664,7 +675,7 @@ class DualThermostatCard extends LitElement {
     this.active = index;
     this._visible = false;
 
-    // Карточки уже прогрелись в offscreen — card-mod уже применён
+    // Карточки уже прогрелись в offscreen - card-mod уже применён
     // Просто показываем
     this.requestUpdate();
     this.updateComplete.then(() => {
@@ -678,7 +689,7 @@ class DualThermostatCard extends LitElement {
     const container = this.shadowRoot.querySelector(".thermo-container");
     if (!container) { this._visible = true; return; }
 
-    // Текущая карточка могла уже иметь размер (кэш) — проверяем сразу
+    // Текущая карточка могла уже иметь размер (кэш) - проверяем сразу
     if (container.getBoundingClientRect().height > 0) {
       requestAnimationFrame(() => requestAnimationFrame(() => { this._visible = true; }));
       return;
@@ -701,6 +712,7 @@ class DualThermostatCard extends LitElement {
     e.stopPropagation();
     if (!this._hass || !this.config?.entity1) return;
     const isOff = this._hass.states[this.config.entity1]?.state === "off";
+    this._expectedPower = !isOff;
     this.powerOn = !isOff;
     this._hass.callService("climate", isOff ? "turn_on" : "turn_off", {
       entity_id: [this.config.entity1, this.config.entity2].filter(Boolean)
@@ -749,41 +761,39 @@ class DualThermostatCard extends LitElement {
   }
 }
 
-/* ══════════════════════════════════════════
-   EDITOR
-══════════════════════════════════════════ */
+/* EDITOR */
 const ICON_OPTIONS = [
   { label: "Спальня",        value: "/local/images/icons/bedroom.svg" },
   { label: "Гостиная",       value: "/local/images/icons/living_room.svg" },
   { label: "Душ, ванная",    value: "/local/images/icons/bathroom.svg" },
-  { label: "Детская",        value: "/local/images/icons/kids_room.svg" }, //
-  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" }, //
+  { label: "Детская",        value: "/local/images/icons/kids_room.svg" },
+  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" },
   { label: "Кухня",          value: "/local/images/icons/kitchen.svg" },
-  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" }, //
+  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" },
   { label: "Кабинет",        value: "/local/images/icons/office.svg" },
   { label: "Постирочная",    value: "/local/images/icons/laundry.svg" },
   { label: "Туалет",         value: "/local/images/icons/toilet.svg" },
   { label: "Холл",           value: "/local/images/icons/hall.svg" },
-  { label: "Кладовая",       value: "/local/images/icons/storage.svg" }, //
+  { label: "Кладовая",       value: "/local/images/icons/storage.svg" },
   { label: "Коридор",        value: "/local/images/icons/corridor.svg" },
   { label: "Двор",           value: "/local/images/icons/yard.svg" },
-  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" }, //
+  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" },
   { label: "Столовая",       value: "/local/images/icons/dining_room.svg" },
   { label: "Кинотеатр",      value: "/local/images/icons/home_cinema.svg" },
   { label: "Бассейн",        value: "/local/images/icons/pool.svg" },
-  { label: "Гараж",          value: "/local/images/icons/garage.svg" }, //
+  { label: "Гараж",          value: "/local/images/icons/garage.svg" },
   { label: "Комната няни",   value: "/local/images/icons/nanny_room.svg" },
-  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" }, //
-  { label: "Полумесяц",       value: "/local/images/icons/cresent_moon.svg" }, //
-  { label: "Часы",       value: "/local/images/icons/clock.svg" }, //
-  { label: "Холодный термостат",       value: "/local/images/icons/cool_thermostat.svg" }, //
-  { label: "Горячий термостат",       value: "/local/images/icons/heat_thermostat.svg" }, //
-  { label: "Дверь закрытая",       value: "/local/images/icons/door_front.svg" }, //
-  { label: "Дверь открытая",       value: "/local/images/icons/door_open.svg" }, //
-  { label: "Лампочка включенная",       value: "/local/images/icons/lightbulb.svg" }, //
-  { label: "Лампочка выключенная",       value: "/local/images/icons/lightbulb_turnoff.svg" }, //
-  { label: "Капля",       value: "/local/images/icons/no_drop.svg" }, //
-  { label: "вкл/выкл",       value: "/local/images/icons/power.svg" }, //
+  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" },
+  { label: "Полумесяц",       value: "/local/images/icons/cresent_moon.svg" },
+  { label: "Часы",       value: "/local/images/icons/clock.svg" },
+  { label: "Холодный термостат",       value: "/local/images/icons/cool_thermostat.svg" },
+  { label: "Горячий термостат",       value: "/local/images/icons/heat_thermostat.svg" },
+  { label: "Дверь закрытая",       value: "/local/images/icons/door_front.svg" },
+  { label: "Дверь открытая",       value: "/local/images/icons/door_open.svg" },
+  { label: "Лампочка включенная",       value: "/local/images/icons/lightbulb.svg" },
+  { label: "Лампочка выключенная",       value: "/local/images/icons/lightbulb_turnoff.svg" },
+  { label: "Капля",       value: "/local/images/icons/no_drop.svg" },
+  { label: "вкл/выкл",       value: "/local/images/icons/power.svg" },
 ];
 class DualThermostatCardEditor extends LitElement {
   static properties = {
@@ -860,7 +870,7 @@ class DualThermostatCardEditor extends LitElement {
           style="flex:1; border:1px solid var(--divider-color); border-radius:10px; padding:10px 12px; background:var(--secondary-background-color); color:var(--primary-text-color); font:inherit; box-sizing:border-box;"
           @change=${(e) => this._setIcon(key, e.target.value)}
         >
-          <option value="">— Выберите иконку —</option>
+          <option value="">Выберите иконку</option>
           ${ICON_OPTIONS.map(opt => html`
             <option value=${opt.value} ?selected=${this._config?.[key] === opt.value}>
               ${opt.label}
@@ -958,6 +968,6 @@ window.customCards.push({
   name: "Dual Thermostat Card",
   description: "Два термостата с переключателем режимов",
   preview: true,
-  // ── Ключевое поле: без него HA не знает какой элемент открывать в редакторе
+  // -- Ключевое поле: без него HA не знает какой элемент открывать в редакторе
   documentationURL: "https://github.com/",
 });

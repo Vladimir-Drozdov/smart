@@ -14,14 +14,12 @@ class EmelyaQuickActions extends LitElement {
   constructor() {
     super();
     this.activeActions = new Set();
-    this.isDragging = false;
     this.startX = 0;
-    this.scrollLeft = 0;
     this.dragStarted = false;
-    this._expectedStates = {};
-    this._lastUserChange = 0;
     this._modalAction = null;
     this._modalIndex = null;
+    this._wasDragging = false;
+    this._lastTurnOff = {};
   }
 
   setConfig(config) {
@@ -35,10 +33,10 @@ class EmelyaQuickActions extends LitElement {
   static getStubConfig() {//создание конфигурации по умолчанию, когда пользователь только добавляет карточку на панель
     return {
       actions: [
-        { label: "Home", icon: "", entity: "", service: { domain: "input_select" } },
-        { label: "Away", icon: "", entity: "", service: { domain: "input_select" } },
+        { label: "Home", icon: "", entity: "" },
+        { label: "Away", icon: "", entity: "" },
         { divider: true },
-        { label: "Light", icon: "", entity: "", service: { domain: "light" } },
+        { label: "Light", icon: "", entity: "" },
       ]
     };
   }
@@ -58,7 +56,7 @@ class EmelyaQuickActions extends LitElement {
       }
     });
 
-    // Для каждой группы между divider-ами — если несколько горят,
+    // Для каждой группы между divider-ами - если несколько горят,
     // оставить только последнюю активную и выключить остальные
     const groups = [];
     let currentGroup = [];
@@ -72,15 +70,20 @@ class EmelyaQuickActions extends LitElement {
     });
     if (currentGroup.length) groups.push(currentGroup);
 
+    // СТАЛО
     groups.forEach(group => {
       const activeInGroup = group.filter(i => newActive.has(i));
       if (activeInGroup.length > 1) {
-        // оставляем последний активный, остальные выключаем
         const toTurnOff = activeInGroup.slice(0, -1);
         toTurnOff.forEach(i => {
           newActive.delete(i);
           const entity = actions[i].entity;
           if (entity) {
+            // защита от спама: не дёргаем сервис если уже вызывали для этой entity
+            const now = Date.now();
+            if (this._lastTurnOff[entity] && now - this._lastTurnOff[entity] < 3000) return;
+            this._lastTurnOff[entity] = now;
+
             this._hass.callService("input_boolean", "turn_off", { entity_id: entity });
           }
         });
@@ -187,7 +190,6 @@ class EmelyaQuickActions extends LitElement {
       white-space: pre-wrap;
       margin: 0;
     }
-    .label.single-line { bottom: 40px; }
     .divider {
       width: 3px;
       min-width: 3px;
@@ -303,30 +305,11 @@ class EmelyaQuickActions extends LitElement {
       border-color: #6750A4;
     }
     .modal-btn.primary:hover { background: #7965AF; }
-    .modal-close-btn {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      background: #343239;
-      border: none;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      color: #fff;
-      font-size: 16px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
   `;
 
   _onMouseDown(e) {
-    this.isDragging = false;
     this.dragStarted = false;
     this.startX = e.pageX - this.offsetLeft;
-    this.scrollLeft = this.scrollLeft;
-
     const container = this.renderRoot.querySelector('.quick-actions');
     this.startScrollLeft = container.scrollLeft;
 
@@ -343,9 +326,7 @@ class EmelyaQuickActions extends LitElement {
     if (!container) return;
 
     const moveX = Math.abs(e.pageX - this._dragStartX);
-    const moveTime = Date.now() - this._dragStartTime;
-
-    if (!this.dragStarted && (moveX > 5 || moveTime > 200)) {
+    if (!this.dragStarted && moveX > 5) {
       this.dragStarted = true;
       container.classList.add('dragging');
     }
@@ -370,14 +351,31 @@ class EmelyaQuickActions extends LitElement {
       e.stopPropagation();
     }
 
+    this._wasDragging = this.dragStarted;
     this._dragStartTime = null;
     this.dragStarted = false;
+    if (this._wasDragging) {
+      setTimeout(() => { this._wasDragging = false; }, 50);
+    }
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    document.removeEventListener('mousemove', this._onMouseMove);
+    document.removeEventListener('mouseup', this._onMouseUp);
+    if (this._holdTimer) {
+      clearTimeout(this._holdTimer);
+      this._holdTimer = null;
+    }
+    if (this._tapTimer) {
+      clearTimeout(this._tapTimer);
+      this._tapTimer = null;
+    }
   }
 
   // Click / hold / double-tap wiring
 
   _handleClick(action, index, e) {
-    if (this.dragStarted) {
+    if (this._wasDragging) {
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -477,7 +475,7 @@ class EmelyaQuickActions extends LitElement {
     const isActive = this.activeActions.has(index);
     const service = isActive ? "turn_off" : "turn_on";
 
-    // если включаем — сначала выключаем все остальные в группе
+    // если включаем - сначала выключаем все остальные в группе
     if (!isActive) {
       const actions = this.config?.actions || [];
 
@@ -560,7 +558,7 @@ class EmelyaQuickActions extends LitElement {
 
           <div class="modal-actions-row">
             <button class="modal-btn" @click=${this._closeModal}>Закрыть</button>
-            <button class="modal-btn primary" @click=${() => { this._closeModal(); this._toggleAction(action, index); }}>
+            <button class="modal-btn primary" @click=${() => { this._closeModal(); this._doToggle(action, index) }}>
               ${isActive ? 'Выключить' : 'Включить'}
             </button>
           </div>
@@ -581,7 +579,6 @@ class EmelyaQuickActions extends LitElement {
           if (action.divider) return html`<div class="divider"></div>`;
 
           const isActive = this.activeActions.has(index);
-          const labelClass = action.lines === 1 ? 'label single-line' : 'label';
 
           return html`
             <button
@@ -592,6 +589,8 @@ class EmelyaQuickActions extends LitElement {
               @mouseleave=${() => this._handleMouseUp()}
               @touchstart=${() => this._handleMouseDown(action, index)}
               @touchend=${() => this._handleMouseUp()}
+              @touchmove=${() => this._handleMouseUp()}
+              @touchcancel=${() => this._handleMouseUp()}
             >
               <div class="icon-bg">
                 <div class="icon">
@@ -615,34 +614,34 @@ const ICON_OPTIONS = [
   { label: "Спальня",        value: "/local/images/icons/bedroom.svg" },
   { label: "Гостиная",       value: "/local/images/icons/living_room.svg" },
   { label: "Душ, ванная",    value: "/local/images/icons/bathroom.svg" },
-  { label: "Детская",        value: "/local/images/icons/kids_room.svg" }, //
-  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" }, //
+  { label: "Детская",        value: "/local/images/icons/kids_room.svg" },
+  { label: "Гардероб",       value: "/local/images/icons/wardrobe.svg" },
   { label: "Кухня",          value: "/local/images/icons/kitchen.svg" },
-  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" }, //
+  { label: "Котельная",      value: "/local/images/icons/boiler_room.svg" },
   { label: "Кабинет",        value: "/local/images/icons/office.svg" },
   { label: "Постирочная",    value: "/local/images/icons/laundry.svg" },
   { label: "Туалет",         value: "/local/images/icons/toilet.svg" },
   { label: "Холл",           value: "/local/images/icons/hall.svg" },
-  { label: "Кладовая",       value: "/local/images/icons/storage.svg" }, //
+  { label: "Кладовая",       value: "/local/images/icons/storage.svg" },
   { label: "Коридор",        value: "/local/images/icons/corridor.svg" },
   { label: "Двор",           value: "/local/images/icons/yard.svg" },
-  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" }, //
+  { label: "Баня, сауна",    value: "/local/images/icons/sauna.svg" },
   { label: "Столовая",       value: "/local/images/icons/dining_room.svg" },
   { label: "Кинотеатр",      value: "/local/images/icons/home_cinema.svg" },
   { label: "Бассейн",        value: "/local/images/icons/pool.svg" },
-  { label: "Гараж",          value: "/local/images/icons/garage.svg" }, //
+  { label: "Гараж",          value: "/local/images/icons/garage.svg" },
   { label: "Комната няни",   value: "/local/images/icons/nanny_room.svg" },
-  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" }, //
-  { label: "Полумесяц",       value: "/local/images/icons/cresent_moon.svg" }, //
-  { label: "Часы",       value: "/local/images/icons/clock.svg" }, //
-  { label: "Холодный термостат",       value: "/local/images/icons/cool_thermostat.svg" }, //
-  { label: "Горячий термостат",       value: "/local/images/icons/heat_thermostat.svg" }, //
-  { label: "Дверь закрытая",       value: "/local/images/icons/door_front.svg" }, //
-  { label: "Дверь открытая",       value: "/local/images/icons/door_open.svg" }, //
-  { label: "Лампочка включенная",       value: "/local/images/icons/lightbulb.svg" }, //
-  { label: "Лампочка выключенная",       value: "/local/images/icons/lightbulb_turnoff.svg" }, //
-  { label: "Капля",       value: "/local/images/icons/no_drop.svg" }, //
-  { label: "вкл/выкл",       value: "/local/images/icons/power.svg" }, //
+  { label: "Прихожая",       value: "/local/images/icons/entrance.svg" },
+  { label: "Полумесяц",       value: "/local/images/icons/cresent_moon.svg" },
+  { label: "Часы",       value: "/local/images/icons/clock.svg" },
+  { label: "Холодный термостат",       value: "/local/images/icons/cool_thermostat.svg" },
+  { label: "Горячий термостат",       value: "/local/images/icons/heat_thermostat.svg" },
+  { label: "Дверь закрытая",       value: "/local/images/icons/door_front.svg" },
+  { label: "Дверь открытая",       value: "/local/images/icons/door_open.svg" },
+  { label: "Лампочка включенная",       value: "/local/images/icons/lightbulb.svg" },
+  { label: "Лампочка выключенная",       value: "/local/images/icons/lightbulb_turnoff.svg" },
+  { label: "Капля",       value: "/local/images/icons/no_drop.svg" },
+  { label: "вкл/выкл",       value: "/local/images/icons/power.svg" },
 ];
 class EmelyaQuickActionsEditor extends LitElement {
 
@@ -970,6 +969,7 @@ class EmelyaQuickActionsEditor extends LitElement {
     const schema = [
       {
         name: "label",
+        label: "Название кнопки",
         selector: { text: {multiline: true} }
       },
       {
@@ -1069,6 +1069,7 @@ class EmelyaQuickActionsEditor extends LitElement {
       double_tap_action: { action: 'none' },
     });
     this.config = { ...this.config, actions };
+    this._actionStates = {};
     this._editingIndex = actions.length - 1;
     this._fire();
   }
