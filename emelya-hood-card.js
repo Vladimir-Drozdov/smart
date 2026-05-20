@@ -217,6 +217,10 @@ class EmelyaHoodCard extends LitElement {
       position: relative;
       z-index: 1;
     }
+    .btn img {
+      width:28px;
+      height:28px;
+    }
 
     .btn.power {
       border: none;

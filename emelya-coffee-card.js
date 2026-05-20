@@ -750,7 +750,7 @@ class EmelyaCoffeeCardEditor extends LitElement {
     const options = sourceState?.attributes?.preset_modes
       || sourceState?.attributes?.options
       || [];
-    const labels       = this._config?.mode_labels || {};
+    const labels = this._config?.mode_labels || {};
 
     return html`
       ${this._form([

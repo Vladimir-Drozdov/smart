@@ -346,7 +346,10 @@ class EmelyaBreezerCard extends LitElement {
     .power.active{ 
       background: #4D4A54;
     }
-
+    .power img {
+      width:28px;
+      height:28px;
+    }
     ha-select{
       width:100%;
       position: relative !important;
