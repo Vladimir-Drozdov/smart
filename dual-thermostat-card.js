@@ -619,8 +619,10 @@ class DualThermostatCard extends LitElement {
   }
 
   updatePowerState() {
-    if (!this._hass || !this.config?.entity1) return;
-    const state = this._hass.states[this.config.entity1];
+    if (!this._hass) return;
+    const entity = this.active === 0 ? this.config?.entity1 : this.config?.entity2;
+    if (!entity) return;
+    const state = this._hass.states[entity];
     const newPower = state ? state.state !== "off" : false;
 
     if (this._expectedPower !== null) {
@@ -628,7 +630,6 @@ class DualThermostatCard extends LitElement {
         this._expectedPower = null;
         this.powerOn = newPower;
       }
-      // иначе ждём - не перезаписываем оптимистичное значение
     } else {
       this.powerOn = newPower;
     }
@@ -674,9 +675,9 @@ class DualThermostatCard extends LitElement {
     if (this.active === index) return;
     this.active = index;
     this._visible = false;
+    this._expectedPower = null;   // ← сбрасываем ожидание предыдущего entity
+    this.updatePowerState();       // ← сразу обновляем кнопку
 
-    // Карточки уже прогрелись в offscreen - card-mod уже применён
-    // Просто показываем
     this.requestUpdate();
     this.updateComplete.then(() => {
       requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -684,7 +685,6 @@ class DualThermostatCard extends LitElement {
       }));
     });
   }
-
   _waitForCardRender() {
     const container = this.shadowRoot.querySelector(".thermo-container");
     if (!container) { this._visible = true; return; }
@@ -710,12 +710,14 @@ class DualThermostatCard extends LitElement {
 
   togglePower(e) {
     e.stopPropagation();
-    if (!this._hass || !this.config?.entity1) return;
-    const isOff = this._hass.states[this.config.entity1]?.state === "off";
-    this._expectedPower = !isOff;
-    this.powerOn = !isOff;
+    if (!this._hass) return;
+    const entity = this.active === 0 ? this.config?.entity1 : this.config?.entity2;
+    if (!entity) return;
+    const isOff = this._hass.states[entity]?.state === "off";
+    this._expectedPower = isOff;
+    this.powerOn = isOff;
     this._hass.callService("climate", isOff ? "turn_on" : "turn_off", {
-      entity_id: [this.config.entity1, this.config.entity2].filter(Boolean)
+      entity_id: entity
     });
   }
 
