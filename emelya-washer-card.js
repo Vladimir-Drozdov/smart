@@ -352,8 +352,8 @@ class EmelyaWasherCard extends LitElement {
     }
 
     .power img{
-      width:24px;
-      height:24px;
+      width:18px;
+      height:18px;
     }
   `;
 

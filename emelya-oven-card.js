@@ -285,7 +285,8 @@ class EmelyaOvenCard extends LitElement {
       background: #4D4A54;
     }
     .power img {
-      width: 28px;
+      width: 18px;
+      height: 18px;
     }
   `;
 

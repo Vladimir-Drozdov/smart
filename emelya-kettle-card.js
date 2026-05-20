@@ -460,7 +460,7 @@ class EmelyaKettleCard extends LitElement {
       z-index: 1;
     }
 
-    .power-btn img { width: 28px; height: 28px; }
+    .power-btn img { width: 18px; height: 18px; }
 
     .mode-btn.active,
     .power-btn.active {

@@ -360,8 +360,8 @@ class EmelyaCoffeeCard extends LitElement {
     }
 
     .power img {
-      width: 24px;
-      height: 24px;
+      width: 18px;
+      height: 18px;
       object-fit: contain;
     }
 

@@ -272,7 +272,7 @@ class DualThermostatCard extends LitElement {
     .btn.power.active {
       background: #343239;
     }
-    .btn img { width: 24px; height: 24px; }
+    .btn img { width: 18px; height: 18px; }
 
     .toggle {
       display: flex;

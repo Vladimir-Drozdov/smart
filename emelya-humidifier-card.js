@@ -338,8 +338,8 @@ class EmelyaHumidifierCard extends LitElement {
     }
 
     .power img{
-      width:28px;
-      height:28px;
+      width:18px;
+      height:18px;
     }
 
     ha-select{
