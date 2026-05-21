@@ -1,6 +1,5 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
-
-//  RUNTIME CARD
+import { LitElement, html, css } from "/local/lib/lit.js";
+// RUNTIME CARD
 class EmelyaQuickActions extends LitElement {
 
   static properties = {
@@ -20,6 +19,7 @@ class EmelyaQuickActions extends LitElement {
     this._modalIndex = null;
     this._wasDragging = false;
     this._lastTurnOff = {};
+    this._lastEntityStates = {};
   }
 
   setConfig(config) {
@@ -45,19 +45,38 @@ class EmelyaQuickActions extends LitElement {
     this._hass = hass;
 
     const actions = this.config?.actions || [];
-    const newActive = new Set();
 
+    // Собираем entityId всех кнопок (не divider)
+    const entityIds = actions
+      .filter(a => !a.divider && a.entity)
+      .map(a => a.entity);
+
+    // Проверяем изменились ли состояния нужных entity
+    let changed = false;
+    for (const id of entityIds) {
+      const newState = hass.states?.[id]?.state;
+      if (this._lastEntityStates[id] !== newState) {
+        changed = true;
+        break;
+      }
+    }
+
+    if (!changed) return;
+
+    // Сохраняем новые состояния
+    for (const id of entityIds) {
+      this._lastEntityStates[id] = hass.states?.[id]?.state;
+    }
+
+    // Считаем активные
+    const newActive = new Set();
     actions.forEach((action, index) => {
       if (action.divider || !action.entity) return;
-      const stateObj = hass.states?.[action.entity];
-      if (!stateObj) return;
-      if (["on", "home", "running"].includes(stateObj.state)) {
-        newActive.add(index);
-      }
+      const state = hass.states?.[action.entity]?.state;
+      if (["on", "home", "running"].includes(state)) newActive.add(index);
     });
 
-    // Для каждой группы между divider-ами - если несколько горят,
-    // оставить только последнюю активную и выключить остальные
+    // Группы между divider-ами — выключаем лишние активные
     const groups = [];
     let currentGroup = [];
     actions.forEach((action, index) => {
@@ -70,28 +89,21 @@ class EmelyaQuickActions extends LitElement {
     });
     if (currentGroup.length) groups.push(currentGroup);
 
-    // СТАЛО
+    const now = Date.now();
     groups.forEach(group => {
       const activeInGroup = group.filter(i => newActive.has(i));
-      if (activeInGroup.length > 1) {
-        const toTurnOff = activeInGroup.slice(0, -1);
-        toTurnOff.forEach(i => {
-          newActive.delete(i);
-          const entity = actions[i].entity;
-          if (entity) {
-            // защита от спама: не дёргаем сервис если уже вызывали для этой entity
-            const now = Date.now();
-            if (this._lastTurnOff[entity] && now - this._lastTurnOff[entity] < 3000) return;
-            this._lastTurnOff[entity] = now;
-
-            this._hass.callService("input_boolean", "turn_off", { entity_id: entity });
-          }
-        });
-      }
+      if (activeInGroup.length <= 1) return;
+      activeInGroup.slice(0, -1).forEach(i => {
+        newActive.delete(i);
+        const entity = actions[i].entity;
+        if (!entity) return;
+        if (this._lastTurnOff[entity] && now - this._lastTurnOff[entity] < 3000) return;
+        this._lastTurnOff[entity] = now;
+        this._hass.callService("input_boolean", "turn_off", { entity_id: entity });
+      });
     });
 
     this.activeActions = newActive;
-    this.requestUpdate();
   }
 
   get hass() { return this._hass; }
@@ -566,14 +578,48 @@ class EmelyaQuickActions extends LitElement {
       </div>
     `;
   }
+  _getActionIndex(e) {
+    const btn = e.target.closest(".action-btn");
+    if (!btn) return -1;
+    const container = this.renderRoot.querySelector(".quick-actions");
+    return [...container.children].indexOf(btn);
+  }
 
+  _onContainerClick = (e) => {
+    const btn = e.target.closest(".action-btn");
+    if (!btn) return;
+    const i = this._getRealIndex(btn);
+    if (i === -1) return;
+    this._handleClick(this.config.actions[i], i, e);
+  }
+
+  _onContainerMouseUp = (e) => {
+    this._handleMouseUp();
+  }
+  _getRealIndex(btn) {
+    const container = this.renderRoot.querySelector(".quick-actions");
+    const domIndex = [...container.children].indexOf(btn);
+    if (domIndex === -1) return -1;
+    // children включают divider-ы, поэтому считаем сколько не-divider элементов до него
+    let actionIndex = 0;
+    const actions = this.config?.actions || [];
+    let domPos = 0;
+    for (let i = 0; i < actions.length; i++) {
+      if (domPos === domIndex) return i;
+      domPos++;
+      if (!actions[i].divider) actionIndex++;
+    }
+    return -1;
+  }
   render() {
     const actions = this.config?.actions || [];
 
     return html`
-      <div
-        class="quick-actions"
+      <div class="quick-actions"
         @mousedown=${this._onMouseDown}
+        @click=${this._onContainerClick}
+        @mouseup=${this._onContainerMouseUp}
+        @mouseleave=${this._onContainerMouseUp}
       >
         ${actions.map((action, index) => {
           if (action.divider) return html`<div class="divider"></div>`;
@@ -582,15 +628,7 @@ class EmelyaQuickActions extends LitElement {
 
           return html`
             <button
-              class="action-btn ${isActive ? 'active' : ''}"
-              @click=${(e) => this._handleClick(action, index, e)}
-              @mousedown=${() => this._handleMouseDown(action, index)}
-              @mouseup=${() => this._handleMouseUp()}
-              @mouseleave=${() => this._handleMouseUp()}
-              @touchstart=${() => this._handleMouseDown(action, index)}
-              @touchend=${() => this._handleMouseUp()}
-              @touchmove=${() => this._handleMouseUp()}
-              @touchcancel=${() => this._handleMouseUp()}
+              class="action-btn ${isActive ? 'active' : ''}"              
             >
               <div class="icon-bg">
                 <div class="icon">

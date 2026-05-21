@@ -1,254 +1,264 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
-import {
-  handleAction,
-  hasAction
-} from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
+import { LitElement, html, css } from "/local/lib/lit.js";
+import { handleAction, hasAction } from "/local/lib/custom-card-helpers.js";
 
 function clone(value) {
   return structuredClone(value);
 }
+const _cardModCache = new Map();
+const yieldToMain = () => {
+  if (typeof scheduler !== "undefined" && scheduler.postTask) {
+    return scheduler.postTask(() => {}, { priority: "background" });
+  }
+  return new Promise(r => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = r;
+    ch.port2.postMessage(null);
+  });
+};
+const getCardMod = (base = "/local") => {
+  if (_cardModCache.has(base)){return _cardModCache.get(base);}
+  const mod = {
+    style: {
+      ".": `
+        ha-card {
+          --tile-color: #343239 !important;
+          background: rgba(28, 27, 31, 1) !important;
+          box-shadow: none !important;
+          padding: 0px !important;
+          border-radius: 24px !important;
+        }
+        ha-card:hover { background: transparent !important; }
+        ha-card::before {
+          content: "" !important;
+          position: absolute !important;
+          inset: 0 !important;
+          padding: 1px !important;
+          border-radius: inherit !important;
+          background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+          pointer-events: none !important;
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor !important;
+          mask-composite: exclude !important;
+        }
 
-// entity передаётся сюда, чтобы Jinja2-шаблоны card_mod
-// реагировали на реальное состояние объекта в HA
-const getCardMod = (base = "/local", entity = "") => ({
-  style: {
-    ".": `
-      ha-card {
-        --tile-color: #343239 !important;
-        background: rgba(28, 27, 31, 1) !important;
-        box-shadow: none !important;
-        padding: 0px !important;
-        border-radius: 24px !important;
-      }
-      ha-card:hover { background: transparent !important; }
-      ha-card::before {
-        content: "" !important;
-        position: absolute !important;
-        inset: 0 !important;
-        padding: 1px !important;
-        border-radius: inherit !important;
-        background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-        pointer-events: none !important;
-        -webkit-mask:
-          linear-gradient(#fff 0 0) content-box,
-          linear-gradient(#fff 0 0);
-        -webkit-mask-composite: xor !important;
-        mask-composite: exclude !important;
-      }
-
-      ha-card ha-tile-container ha-tile-info {
-        opacity:0 !important;
-        visibility:hidden !important;
-        display:none !important;
-      }
-      ha-card ha-tile-container ha-tile-icon{
-        opacity:0 !important;
-        visibility:hidden !important;
-        display:none !important;
-      }
-      ha-card ha-tile-container ha-tile-icon ha-state-icon{
-        display:none;
-        opacity:0;
-        visibility: hidden;
-      }
-      ha-card ha-tile-container ha-tile-icon[data-state="on"]{
-        opacity:0 !important;
-        visibility:hidden !important;
-        display:none !important;
-      }
-      ha-card ha-tile-container ha-tile-icon::after{
-        opacity:0 !important;
-        visibility:hidden !important;
-        display:none !important;
-      }
-      ha-card ha-tile-container ha-tile-icon::before {
-        opacity:0 !important;
-        visibility:hidden !important;
-        display:none !important;
-      }
-      ha-card ha-tile-container ha-tile-info span:nth-child(2) {
-        opacity:0 !important;
-        visibility:hidden !important;
-        display:none !important;
-      }
-      ha-card ha-tile-container ha-tile-info span:nth-child(3) {
-        opacity:0 !important;
-        visibility:hidden !important;
-        display:none !important;
-      }
-      ha-card ha-tile-container hui-card-features {
-        padding: 0 !important;
-      }
-    `,
-    "ha-tile-container ha-tile-icon":{
-      "$":`
-        .container.background{
+        ha-card ha-tile-container ha-tile-info {
           opacity:0 !important;
           visibility:hidden !important;
           display:none !important;
         }
-        .container{
+        ha-card ha-tile-container ha-tile-icon{
           opacity:0 !important;
           visibility:hidden !important;
           display:none !important;
         }
-      `
-    },
-    "ha-tile-container": {
-      "$": `
-        .content { 
+        ha-card ha-tile-container ha-tile-icon ha-state-icon{
+          display:none;
+          opacity:0;
+          visibility: hidden;
+        }
+        ha-card ha-tile-container ha-tile-icon[data-state="on"]{
           opacity:0 !important;
           visibility:hidden !important;
           display:none !important;
+        }
+        ha-card ha-tile-container ha-tile-icon::after{
+          opacity:0 !important;
+          visibility:hidden !important;
+          display:none !important;
+        }
+        ha-card ha-tile-container ha-tile-icon::before {
+          opacity:0 !important;
+          visibility:hidden !important;
+          display:none !important;
+        }
+        ha-card ha-tile-container ha-tile-info span:nth-child(2) {
+          opacity:0 !important;
+          visibility:hidden !important;
+          display:none !important;
+        }
+        ha-card ha-tile-container ha-tile-info span:nth-child(3) {
+          opacity:0 !important;
+          visibility:hidden !important;
+          display:none !important;
+        }
+        ha-card ha-tile-container hui-card-features {
+          padding: 0 !important;
         }
       `,
-      "ha-tile-info": {
-        "$": `
-          .info {
+      "ha-tile-container ha-tile-icon":{
+        "$":`
+          .container.background{
+            opacity:0 !important;
+            visibility:hidden !important;
+            display:none !important;
+          }
+          .container{
             opacity:0 !important;
             visibility:hidden !important;
             display:none !important;
           }
         `
       },
+      "ha-tile-container": {
+        "$": `
+          .content { 
+            opacity:0 !important;
+            visibility:hidden !important;
+            display:none !important;
+          }
+        `,
+        "ha-tile-info": {
+          "$": `
+            .info {
+              opacity:0 !important;
+              visibility:hidden !important;
+              display:none !important;
+            }
+          `
+        },
 
-      "hui-card-features $": {
-        "hui-card-feature $": {
-          "hui-light-brightness-card-feature $":{
-            // Jinja2 работает и во вложенных shadow-root строках card_mod
-            "ha-control-slider $":`
-              .slider{
-                height: 64px !important;
-                border-radius: 20px !important;
-                background: #1C1B1F !important;
-                position: relative !important;
-              }
-              .slider::before {
-                content: "" !important;
-                position: absolute !important;
-                inset: 0 !important;
-                padding: 1px !important;
-                border-radius: inherit !important;
-                background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
-                pointer-events: none !important;
-                -webkit-mask:
-                  linear-gradient(#fff 0 0) content-box,
-                  linear-gradient(#fff 0 0);
-                -webkit-mask-composite: xor !important;
-                mask-composite: exclude !important;
-              }
-              .slider .slider-track-bar::after{
-                right: 16px !important;
-                --handle-margin: 16px !important;
-              }
-              .slider .slider-track-cursor::after{
-                right: 16px !important;
-                --handle-margin: 16px !important;
-              }
+        "hui-card-features $": {
+          "hui-card-feature $": {
+            "hui-light-brightness-card-feature $":{
+              // Jinja2 работает и во вложенных shadow-root строках card_mod
+              "ha-control-slider $":`
+                .slider{
+                  height: 64px !important;
+                  border-radius: 20px !important;
+                  background: #1C1B1F !important;
+                  position: relative !important;
+                }
+                .slider::before {
+                  content: "" !important;
+                  position: absolute !important;
+                  inset: 0 !important;
+                  padding: 1px !important;
+                  border-radius: inherit !important;
+                  background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+                  pointer-events: none !important;
+                  -webkit-mask:
+                    linear-gradient(#fff 0 0) content-box,
+                    linear-gradient(#fff 0 0);
+                  -webkit-mask-composite: xor !important;
+                  mask-composite: exclude !important;
+                }
+                .slider .slider-track-bar::after{
+                  right: 16px !important;
+                  --handle-margin: 16px !important;
+                }
+                .slider .slider-track-cursor::after{
+                  right: 16px !important;
+                  --handle-margin: 16px !important;
+                }
 
-              .container {
-                height: 64px !important;
-                border-radius: 20px !important;
-              }
-              .slider .slider-track-bar{
-                height: 64px !important;
-                border-radius: 20px !important;
-                /* background управляется через JS динамически */
-              }
-            `,
-            "." : `
-              ha-control-slider {
-                --control-slider-thickness: 64px !important;
-                height: 64px !important;
-                min-height: 64px !important;
-                border-radius: 20px !important;
-                --feature-border-radius: 20px !important;
-                --control-slider-border-radius: 20px !important;
-              }
-              ha-control-slider::before {
-                content: "" !important;
-                position: absolute !important;
-                inset: 0 !important;
-                padding: 1px !important;
-                border-radius: inherit !important;
-                background: linear-gradient(292deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-                pointer-events: none !important;
-                -webkit-mask:
-                  linear-gradient(#fff 0 0) content-box,
-                  linear-gradient(#fff 0 0);
-                -webkit-mask-composite: xor !important;
-                mask-composite: exclude !important;
-              }`,
-          },
+                .container {
+                  height: 64px !important;
+                  border-radius: 20px !important;
+                }
+                .slider .slider-track-bar{
+                  height: 64px !important;
+                  border-radius: 20px !important;
+                  /* background управляется через JS динамически */
+                }
+              `,
+              "." : `
+                ha-control-slider {
+                  --control-slider-thickness: 64px !important;
+                  height: 64px !important;
+                  min-height: 64px !important;
+                  border-radius: 20px !important;
+                  --feature-border-radius: 20px !important;
+                  --control-slider-border-radius: 20px !important;
+                }
+                ha-control-slider::before {
+                  content: "" !important;
+                  position: absolute !important;
+                  inset: 0 !important;
+                  padding: 1px !important;
+                  border-radius: inherit !important;
+                  background: linear-gradient(292deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+                  pointer-events: none !important;
+                  -webkit-mask:
+                    linear-gradient(#fff 0 0) content-box,
+                    linear-gradient(#fff 0 0);
+                  -webkit-mask-composite: xor !important;
+                  mask-composite: exclude !important;
+                }`,
+            },
 
-          "hui-light-color-temp-card-feature $": {
-            "ha-control-slider $": `
-              .slider{
-                height: 64px !important;
-                border-radius: 20px !important;
-                position: relative !important;
-              }
-              .slider::before {
-                content: "" !important;
-                position: absolute !important;
-                inset: 0 !important;
-                padding: 1px !important;
-                border-radius: inherit !important;
-                background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
-                pointer-events: none !important;
-                -webkit-mask:
-                  linear-gradient(#fff 0 0) content-box,
-                  linear-gradient(#fff 0 0);
-                -webkit-mask-composite: xor !important;
-                mask-composite: exclude !important;
-              }
-              .slider .slider-track-bar::after{
-                right: 16px !important;
-                --handle-margin: 16px !important;
-              }
-              .slider .slider-track-cursor::after{
-                right: 16px !important;
-                --handle-margin: 16px !important;
-              }
-              .container {
-                height: 64px !important;
-                border-radius: 20px !important;
-              }
-              .slider .slider-track-bar{
-                height: 64px !important;
-                border-radius: 20px !important;
-              }
-            `,
-            ".": `
-              ha-control-slider {
-                --control-slider-thickness: 64px !important;
-                height: 64px !important;
-                min-height: 64px !important;
-                border-radius: 20px !important;
-                --feature-border-radius: 20px !important;
-                --control-slider-border-radius: 20px !important;
-              }
-              ha-control-slider::before {
-                content: "" !important;
-                position: absolute !important;
-                inset: 0 !important;
-                padding: 1px !important;
-                border-radius: inherit !important;
-                background: linear-gradient(292deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-                pointer-events: none !important;
-                -webkit-mask:
-                  linear-gradient(#fff 0 0) content-box,
-                  linear-gradient(#fff 0 0);
-                -webkit-mask-composite: xor !important;
-                mask-composite: exclude !important;
-              }
-            `
+            "hui-light-color-temp-card-feature $": {
+              "ha-control-slider $": `
+                .slider{
+                  height: 64px !important;
+                  border-radius: 20px !important;
+                  position: relative !important;
+                }
+                .slider::before {
+                  content: "" !important;
+                  position: absolute !important;
+                  inset: 0 !important;
+                  padding: 1px !important;
+                  border-radius: inherit !important;
+                  background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+                  pointer-events: none !important;
+                  -webkit-mask:
+                    linear-gradient(#fff 0 0) content-box,
+                    linear-gradient(#fff 0 0);
+                  -webkit-mask-composite: xor !important;
+                  mask-composite: exclude !important;
+                }
+                .slider .slider-track-bar::after{
+                  right: 16px !important;
+                  --handle-margin: 16px !important;
+                }
+                .slider .slider-track-cursor::after{
+                  right: 16px !important;
+                  --handle-margin: 16px !important;
+                }
+                .container {
+                  height: 64px !important;
+                  border-radius: 20px !important;
+                }
+                .slider .slider-track-bar{
+                  height: 64px !important;
+                  border-radius: 20px !important;
+                }
+              `,
+              ".": `
+                ha-control-slider {
+                  --control-slider-thickness: 64px !important;
+                  height: 64px !important;
+                  min-height: 64px !important;
+                  border-radius: 20px !important;
+                  --feature-border-radius: 20px !important;
+                  --control-slider-border-radius: 20px !important;
+                }
+                ha-control-slider::before {
+                  content: "" !important;
+                  position: absolute !important;
+                  inset: 0 !important;
+                  padding: 1px !important;
+                  border-radius: inherit !important;
+                  background: linear-gradient(292deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
+                  pointer-events: none !important;
+                  -webkit-mask:
+                    linear-gradient(#fff 0 0) content-box,
+                    linear-gradient(#fff 0 0);
+                  -webkit-mask-composite: xor !important;
+                  mask-composite: exclude !important;
+                }
+              `
+            }
           }
         }
       }
     }
   }
-});
+  _cardModCache.set(base, mod);
+  return mod;
+};
 
 // entity передаётся в getCardMod - Jinja2-шаблоны знают за каким объектом следить
 // supportedColorModes определяет какой слайдер показывать:
@@ -272,14 +282,12 @@ function normalizeTileConfig(entity, base = "/local", hass = null) {
   return {
     type: "tile",
     entity: entity,
-    card_mod: getCardMod(base, entity),
+    card_mod: getCardMod(base),
     features
   };
 }
 
-/* ══════════════════════════════════════════
-   MAIN CARD
-══════════════════════════════════════════ */
+/* MAIN CARD */
 class EmelyaLampCard extends LitElement {
   static properties = {
     hass: {},
@@ -467,7 +475,7 @@ class EmelyaLampCard extends LitElement {
       hold_action: { action: "none" },
       double_tap_action: { action: "none" },
       base_path: "/local",
-      ...clone(config || {})
+      ...config
     };
     this.base = this.config.base_path || "/local";
     this._buildSliderCard();
@@ -555,10 +563,15 @@ class EmelyaLampCard extends LitElement {
   Обновляем background у .slider-track-bar напрямую в shadow DOM.
   */
   _updateSliderTrackBarColor(isOn) {
-    const trackColor = isOn ? "#4D4A54" : "linear-gradient(270deg, #343239 0%, #1C1B1F 100%)";
-    const sliderBg  = isOn ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)" : "#1C1B1F";
-    this._applyTrackBarColor(this._sliderCard, trackColor);
-    this._applySliderBgColor(this._sliderCard, sliderBg);
+    if (!this._sliderCard) return;
+    this._sliderCard.style.setProperty(
+      "--emelya-track-color",
+      isOn ? "#4D4A54" : "linear-gradient(270deg, #343239 0%, #1C1B1F 100%)"
+    );
+    this._sliderCard.style.setProperty(
+      "--emelya-slider-bg",
+      isOn ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)" : "#1C1B1F"
+    );
   }
 
   _applyTrackBarColor(root, color, depth = 0) {
@@ -631,14 +644,14 @@ class EmelyaLampCard extends LitElement {
       this._lastIsOn = isOn;
       // Даём card_mod полностью отработать (двойной rAF + setTimeout),
       // затем принудительно ставим нужный цвет поверх
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        setTimeout(() => {
-          this._updateSliderTrackBarColor(isOn);
-          this._watchTrackBarColor(card);
-          this._sliderReady = true;
-          this.requestUpdate();
-        }, 50);
-      }));
+      await yieldToMain();
+      this._forceShowHandle(card);
+      await yieldToMain();
+      this._updateSliderTrackBarColor(isOn);
+      await yieldToMain();
+      this._watchTrackBarColor(card);
+      this._sliderReady = true;
+      this.requestUpdate();
 
     } catch (err) {
       console.error("emelya-lamp-card: build error", err);
@@ -662,28 +675,18 @@ class EmelyaLampCard extends LitElement {
           ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)"
           : "#1C1B1F";
 
-    const applyToEl = (el) => {
-      const color = getColor();
-      el.style.setProperty("background", color, "important");
-    };
-
-    const applySliderBg = (el) => {
-      el.style.setProperty("background", getSliderBg(), "important");
-    };
-
+    const applyToEl  = el => el.style.setProperty("background", getColor(), "important");
+    const applySliderBg = el => el.style.setProperty("background", getSliderBg(), "important");
     const observeShadow = (shadowRoot) => {
-      shadowRoot.querySelectorAll(".slider-track-bar").forEach(applyToEl);
-      shadowRoot.querySelectorAll(".slider").forEach(applySliderBg);
-
-      const mo = new MutationObserver(() => {
-        shadowRoot.querySelectorAll(".slider-track-bar").forEach(applyToEl);
-        shadowRoot.querySelectorAll(".slider").forEach(applySliderBg);
+      shadowRoot.querySelectorAll(".slider-track-bar").forEach(el => {
+        applyToEl(el);
+        const mo = new MutationObserver(() => applyToEl(el));
+        mo.observe(el, { attributes: true, attributeFilter: ["style"] });
       });
-      mo.observe(shadowRoot, {
-        attributes: true,
-        subtree: true,
-        attributeFilter: ["style", "class"],
-        childList: true
+      shadowRoot.querySelectorAll(".slider").forEach(el => {
+        applySliderBg(el);
+        const mo = new MutationObserver(() => applySliderBg(el));
+        mo.observe(el, { attributes: true, attributeFilter: ["style"] });
       });
     };
 
@@ -710,19 +713,21 @@ class EmelyaLampCard extends LitElement {
   }
 
   _waitForCardModReady(card) {
-    return new Promise((resolve) => {
-      const deadline = Date.now() + 3000;
+    return new Promise(resolve => {
+      const deadline = setTimeout(resolve, 2000);
       const check = () => {
-        if (Date.now() > deadline) { resolve(); return; }
         const shadow = card.shadowRoot;
-        if (!shadow) { requestAnimationFrame(check); return; }
-        const haCard = shadow.querySelector("ha-card");
-        if (!haCard) { requestAnimationFrame(check); return; }
+        const haCard = shadow?.querySelector("ha-card");
+        if (!haCard) { setTimeout(check, 100); return; }
         const bg = getComputedStyle(haCard).backgroundColor;
-        if (bg === "rgb(28, 27, 31)") resolve();
-        else requestAnimationFrame(check);
+        if (bg === "rgb(28, 27, 31)") {
+          clearTimeout(deadline);
+          resolve();
+        } else {
+          setTimeout(check, 100);
+        }
       };
-      requestAnimationFrame(check);
+      setTimeout(check, 100);
     });
   }
 
@@ -732,48 +737,37 @@ class EmelyaLampCard extends LitElement {
    * и визуально сдвигает ползунок. Вешаем MutationObserver на каждый
    * ha-control-slider чтобы мгновенно возвращать класс при любом изменении DOM.
    */
+
   _forceShowHandle(card) {
-    const applyClass = (root) => {
-      if (!root) return;
-      root.querySelectorAll(".slider-track-bar").forEach((el) => {
-        if (!el.classList.contains("show-handle")) el.classList.add("show-handle");
+    const watchElement = (el) => {
+      el.classList.add("show-handle");
+      const mo = new MutationObserver(() => {
+        if (!el.classList.contains("show-handle")) {
+          el.classList.add("show-handle");
+        }
       });
+      mo.observe(el, { attributes: true, attributeFilter: ["class"] });
+      this._handleObservers.push(mo);
     };
 
-    const observeCard = (shadowRoot) => {
-      applyClass(shadowRoot);
-      const mo = new MutationObserver((mutations) => {
-        let needs = false;
-        for (const m of mutations) {
-          if (
-            m.type === "attributes" &&
-            m.attributeName === "class" &&
-            m.target.classList.contains("slider-track-bar") &&
-            !m.target.classList.contains("show-handle")
-          ) {
-            needs = true;
-            break;
-          }
-        }
-        if (needs) applyClass(shadowRoot);
-      });
-      mo.observe(shadowRoot, {
-        attributes: true,
-        subtree: true,
-        attributeFilter: ["class"]
+    const findTrackBars = (root, depth = 0) => {
+      if (!root || depth > 8) return;
+      root.querySelectorAll(".slider-track-bar").forEach(watchElement);
+      root.querySelectorAll("*").forEach(el => {
+        if (el.shadowRoot) findTrackBars(el.shadowRoot, depth + 1);
       });
     };
 
     const findSliders = (root, depth = 0) => {
       if (!root || depth > 8) return;
-      root.querySelectorAll("ha-control-slider").forEach((slider) => {
-        const wait = () => {
-          if (slider.shadowRoot) observeCard(slider.shadowRoot);
-          else requestAnimationFrame(wait);
+      root.querySelectorAll("ha-control-slider").forEach(slider => {
+        const attach = () => {
+          if (slider.shadowRoot) findTrackBars(slider.shadowRoot);
+          else requestAnimationFrame(attach);
         };
-        wait();
+        attach();
       });
-      root.querySelectorAll("*").forEach((el) => {
+      root.querySelectorAll("*").forEach(el => {
         if (el.shadowRoot) findSliders(el.shadowRoot, depth + 1);
       });
     };
@@ -784,9 +778,10 @@ class EmelyaLampCard extends LitElement {
     };
     requestAnimationFrame(waitCard);
   }
-
   disconnectedCallback() {
     super.disconnectedCallback();
+    this._handleObservers.forEach(mo => mo.disconnect());
+    this._handleObservers = [];
   }
 
   _togglePower(e) {
@@ -1000,6 +995,7 @@ class EmelyaLampCardEditor extends LitElement {
     this._bgUploadState = "idle";
     this._bgUploadError = "";
     this._bgDragOver = false;
+    this._handleObservers = [];
   }
 
   setConfig(config) {

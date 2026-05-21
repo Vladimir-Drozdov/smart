@@ -1,5 +1,4 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
-
+import { LitElement, html, css } from "/local/lib/lit.js";
 /* CARD */
 class EmelyaRoomsRow extends LitElement {
   static properties = {
@@ -71,6 +70,9 @@ class EmelyaRoomsRow extends LitElement {
   updated(changedProps) {
     const cards = this.renderRoot.querySelectorAll(".card[data-bg]");
     cards.forEach(el => {
+      // восстановить класс, если фон уже загружен
+      if (el._bgLoaded) el.classList.add("bg-loaded");
+
       const bgUrl = el.dataset.bg;
       if (!bgUrl || el._bgInitialized === bgUrl) return;
       el._bgInitialized = bgUrl;
@@ -79,7 +81,10 @@ class EmelyaRoomsRow extends LitElement {
       el.style.setProperty("--room-bg", `url("${safeUrl}")`);
 
       const img = new Image();
-      img.onload = () => el.classList.add("bg-loaded");
+      img.onload = () => {
+        el._bgLoaded = true;          // <-- добавить этот флаг
+        el.classList.add("bg-loaded");
+      };
       img.src = bgUrl;
     });
 

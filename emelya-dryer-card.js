@@ -1,9 +1,5 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
-
-import {
-  handleAction,
-  hasAction
-} from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
+import { LitElement, html, css } from "/local/lib/lit.js";
+import { handleAction, hasAction } from "/local/lib/custom-card-helpers.js";
 
 class EmelyaDryerCard extends LitElement {
 
@@ -363,7 +359,6 @@ class EmelyaDryerCard extends LitElement {
   firstUpdated() {
     const card = this.shadowRoot?.querySelector(".card");
     if (!card) return;
-
     card.addEventListener("pointerdown", this._onPointerDown.bind(this));
     card.addEventListener("pointerup", this._onPointerUp.bind(this));
     card.addEventListener("click", this._onClick.bind(this));
@@ -395,9 +390,7 @@ class EmelyaDryerCard extends LitElement {
 
   _onClick(e) {
     if (e.target.closest('ha-select') || e.target.closest('.power')) return;
-
     const now = Date.now();
-
     if (this._lastTap && now - this._lastTap < 300) {
       if (hasAction(this.config, 'double_tap_action')) {
         e.stopImmediatePropagation();
@@ -406,9 +399,7 @@ class EmelyaDryerCard extends LitElement {
         return;
       }
     }
-
     this._lastTap = now;
-
     setTimeout(() => {
       if (this._lastTap === now) {
         this._performAction('tap');
@@ -644,9 +635,7 @@ class EmelyaDryerCardEditor extends LitElement {
     this._uploadError = "";
     this._dragOver = false;
   }
-
   setConfig(config) { this._config = { ...config }; }
-
   render() {
     if (!this._config) return html``;
     return html`

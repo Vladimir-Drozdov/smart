@@ -1,11 +1,115 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
+import { LitElement, html, css } from "/local/lib/lit.js";
+import { handleAction, hasAction } from "/local/lib/custom-card-helpers.js";
+const circularSliderStyle = `
+  :host {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    background: #1C1B1F !important;
+    --ha-card-background: #1C1B1F !important;
+    --card-background-color: #1C1B1F !important;
+    --state-climate-heat-color: #FFF !important;
+    --state-climate-cool-color: #FFF !important;
+    --control-circular-slider-color: #FFF !important;
+    --control-circular-slider-high-color: #FFF !important;
+    --control-circular-slider-low-color: #FFF !important;
+    --control-circular-slider-thumb-color: #343239 !important;
+    --control-circular-slider-handle-color: #343239 !important;
+    --control-circular-slider-background: rgba(255, 255, 255, 0.1) !important;
+    --slider-thumb-color: #343239 !important;
+    --action-color: transparent !important;
+  }
+  svg {
+    width: 240px !important;
+    height: 240px !important;
+  }
+`;
 
-import {
-  handleAction,
-  hasAction,
-  fireEvent,
-} from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
+const mainCardStyle = `
+  .title {
+    text-align: start !important;
+    padding: 16px 0 0 16px !important;
+  }
+  :host {
+    background: #1C1B1F !important;
+    border-radius: 24px 24px 0 0 !important;
+    --ha-card-background: #1C1B1F !important;
+    --card-background-color: #1C1B1F !important;
+    --state-climate-heat-color: transparent !important;
+    --state-climate-active-color: transparent !important;
+    --state-active-color: transparent !important;
+    --action-color: transparent !important;
+  }
+  ha-card {
+    border-width: 0 !important;
+    border-style: none !important;
+    border-color: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    --ha-card-border-width: 0 !important;
+    --ha-card-border-style: none !important;
+    --ha-card-border-color: transparent !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  ha-card .container {
+    height: 288px !important;
+    flex: 0 0 auto !important;
+  }
+`;
 
+const climateRootStyle = `
+  :host {
+    background: #1C1B1F !important;
+    --ha-card-background: #1C1B1F !important;
+    --card-background-color: #1C1B1F !important;
+  }
+`;
+
+const buttonsStyle = `
+  ha-outlined-icon-button {
+    position: relative !important;
+    border-radius: 24px !important;
+    --_outline-color: transparent !important;
+  }
+  ha-outlined-icon-button::before {
+    content: "" !important;
+    position: absolute !important;
+    inset: 0 !important;
+    padding: 1px !important;
+    border-radius: 24px !important;
+    z-index: 4 !important;
+    background: linear-gradient(
+      135deg,
+      rgba(101,101,101,0) 0%,
+      #656565 50%,
+      rgba(101,101,101,0) 100%
+    ) !important;
+    pointer-events: none !important;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor !important;
+    mask-composite: exclude !important;
+  }
+`;
+
+const outlinedButtonStyle = `
+  .icon-button.outlined {
+    background: #323135 !important;
+    color: white !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    border: none !important;
+  }
+  .icon-button.outlined .icon {
+    transform: scale(0.6);
+    transform-origin: center;
+    color: white !important;
+  }
+`;
 class DualThermostatCard extends LitElement {
 
   static properties = {
@@ -35,11 +139,12 @@ class DualThermostatCard extends LitElement {
   }
 
   deepMerge(target, source) {
-    const output = this.clone(target);
-    if (!source) return output;
+    if (!target) return source;
+    if (!source) return target;
+    const output = { ...target }; // shallow copy достаточно для первого уровня
     Object.keys(source).forEach(key => {
       if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-        output[key] = this.deepMerge(output[key] || {}, source[key]);
+        output[key] = this.deepMerge(target[key] || {}, source[key]);
       } else {
         output[key] = source[key];
       }
@@ -48,17 +153,18 @@ class DualThermostatCard extends LitElement {
   }
 
   setConfig(config) {
-    this.config = {
-      tap_action: { action: "more-info" },
-      hold_action: { action: "none" },
-      double_tap_action: { action: "none" },
-      ...this.clone(config || {}),
-    };
+    const e1 = config.entity1;
+    const e2 = config.entity2;
 
-    const autoMods = this.buildDualThermostatCardMods(this.config);
-    this.config.card_mod  = this.deepMerge(autoMods.card_mod,  this.config.card_mod  || {});
-    this.config.card_mod1 = this.deepMerge(autoMods.card_mod1, this.config.card_mod1 || {});
-    this.config.card_mod2 = this.deepMerge(autoMods.card_mod2, this.config.card_mod2 || {});
+    if (e1 !== this._lastEntity1 || e2 !== this._lastEntity2) {
+      this._cachedMods = this.buildDualThermostatCardMods(e1, e2);
+      this._lastEntity1 = e1;
+      this._lastEntity2 = e2;
+    }
+    this.config = { ...config };
+    this.config.card_mod  = this.deepMerge(this._cachedMods.card_mod,  config.card_mod  || {});
+    this.config.card_mod1 = this.deepMerge(this._cachedMods.card_mod1, config.card_mod1 || {});
+    this.config.card_mod2 = this.deepMerge(this._cachedMods.card_mod2, config.card_mod2 || {});
 
     this.base = this.config.base_path || "/local";
 
@@ -162,27 +268,7 @@ class DualThermostatCard extends LitElement {
 
   _waitForCardModReady(card) {
     return new Promise((resolve) => {
-      const deadline = Date.now() + 3000;
-
-      const check = () => {
-        if (Date.now() > deadline) { resolve(); return; }
-
-        const shadow = card.shadowRoot;
-        if (!shadow) { requestAnimationFrame(check); return; }
-
-        const haCard = shadow.querySelector("ha-card");
-        if (!haCard) { requestAnimationFrame(check); return; }
-
-        // card-mod меняет background на наш цвет #1C1B1F = rgb(28, 27, 31)
-        const bg = getComputedStyle(haCard).backgroundColor;
-        if (bg === "rgb(28, 27, 31)") {
-          resolve();
-        } else {
-          requestAnimationFrame(check);
-        }
-      };
-
-      requestAnimationFrame(check);
+      setTimeout(resolve, 300);
     });
   }
 
@@ -324,122 +410,8 @@ class DualThermostatCard extends LitElement {
     }
     .toggle-btn img { width: 24px; height: 24px; }
   `;
-
-  buildDualThermostatCardMods(config = {}) {
-    const entity1 = config.entity1;
-    const entity2 = config.entity2;
-
-    const circularSliderStyle = `
-      :host {
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-        background: #1C1B1F !important;
-        --ha-card-background: #1C1B1F !important;
-        --card-background-color: #1C1B1F !important;
-        --state-climate-heat-color: #FFF !important;
-        --state-climate-cool-color: #FFF !important;
-        --control-circular-slider-color: #FFF !important;
-        --control-circular-slider-high-color: #FFF !important;
-        --control-circular-slider-low-color: #FFF !important;
-        --control-circular-slider-thumb-color: #343239 !important;
-        --control-circular-slider-handle-color: #343239 !important;
-        --control-circular-slider-background: rgba(255, 255, 255, 0.1) !important;
-        --slider-thumb-color: #343239 !important;
-        --action-color: transparent !important;
-      }
-      svg {
-        width: 240px !important;
-        height: 240px !important;
-      }
-    `;
-
-    const mainCardStyle = `
-      .title {
-        text-align: start !important;
-        padding: 16px 0 0 16px !important;
-      }
-      :host {
-        background: #1C1B1F !important;
-        border-radius: 24px 24px 0 0 !important;
-        --ha-card-background: #1C1B1F !important;
-        --card-background-color: #1C1B1F !important;
-        --state-climate-heat-color: transparent !important;
-        --state-climate-active-color: transparent !important;
-        --state-active-color: transparent !important;
-        --action-color: transparent !important;
-      }
-      ha-card {
-        border-width: 0 !important;
-        border-style: none !important;
-        border-color: transparent !important;
-        border: none !important;
-        border-radius: 0 !important;
-        --ha-card-border-width: 0 !important;
-        --ha-card-border-style: none !important;
-        --ha-card-border-color: transparent !important;
-        margin-bottom: 0 !important;
-        padding-bottom: 0 !important;
-      }
-      ha-card .container {
-        height: 288px !important;
-        flex: 0 0 auto !important;
-      }
-    `;
-
-    const climateRootStyle = `
-      :host {
-        background: #1C1B1F !important;
-        --ha-card-background: #1C1B1F !important;
-        --card-background-color: #1C1B1F !important;
-      }
-    `;
-
-    const buttonsStyle = `
-      ha-outlined-icon-button {
-        position: relative !important;
-        border-radius: 24px !important;
-        --_outline-color: transparent !important;
-      }
-      ha-outlined-icon-button::before {
-        content: "" !important;
-        position: absolute !important;
-        inset: 0 !important;
-        padding: 1px !important;
-        border-radius: 24px !important;
-        z-index: 4 !important;
-        background: linear-gradient(
-          135deg,
-          rgba(101,101,101,0) 0%,
-          #656565 50%,
-          rgba(101,101,101,0) 100%
-        ) !important;
-        pointer-events: none !important;
-        -webkit-mask:
-          linear-gradient(#fff 0 0) content-box,
-          linear-gradient(#fff 0 0);
-        -webkit-mask-composite: xor !important;
-        mask-composite: exclude !important;
-      }
-    `;
-
-    const outlinedButtonStyle = `
-      .icon-button.outlined {
-        background: #323135 !important;
-        color: white !important;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        position: relative;
-        border: none !important;
-      }
-      .icon-button.outlined .icon {
-        transform: scale(0.6);
-        transform-origin: center;
-        color: white !important;
-      }
-    `;
-
+  
+  buildDualThermostatCardMods(entity1, entity2) {
     const makeFirstButtonStyle = (entity) => `
       .icon-button.outlined::after {
         content: "{{ state_attr('${entity}','min_temp')|round(0) }}°C";

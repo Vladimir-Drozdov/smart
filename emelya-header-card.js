@@ -1,6 +1,4 @@
-// /config/www/emelya-header-card.js
-import { LitElement, html, css } from "https://unpkg.com/lit@2.0.0/index.js?module";
-
+import { LitElement, html, css } from "/local/lib/lit.js";
 /* HELPERS */
 function fireMoreInfo(element, entityId) {
   element.dispatchEvent(new CustomEvent("hass-more-info", {

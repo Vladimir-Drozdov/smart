@@ -1,6 +1,17 @@
 //import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 //import { LitElement, html, css } from "https://esm.run/lit@3";
-import { LitElement, html, css } from "https://unpkg.com/lit@3/index.js?module";
+//import { LitElement, html, css } from "https://unpkg.com/lit@3/index.js?module";
+import { LitElement, html, css } from "/local/lib/lit.js";
+const yieldToMain = () => {
+  if (typeof scheduler !== "undefined" && scheduler.postTask) {
+    return scheduler.postTask(() => {}, { priority: "background" });
+  }
+  return new Promise(r => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = r;
+    ch.port2.postMessage(null);
+  });
+};
 class MyElement extends LitElement {
   static properties = {
     hass: {},
@@ -39,57 +50,41 @@ class MyElement extends LitElement {
     }
   }
   async setConfig(config) {
-    this.config = structuredClone(config || {});
+    this.config = { cards: [], ...config };
     if (!this.config.cards) this.config.cards = [];
 
     const token = ++this.#token;
     const helpers = await window.loadCardHelpers();
     if (token !== this.#token) return;
 
-    this._cards = await Promise.all(
+    const cards = await Promise.all(
       this.config.cards.map(c => this._createCard(c, helpers))
     );
-
-    // Точка 1: сразу после создания (до DOM)
-    this._spreadHass();
-
-    // Точка 2: после того как Lit вставил карточки в DOM
-    await this.updateComplete;
     if (token !== this.#token) return;
-    this._spreadHass();
-    // ЖДЁМ пока ВСЕ карточки дорендерятся
-    await Promise.all(
-      this._cards.map(c => c.updateComplete?.catch(() => {}))
-    );
 
-    // форсим перерисовку контейнера
+    this._cards = cards;
     this.requestUpdate();
-    await this.updateComplete;
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    this._spreadHass();
-    this.requestUpdate();
-    // Точка 3: следующий кадр — для карточек с отложенной инициализацией
-    requestAnimationFrame(() => {
-      if (token !== this.#token) return;
-      this._spreadHass();
-    });
   }
 
-  _spreadHass() {
-    if (this._hass && this._cards) {
-      this._cards.forEach(c => (c.hass = this._hass));
+  async _spreadHass() {
+    if (!this._hass || !this._cards?.length) return;
+    for (const card of this._cards) {
+      card.hass = this._hass;
+      await yieldToMain(); // та же функция что добавили ранее
     }
   }
 
   set hass(hass) {
     this._hass = hass;
-    this._spreadHass(); // карточки уже существуют — раздаём сразу
+    this._spreadHass();
   }
   get hass() { return this._hass; }
 
   // Страховка: после каждого рендера (например смена _cards)
-  updated() {
-    this._spreadHass();
+  updated(changedProps) {
+    if (changedProps.has('_cards') && this._hass) {
+      this._spreadHass();
+    }
   }
 
 
@@ -338,261 +333,264 @@ class ChildEditorHost extends LitElement {
 }
 
 customElements.define("child-editor-host", ChildEditorHost);
+const coverTileCardMod = {
+  ".": `
+    :host {
+      border-radius: 24px !important;
+      --ha-card-border-radius: 24px !important;
+      border-color: transparent !important;
+      --ha-card-border-color: transparent !important;
+      --divider-color: transparent !important;
+    }
 
+    ha-card {
+      background-color: #1C1B1F !important;
+      height: 132px !important;
+      box-sizing: border-box !important;
+      --tile-color: transparent !important;
+      padding: 16px !important;
+      opacity: 0;
+      animation: cmReady 0.15s ease 0.35s forwards;
+    }
+    @keyframes cmReady { to { opacity: 1; } }
+
+    ha-card::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 1px !important;
+      border-radius: inherit !important;
+      background: linear-gradient(
+        165deg,
+        rgba(101, 101, 101, 0) 0%,
+        #656565 50%,
+        rgba(101, 101, 101, 0) 100%
+      ) !important;
+      pointer-events: none !important;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor !important;
+      mask-composite: exclude !important;
+    }
+
+    ha-card hui-card-features {
+      padding-right: 0 !important;
+      padding-left: 0 !important;
+    }
+
+    ha-tile-icon {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+    }
+
+    ha-tile-info {
+      display: flex !important;
+      flex-direction: row !important;
+      justify-content: space-between !important;
+      width: 100% !important;
+      flex-wrap: nowrap !important;
+    }
+
+    ha-tile-info span:nth-child(2) {
+      text-align: right !important;
+      color: rgba(255, 255, 255, 0.50) !important;
+      opacity: 1 !important;
+      font-size: 15px !important;
+      font-style: normal !important;
+      font-weight: 400 !important;
+      line-height: 20px !important;
+    }
+
+    ha-tile-info span:nth-child(1) {
+      font-family: Roboto !important;
+      font-size: 16px !important;
+      font-style: normal !important;
+      font-weight: 600 !important;
+      line-height: 20px !important;
+    }
+  `,
+
+  "ha-tile-container": {
+    "$": `
+      .content {
+        padding-top: 0 !important;
+        padding-right: 0 !important;
+        padding-left: 0 !important;
+        align-items: start !important;
+        flex-grow: 0 !important;
+        flex-shrink: 0 !important;
+        flex-basis: 0% !important;
+        flex: 0 0 0% !important;
+        height: 50% !important;
+      }
+
+      .container {
+        justify-content: space-between !important;
+      }
+    `,
+
+    "ha-tile-info $": `
+      .info {
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+      }
+    `,
+
+    "hui-card-features $": {
+      "hui-card-feature $": {
+        "hui-cover-open-close-card-feature $": {
+          "ha-control-button-group": {
+            "ha-control-button": {
+              "$": `
+                .button::before {
+                  content: none !important;
+                  background-color: transparent !important;
+                  transition: none !important;
+                  opacity: 0 !important;
+                }
+
+                .button ha-ripple {
+                  --md-ripple-hover-color: transparent !important;
+                  --md-ripple-pressed-color: transparent !important;
+                }
+              `
+            },
+
+            ".": `
+              ha-control-button {
+                background-color: #343239 !important;
+                position: relative !important;
+              }
+
+              ha-control-button:nth-child(2)::after, 
+              ha-control-button:nth-child(3)::after{
+                content: "" !important;
+                position: absolute !important;
+                inset: 0 !important;
+                padding: 1px !important;
+                border-radius: inherit !important;
+                background: linear-gradient(
+                  165deg,
+                  rgba(101, 101, 101, 0) 0%,
+                  #656565 50%,
+                  rgba(101, 101, 101, 0) 100%
+                ) !important;
+                pointer-events: none !important;
+                -webkit-mask:
+                  linear-gradient(#fff 0 0) content-box,
+                  linear-gradient(#fff 0 0);
+                -webkit-mask-composite: xor !important;
+                mask-composite: exclude !important;
+              }
+              ha-control-button:nth-child(4)::after{
+                content: "" !important;
+                position: absolute !important;
+                inset: 0 !important;
+                padding: 1px !important;
+                border-radius: inherit !important;
+                background: linear-gradient(
+                  15deg,
+                  rgba(101, 101, 101, 0) 0%,
+                  #656565 50%,
+                  rgba(101, 101, 101, 0) 100%
+                ) !important;
+                pointer-events: none !important;
+                -webkit-mask:
+                  linear-gradient(#fff 0 0) content-box,
+                  linear-gradient(#fff 0 0);
+                -webkit-mask-composite: xor !important;
+                mask-composite: exclude !important;
+              }
+
+              ha-control-button[disabled] {
+                background-color: #4D4A54 !important;
+              }
+
+              ha-control-button:nth-child(2)::before {
+                content: "";
+                position: absolute !important;
+                top: 50% !important;
+                left: 50% !important;
+                width: 6px !important;
+                height: 6px !important;
+                border-right: 2px solid white !important;
+                border-bottom: 2px solid white !important;
+                transform: translate(-50%, -50%) rotate(45deg) !important;
+              }
+
+              ha-control-button:nth-child(4)::before {
+                content: "";
+                position: absolute !important;
+                top: 50% !important;
+                left: 50% !important;
+                width: 6px !important;
+                height: 6px !important;
+                border-right: 2px solid white !important;
+                border-bottom: 2px solid white !important;
+                transform: translate(-50%, 0%) rotate(-135deg) !important;
+              }
+
+              ha-control-button:nth-child(even) {
+                display: flex !important;
+                height: 56px !important;
+                padding: 20px !important;
+                justify-content: center !important;
+                align-items: center !important;
+                gap: 8px !important;
+                flex: 1 0 0 !important;
+                border-radius: 16px !important;
+                box-sizing: border-box !important;
+              }
+
+              ha-control-button:nth-child(3) {
+                display: flex !important;
+                width: 56px !important;
+                height: 56px !important;
+                padding: 20px !important;
+                justify-content: center !important;
+                align-items: center !important;
+                gap: 8px !important;
+                flex-grow: 0 !important;
+                flex-basis: 56px !important;
+                border-radius: 96px !important;
+                background: #343239 !important;
+                box-sizing: border-box !important;
+              }
+
+              ha-control-button:nth-child(3)::before {
+                content: "";
+                position: absolute !important;
+                top: 50% !important;
+                left: 50% !important;
+                width: 12px !important;
+                height: 12px !important;
+                background: white !important;
+                border-radius: 1px !important;
+                transform: translate(-50%, -50%) !important;
+              }
+
+              ha-control-button ha-svg-icon {
+                display: none !important;
+                opacity: 0 !important;
+                visibility: hidden !important;
+              }
+            `
+          }
+        }
+      }
+    }
+  }
+};
 class MyElementEditor extends LitElement {
   static properties = {
     hass: {},
     config: {},
     _editingIndex: { state: true }
   };
-  coverTileCardMod = {
-    ".": `
-      :host {
-        border-radius: 24px !important;
-        --ha-card-border-radius: 24px !important;
-        border-color: transparent !important;
-        --ha-card-border-color: transparent !important;
-        --divider-color: transparent !important;
-      }
 
-      ha-card {
-        background-color: #1C1B1F !important;
-        height: 132px !important;
-        box-sizing: border-box !important;
-        --tile-color: transparent !important;
-        padding: 16px !important;
-      }
-
-      ha-card::before {
-        content: "" !important;
-        position: absolute !important;
-        inset: 0 !important;
-        padding: 1px !important;
-        border-radius: inherit !important;
-        background: linear-gradient(
-          165deg,
-          rgba(101, 101, 101, 0) 0%,
-          #656565 50%,
-          rgba(101, 101, 101, 0) 100%
-        ) !important;
-        pointer-events: none !important;
-        -webkit-mask:
-          linear-gradient(#fff 0 0) content-box,
-          linear-gradient(#fff 0 0);
-        -webkit-mask-composite: xor !important;
-        mask-composite: exclude !important;
-      }
-
-      ha-card hui-card-features {
-        padding-right: 0 !important;
-        padding-left: 0 !important;
-      }
-
-      ha-tile-icon {
-        display: none !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-      }
-
-      ha-tile-info {
-        display: flex !important;
-        flex-direction: row !important;
-        justify-content: space-between !important;
-        width: 100% !important;
-        flex-wrap: nowrap !important;
-      }
-
-      ha-tile-info span:nth-child(2) {
-        text-align: right !important;
-        color: rgba(255, 255, 255, 0.50) !important;
-        opacity: 1 !important;
-        font-size: 15px !important;
-        font-style: normal !important;
-        font-weight: 400 !important;
-        line-height: 20px !important;
-      }
-
-      ha-tile-info span:nth-child(1) {
-        font-family: Roboto !important;
-        font-size: 16px !important;
-        font-style: normal !important;
-        font-weight: 600 !important;
-        line-height: 20px !important;
-      }
-    `,
-
-    "ha-tile-container": {
-      "$": `
-        .content {
-          padding-top: 0 !important;
-          padding-right: 0 !important;
-          padding-left: 0 !important;
-          align-items: start !important;
-          flex-grow: 0 !important;
-          flex-shrink: 0 !important;
-          flex-basis: 0% !important;
-          flex: 0 0 0% !important;
-          height: 50% !important;
-        }
-
-        .container {
-          justify-content: space-between !important;
-        }
-      `,
-
-      "ha-tile-info $": `
-        .info {
-          flex-direction: row !important;
-          justify-content: space-between !important;
-          align-items: center !important;
-        }
-      `,
-
-      "hui-card-features $": {
-        "hui-card-feature $": {
-          "hui-cover-open-close-card-feature $": {
-            "ha-control-button-group": {
-              "ha-control-button": {
-                "$": `
-                  .button::before {
-                    content: none !important;
-                    background-color: transparent !important;
-                    transition: none !important;
-                    opacity: 0 !important;
-                  }
-
-                  .button ha-ripple {
-                    --md-ripple-hover-color: transparent !important;
-                    --md-ripple-pressed-color: transparent !important;
-                  }
-                `
-              },
-
-              ".": `
-                ha-control-button {
-                  background-color: #343239 !important;
-                  position: relative !important;
-                }
-
-                ha-control-button:nth-child(2)::after, 
-                ha-control-button:nth-child(3)::after{
-                  content: "" !important;
-                  position: absolute !important;
-                  inset: 0 !important;
-                  padding: 1px !important;
-                  border-radius: inherit !important;
-                  background: linear-gradient(
-                    165deg,
-                    rgba(101, 101, 101, 0) 0%,
-                    #656565 50%,
-                    rgba(101, 101, 101, 0) 100%
-                  ) !important;
-                  pointer-events: none !important;
-                  -webkit-mask:
-                    linear-gradient(#fff 0 0) content-box,
-                    linear-gradient(#fff 0 0);
-                  -webkit-mask-composite: xor !important;
-                  mask-composite: exclude !important;
-                }
-                ha-control-button:nth-child(4)::after{
-                  content: "" !important;
-                  position: absolute !important;
-                  inset: 0 !important;
-                  padding: 1px !important;
-                  border-radius: inherit !important;
-                  background: linear-gradient(
-                    15deg,
-                    rgba(101, 101, 101, 0) 0%,
-                    #656565 50%,
-                    rgba(101, 101, 101, 0) 100%
-                  ) !important;
-                  pointer-events: none !important;
-                  -webkit-mask:
-                    linear-gradient(#fff 0 0) content-box,
-                    linear-gradient(#fff 0 0);
-                  -webkit-mask-composite: xor !important;
-                  mask-composite: exclude !important;
-                }
-
-                ha-control-button[disabled] {
-                  background-color: #4D4A54 !important;
-                }
-
-                ha-control-button:nth-child(2)::before {
-                  content: "";
-                  position: absolute !important;
-                  top: 50% !important;
-                  left: 50% !important;
-                  width: 6px !important;
-                  height: 6px !important;
-                  border-right: 2px solid white !important;
-                  border-bottom: 2px solid white !important;
-                  transform: translate(-50%, -50%) rotate(45deg) !important;
-                }
-
-                ha-control-button:nth-child(4)::before {
-                  content: "";
-                  position: absolute !important;
-                  top: 50% !important;
-                  left: 50% !important;
-                  width: 6px !important;
-                  height: 6px !important;
-                  border-right: 2px solid white !important;
-                  border-bottom: 2px solid white !important;
-                  transform: translate(-50%, 0%) rotate(-135deg) !important;
-                }
-
-                ha-control-button:nth-child(even) {
-                  display: flex !important;
-                  height: 56px !important;
-                  padding: 20px !important;
-                  justify-content: center !important;
-                  align-items: center !important;
-                  gap: 8px !important;
-                  flex: 1 0 0 !important;
-                  border-radius: 16px !important;
-                  box-sizing: border-box !important;
-                }
-
-                ha-control-button:nth-child(3) {
-                  display: flex !important;
-                  width: 56px !important;
-                  height: 56px !important;
-                  padding: 20px !important;
-                  justify-content: center !important;
-                  align-items: center !important;
-                  gap: 8px !important;
-                  flex-grow: 0 !important;
-                  flex-basis: 56px !important;
-                  border-radius: 96px !important;
-                  background: #343239 !important;
-                  box-sizing: border-box !important;
-                }
-
-                ha-control-button:nth-child(3)::before {
-                  content: "";
-                  position: absolute !important;
-                  top: 50% !important;
-                  left: 50% !important;
-                  width: 12px !important;
-                  height: 12px !important;
-                  background: white !important;
-                  border-radius: 1px !important;
-                  transform: translate(-50%, -50%) !important;
-                }
-
-                ha-control-button ha-svg-icon {
-                  display: none !important;
-                  opacity: 0 !important;
-                  visibility: hidden !important;
-                }
-              `
-            }
-          }
-        }
-      }
-    }
-  };
 
   static styles = css`
     :host { display: block; box-sizing: border-box; }
@@ -831,7 +829,7 @@ class MyElementEditor extends LitElement {
             { type: "cover-open-close" }
           ],
           card_mod: {
-            style: structuredClone(this.coverTileCardMod)
+            style: structuredClone(coverTileCardMod)
           }
         }
       },

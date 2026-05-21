@@ -1,9 +1,5 @@
-import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
-
-import {
-  handleAction,
-  hasAction
-} from "https://unpkg.com/custom-card-helpers@2.0.0/dist/index.m.js?module";
+import { LitElement, html, css } from "/local/lib/lit.js";
+import { handleAction, hasAction } from "/local/lib/custom-card-helpers.js";
 
 class EmelyaVacuumCleaner extends LitElement {
 
