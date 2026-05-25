@@ -1,301 +1,8 @@
 import { LitElement, html, css } from "/local/lib/lit.js";
 import { handleAction, hasAction } from "/local/lib/custom-card-helpers.js";
-const yieldToMain = () => {
-  if (typeof scheduler !== "undefined" && scheduler.postTask) {
-    return scheduler.postTask(() => {}, { priority: "background" });
-  }
-  return new Promise(r => {
-    const ch = new MessageChannel();
-    ch.port1.onmessage = r;
-    ch.port2.postMessage(null);
-  });
-};
-const getDefaultTileCardMod = (base = "/local", entity = "") => ({
-  style: {
-    ".": `
-      ha-card {
-        --tile-color: #343239 !important;
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        border-radius: 20px !important;
-        z-index: 2 !important;
-      }
-      ha-card:hover { background: transparent !important; }
-      ha-card::before {
-        content: "" !important;
-        position: absolute !important;
-        inset: 0 !important;
-        padding: 1px !important;
-        border-radius: inherit !important;
-        background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-        pointer-events: none !important;
-        -webkit-mask:
-          linear-gradient(#fff 0 0) content-box,
-          linear-gradient(#fff 0 0);
-        -webkit-mask-composite: xor !important;
-        mask-composite: exclude !important;
-      }
-
-      ha-card ha-tile-container ha-tile-icon {
-        display: none !important;
-      }
-      ha-card ha-tile-container ha-tile-info {
-        display: none !important;
-      }
-      ha-card ha-tile-container hui-card-features {
-        padding: 0 !important;
-      }
-    `,
-    "ha-tile-container": {
-      "$": `
-        .content { 
-          padding: 0 !important; 
-        }
-      `,
-
-      "hui-card-features $": {
-        "hui-card-feature $": {
-          "hui-light-brightness-card-feature $": {
-            "ha-control-slider $": `
-              .slider {
-                height: 64px !important;
-                border-radius: 20px !important;
-                background: var(--emelya-slider-bg, #1C1B1F) !important;
-                position: relative !important;
-              }
-              .slider::before {
-                content: "" !important;
-                position: absolute !important;
-                inset: 0 !important;
-                padding: 1px !important;
-                border-radius: inherit !important;
-                background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
-                pointer-events: none !important;
-                -webkit-mask:
-                  linear-gradient(#fff 0 0) content-box,
-                  linear-gradient(#fff 0 0);
-                -webkit-mask-composite: xor !important;
-                mask-composite: exclude !important;
-              }
-              .slider .slider-track-bar {
-                height: 64px !important;
-                border-radius: 20px !important;
-                background: var(--emelya-track-color, #1C1B1F) !important;
-              }
-              .slider .slider-track-bar::after {
-                right: 16px !important;
-                --handle-margin: 16px !important;
-              }
-              .slider .slider-track-cursor::after {
-                right: 16px !important;
-                --handle-margin: 16px !important;
-              }
-              .container {
-                height: 64px !important;
-                border-radius: 20px !important;
-              }
-            `,
-            ".": `
-              ha-control-slider {
-                --control-slider-thickness: 64px !important;
-                height: 64px !important;
-                min-height: 64px !important;
-                border-radius: 20px !important;
-                --feature-border-radius: 20px !important;
-                --control-slider-border-radius: 20px !important;
-              }
-              ha-control-slider::before {
-                content: "" !important;
-                position: absolute !important;
-                inset: 0 !important;
-                padding: 1px !important;
-                border-radius: inherit !important;
-                background: linear-gradient(292deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-                pointer-events: none !important;
-                -webkit-mask:
-                  linear-gradient(#fff 0 0) content-box,
-                  linear-gradient(#fff 0 0);
-                -webkit-mask-composite: xor !important;
-                mask-composite: exclude !important;
-              }
-            `,
-          },
-
-          "hui-light-color-temp-card-feature $": `
-            ha-control-slider {
-              --control-slider-thickness: 64px !important;
-              height: 64px !important;
-              min-height: 64px !important;
-            }
-            ha-control-slider .container,
-            ha-control-slider .slider,
-            ha-control-slider .slider .slider-track-bar {
-              height: 64px !important;
-              border-radius: 20px !important;
-            }
-
-            ha-control-slider .slider .slider-track-bar::after,
-            ha-control-slider .slider .slider-track-cursor::after {
-              right: 16px !important;
-              width: 4px !important;
-              background: rgba(255,255,255,0.7) !important;
-              opacity: 1 !important;
-            }
-          `
-        }
-      }
-    }
-  }
-});
-
-const getDefaultTileCardModToggle = (base = "/local", entity = "") => ({
-  style: {
-    ".": `
-      ha-card {
-        --tile-color: #343239 !important;
-        background: rgba(28, 27, 31, 1) !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 8px !important;
-        border-radius: 24px !important;
-      }
-      ha-card:hover { background: rgba(28, 27, 31, 1) !important; }
-      ha-card::before {
-        content: "" !important;
-        position: absolute !important;
-        inset: 0 !important;
-        padding: 1px !important;
-        border-radius: inherit !important;
-        background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-        pointer-events: none !important;
-        -webkit-mask:
-          linear-gradient(#fff 0 0) content-box,
-          linear-gradient(#fff 0 0);
-        -webkit-mask-composite: xor !important;
-        mask-composite: exclude !important;
-      }
-
-      ha-card ha-tile-container ha-tile-info {
-        max-width: 100% !important;
-        box-sizing: content-box !important;
-      }
-
-      ha-card ha-tile-container ha-tile-icon {
-        width: 64px !important;
-        height: 64px !important;
-        border-radius: 20px !important;
-        margin: 0px !important;
-        padding: 0px !important;
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-        position: relative !important;
-        cursor: pointer !important;
-        pointer-events: auto !important;
-        background: #343239 !important;
-      }
-      ha-card ha-tile-container ha-tile-icon ha-state-icon {
-        display: none !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-      }
-      ha-card ha-tile-container ha-tile-icon::after {
-        content: "" !important;
-        position: absolute !important;
-        top: 50% !important;
-        left: 50% !important;
-        background: url("${base}/images/container-images/light_button.png") center / 14px 20px no-repeat !important;
-        transform: translate(-50%, -50%) !important;
-        width: 14px !important;
-        height: 20px !important;
-        pointer-events: none !important;
-      }
-      ha-card ha-tile-container ha-tile-icon::before {
-        content: "" !important;
-        position: absolute !important;
-        inset: 0 !important;
-        padding: 1px !important;
-        border-radius: inherit !important;
-        background: 
-          linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%),
-          url("${base}/images/container-images/light_button.png") center / 32px 32px no-repeat !important;
-        pointer-events: none !important;
-        -webkit-mask:
-          linear-gradient(#fff 0 0) content-box,
-          linear-gradient(#fff 0 0) !important;
-        -webkit-mask-composite: xor !important;
-        mask-composite: exclude !important;
-      }
-
-      ha-card ha-tile-container ha-tile-info span:nth-child(2) {
-        text-align: left !important;
-        font-family: Roboto;
-        font-size: 16px;
-        font-weight: 600;
-        line-height: 20px;
-      }
-      ha-card ha-tile-container ha-tile-info span:nth-child(3) {
-        text-align: left !important;
-        color: rgba(255, 255, 255, 0.50) !important;
-        font-family: Roboto;
-        font-size: 15px;
-        font-weight: 400;
-        line-height: 20px;
-      }
-
-      ha-card ha-tile-container hui-card-features {
-        display: none !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-      }
-    `,
-
-    "ha-tile-container ha-tile-icon": {
-      "$": `
-        .container.background,
-        .container {
-          opacity: 0 !important;
-          width: 64px !important;
-          height: 64px !important;
-          border-radius: 20px !important;
-        }
-      `
-    },
-
-    "ha-tile-container": {
-      "$": `
-        .content { 
-          padding: 0 !important; 
-        }
-      `,
-      "ha-tile-info": {
-        "$": `
-          .info {
-            flex-direction: column !important;
-            align-items: flex-start !important;
-          }
-        `
-      }
-    }
-  }
-});
-
 
 function clone(value) {
   return structuredClone(value);
-}
-const _cardModCache = new Map();
-
-function getDefaultCardMod(mode, base) {
-  const key = `${mode}:${base}`;
-  if (_cardModCache.has(key)) return _cardModCache.get(key);
-  const mod = mode === "toggle"
-    ? getDefaultTileCardModToggle(base)
-    : getDefaultTileCardMod(base);
-  _cardModCache.set(key, mod);
-  return mod;
 }
 
 function normalizeTileType(type) {
@@ -316,11 +23,9 @@ function buildFeaturesByMode(mode) {
   return undefined;
 }
 
-function normalizeTileConfig(tile, base) {
+function normalizeTileConfig(tile) {
   const cfg = clone(tile || {});
   cfg.type = normalizeTileType(cfg.type);
-  const mode = detectTileMode(cfg);
-  cfg.card_mod = getDefaultCardMod(mode, base, cfg.entity || "");
   return cfg;
 }
 
@@ -329,7 +34,6 @@ function createDefaultTile(mode = "toggle", base = "/local", entity = "") {
     type: "tile",
     entity,
     name: "",
-    card_mod: getDefaultCardMod(mode, base, entity),
     features_position: mode === "toggle" ? "inline" : undefined
   };
   const features = buildFeaturesByMode(mode);
@@ -337,13 +41,12 @@ function createDefaultTile(mode = "toggle", base = "/local", entity = "") {
   return tile;
 }
 
-/*  MAIN CARD */
+/* MAIN CARD */
 class EmelyaLightPanelHui extends LitElement {
   static properties = {
     hass: {},
     config: {},
     power: { state: true },
-    _tilesVisible: { state: true }
   };
 
   static styles = css`
@@ -445,48 +148,15 @@ class EmelyaLightPanelHui extends LitElement {
       gap: 8px;
       z-index: 0;
     }
-    .skeleton-overlay {
-      position: absolute;
-      inset: 0;
-      border-radius: 24px;
-      background: #1C1B1F;
-      z-index: 5;
-      opacity: 1;
-      transition: opacity 0.25s ease;
-      pointer-events: none;
-    }
-    .skeleton-overlay.hidden { opacity: 0; }
 
-    .tile-skeleton {
-      border-radius: 24px;
-      background: #1C1B1F;
-      position: relative;
-      overflow: hidden;
-    }
-    .tile-skeleton::before {
-      content: "" !important;
-      position: absolute !important;
-      inset: 0 !important;
-      padding: 1px !important;
-      border-radius: inherit !important;
-      background: linear-gradient(291.96deg, #4D4A54 0%, #1C1B1F 50%, #4D4A54 100%);
-      pointer-events: none !important;
-      -webkit-mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor !important;
-      mask-composite: exclude !important;
-    }
-    .tile-skeleton-toggle     { height: 88px; }
-    .tile-skeleton-brightness { height: 152px; }
-
+    /* ── Toggle tile ── */
     .custom-tile-toggle {
       display: flex;
       align-items: center;
       gap: 12px;
       background: #1C1B1F;
       border-radius: 24px;
-      padding: 8px 0px 0px;
+      padding: 8px 0 0;
       box-sizing: border-box;
       cursor: pointer;
     }
@@ -502,7 +172,7 @@ class EmelyaLightPanelHui extends LitElement {
     .custom-tile-toggle .tile-icon-btn::before {
       content: "" !important; position: absolute !important; inset: 0 !important;
       padding: 1px !important; border-radius: inherit !important;
-      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      background: linear-gradient(135deg, rgba(101,101,101,0) 0%, #656565 50%, rgba(101,101,101,0) 100%) !important;
       pointer-events: none !important;
       -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
       -webkit-mask-composite: xor !important; mask-composite: exclude !important;
@@ -515,14 +185,15 @@ class EmelyaLightPanelHui extends LitElement {
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .custom-tile-toggle .tile-state {
-      color: rgba(255, 255, 255, 0.50); font-family: Roboto, sans-serif;
+      color: rgba(255,255,255,0.50); font-family: Roboto, sans-serif;
       font-size: 15px; font-weight: 400; line-height: 20px;
     }
 
+    /* ── Brightness tile ── */
     .custom-tile-brightness {
       display: flex; flex-direction: row; align-items: stretch;
       gap: 12px; background: #1C1B1F; border-radius: 24px;
-      padding: 8px 0px 0px; box-sizing: border-box; cursor: pointer;
+      padding: 8px 0 0; box-sizing: border-box; cursor: pointer;
     }
     .custom-tile-brightness .tile-icon-btn {
       width: 64px; height: 64px;
@@ -536,7 +207,7 @@ class EmelyaLightPanelHui extends LitElement {
     .custom-tile-brightness .tile-icon-btn::before {
       content: "" !important; position: absolute !important; inset: 0 !important;
       padding: 1px !important; border-radius: inherit !important;
-      background: linear-gradient(135deg, rgba(101, 101, 101, 0) 0%, #656565 50%, rgba(101, 101, 101, 0) 100%) !important;
+      background: linear-gradient(135deg, rgba(101,101,101,0) 0%, #656565 50%, rgba(101,101,101,0) 100%) !important;
       pointer-events: none !important;
       -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
       -webkit-mask-composite: xor !important; mask-composite: exclude !important;
@@ -546,8 +217,7 @@ class EmelyaLightPanelHui extends LitElement {
       flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;
     }
     .custom-tile-brightness .tile-header {
-      display: flex; align-items: baseline; justify-content: space-between;
-      gap: 8px; padding: 0px 0px 8px 0px;
+      display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
     }
     .custom-tile-brightness .tile-name {
       color: #fff; font-family: Roboto, sans-serif; font-size: 16px;
@@ -555,10 +225,91 @@ class EmelyaLightPanelHui extends LitElement {
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
     }
     .custom-tile-brightness .tile-percent {
-      color: rgba(255, 255, 255, 0.50); font-family: Roboto, sans-serif;
+      color: rgba(255,255,255,0.50); font-family: Roboto, sans-serif;
       font-size: 15px; font-weight: 400; line-height: 20px; flex-shrink: 0;
     }
-    .custom-tile-brightness .tile-card-wrap { width: 100%; }
+
+    /* ── Custom Slider ── */
+    .slider-wrap {
+      position: relative;
+      width: 100%;
+      height: 64px;
+      border-radius: 20px;
+      overflow: hidden;
+      cursor: pointer;
+      touch-action: none;
+      user-select: none;
+      box-sizing: border-box;
+    }
+
+    /* Gradient border via ::before — rendered above fill/thumb via z-index */
+    .slider-wrap::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      padding: 1px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(101,101,101,0) 0%, #656565 50%, rgba(101,101,101,0) 100%);
+      pointer-events: none;
+      z-index: 3;
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+    }
+
+    /* Track background — ON state: vertical gradient */
+    .slider-wrap.on {
+      background: linear-gradient(90deg, #343239 50%, #1C1B1F 100%);
+
+
+    }
+
+    /* Track background — OFF state: flat dark */
+    .slider-wrap.off {
+      background: #1C1B1F;
+    }
+
+    /* Fill (active portion, left of thumb) */
+    .slider-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 0;
+      border-radius:20px;
+      transition: width 0.18s ease;
+    }
+    .slider-wrap.dragging .slider-fill,
+    .slider-wrap.dragging .slider-thumb {
+      transition: none;
+    }
+
+    /* ON state fill: flat surface-4 */
+    .slider-wrap.on .slider-fill {
+      background: #4D4A54;
+    }
+
+    /* OFF state fill: vertical gradient */
+    .slider-wrap.off .slider-fill {
+      background: linear-gradient(270deg, #343239 0%, #1C1B1F 100%);
+    }
+
+    /* Thumb — white vertical pill */
+    .slider-thumb {
+      position: absolute;
+      top: 16px;
+      width: 6px;
+      height: 32px;
+      background: #ffffff;
+      border-radius: 3px;
+      pointer-events: none;
+      z-index: 2;
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+      transition: left 0.18s ease;
+    }
 
     .empty {
       color: rgba(255, 255, 255, 0.55);
@@ -572,15 +323,9 @@ class EmelyaLightPanelHui extends LitElement {
   constructor() {
     super();
     this.power = true;
-    this._cards = [];
-    this._buildToken = 0;
     this._holdTimer = null;
     this._lastTap = 0;
     this._lastBrightness = {};
-    this._lastIsOn = {};
-    this._tilesVisible = false;
-    // Хранилище observers для корректной очистки при перестройке
-    this._handleObservers = [];
   }
 
   setConfig(config) {
@@ -595,10 +340,7 @@ class EmelyaLightPanelHui extends LitElement {
       ...clone(config || {})
     };
     this.base = this.config.base_path || "/local";
-    this.config.tiles = (this.config.tiles || []).map((tile) =>
-      normalizeTileConfig(tile, this.base)
-    );
-    this._rebuildCards();
+    this.config.tiles = (this.config.tiles || []).map(normalizeTileConfig);
   }
 
   get hass() {
@@ -608,65 +350,9 @@ class EmelyaLightPanelHui extends LitElement {
   set hass(hass) {
     this._saveBrightness(this._hass);
     this._saveBrightness(hass);
-
     this._hass = hass;
-
-    const hassForCards = this._buildHassForCards(hass);
-    this._cards?.forEach((card) => {
-      card.hass = hassForCards;
-    });
-
-    this._cards?.forEach((card, i) => {
-      const entityId = this.config?.tiles?.[i]?.entity;
-      if (!entityId) return;
-      const isOn = hass?.states?.[entityId]?.state === "on";
-      if (isOn !== this._lastIsOn[entityId]) {
-        this._lastIsOn[entityId] = isOn;
-        this._updateSliderColors(card, isOn);
-      }
-    });
-
     this._syncPowerState();
     this.requestUpdate();
-  }
-
-  _buildHassForCards(hass) {
-    if (!hass) return hass;
-
-    const entities = (this.config?.tiles || [])
-      .map((t) => t?.entity)
-      .filter(Boolean);
-
-    if (!entities.length) return hass;
-
-    const needsPatch = entities.some((entityId) => {
-      const stateObj = hass.states[entityId];
-      if (!stateObj || this._lastBrightness[entityId] == null) return false;
-      return stateObj.state === "off" ||
-        (stateObj.state === "on" && !(stateObj.attributes?.brightness > 0));
-    });
-
-    if (!needsPatch) return hass;
-
-    const patchedStates = { ...hass.states };
-
-    entities.forEach((entityId) => {
-      const stateObj = hass.states[entityId];
-      if (!stateObj) return;
-      const savedBrightness = this._lastBrightness[entityId];
-      if (savedBrightness == null) return;
-      const currentBrightness = stateObj.attributes?.brightness;
-      const needsInject =
-        stateObj.state === "off" ||
-        (stateObj.state === "on" && !(currentBrightness > 0));
-      if (!needsInject) return;
-      patchedStates[entityId] = {
-        ...stateObj,
-        attributes: { ...stateObj.attributes, brightness: savedBrightness }
-      };
-    });
-
-    return { ...hass, states: patchedStates };
   }
 
   _saveBrightness(hass) {
@@ -682,100 +368,18 @@ class EmelyaLightPanelHui extends LitElement {
     });
   }
 
-  async _rebuildCards() {
-    const token = ++this._buildToken;
-
-    // Отключаем предыдущие observers перед перестройкой
-    this._handleObservers.forEach((mo) => mo.disconnect());
-    this._handleObservers = [];
-
-    const tiles = Array.isArray(this.config?.tiles) ? this.config.tiles : [];
-    const validTiles = tiles.filter((tile) => tile?.entity);
-
-    this._tilesVisible = false;
-
-    if (!validTiles.length) {
-      this._cards = [];
-      this._syncPowerState();
-      this._tilesVisible = true;
-      this.requestUpdate();
-      return;
-    }
-
-    try {
-      const helpers = await window.loadCardHelpers();
-      if (token !== this._buildToken) return;
-
-      const built = await Promise.all(
-        validTiles.map(async (tile) => {
-          try {
-            const cfg = normalizeTileConfig(tile, this.base);
-            const card = await helpers.createCardElement(cfg);
-            if (this._hass) card.hass = this._buildHassForCards(this._hass);
-            return card;
-          } catch (err) {
-            console.error("emelya-light-panel-hui: tile build error", tile, err);
-            return null;
-          }
-        })
-      );
-
-      if (token !== this._buildToken) return;
-
-      this._cards = built.filter(Boolean);
-      this._syncPowerState();
-
-      this.requestUpdate();
-      await this.updateComplete;
-
-      await new Promise(resolve => {
-        let attempts = 0;
-        const check = () => {
-          const ready = this._cards.some(card =>
-            card.shadowRoot?.querySelector("ha-control-slider")
-          );
-          if (ready || attempts++ > 20) resolve();
-          else setTimeout(check, 50);
-        };
-        check();
-      });
-      if (token !== this._buildToken) return;
-
-      for (let i = 0; i < this._cards.length; i++) {
-        const card = this._cards[i];
-        const entityId = validTiles[i]?.entity;
-        if (!entityId) continue;
-        await yieldToMain();
-        this._forceShowHandle(card);
-        await yieldToMain();
-        const isOn = this._hass?.states?.[entityId]?.state === "on";
-        this._lastIsOn[entityId] = isOn;
-        this._updateSliderColors(card, isOn);
-      }
-
-      this._tilesVisible = true;
-    } catch (err) {
-      console.error("emelya-light-panel-hui: rebuild error", err);
-      this._cards = [];
-      this._tilesVisible = true;
-      this.requestUpdate();
-    }
-  }
-
   _syncPowerState() {
     if (!this._hass) return;
-    const entityIds = (this.config?.tiles || [])
-      .map((tile) => tile?.entity)
-      .filter(Boolean);
+    const entityIds = (this.config?.tiles || []).map((t) => t?.entity).filter(Boolean);
     if (!entityIds.length) { this.power = true; return; }
-    this.power = entityIds.some((entityId) => {
-      const stateObj = this._hass.states[entityId];
-      return stateObj && stateObj.state !== "off";
+    this.power = entityIds.some((id) => {
+      const s = this._hass.states[id];
+      return s && s.state !== "off";
     });
   }
 
   _lightEntities() {
-    return (this.config?.tiles || []).map((tile) => tile?.entity).filter(Boolean);
+    return (this.config?.tiles || []).map((t) => t?.entity).filter(Boolean);
   }
 
   togglePower(e) {
@@ -783,21 +387,18 @@ class EmelyaLightPanelHui extends LitElement {
     if (!this._hass) return;
     const entities = this._lightEntities();
     if (!entities.length) return;
-
     const shouldTurnOn = !this.power;
     this.power = shouldTurnOn;
-
     if (shouldTurnOn) {
       entities.forEach((entityId) => {
-        const brightness = this._lastBrightness[entityId];
         const serviceData = { entity_id: entityId };
+        const brightness = this._lastBrightness[entityId];
         if (brightness != null) serviceData.brightness = brightness;
         this._hass.callService("light", "turn_on", serviceData);
       });
     } else {
       entities.forEach((entityId) => {
-        const stateObj = this._hass.states[entityId];
-        const brightness = stateObj?.attributes?.brightness;
+        const brightness = this._hass.states[entityId]?.attributes?.brightness;
         if (typeof brightness === "number" && brightness > 0) {
           this._lastBrightness[entityId] = brightness;
         }
@@ -818,22 +419,48 @@ class EmelyaLightPanelHui extends LitElement {
       }
       this._hass.callService("light", "turn_off", { entity_id: entityId });
     } else {
-      const brightness = this._lastBrightness[entityId];
       const serviceData = { entity_id: entityId };
+      const brightness = this._lastBrightness[entityId];
       if (brightness != null) serviceData.brightness = brightness;
       this._hass.callService("light", "turn_on", serviceData);
     }
   }
 
+  /* ── Custom slider pointer handling ── */
+  _sliderPointerDown(e, entityId) {
+    e.stopPropagation();
+    const wrap = e.currentTarget;
+    wrap.setPointerCapture(e.pointerId);
+    this._applySlider(e, entityId, wrap);
+
+    const onMove = (ev) => {
+      ev.stopPropagation();
+      this._applySlider(ev, entityId, wrap);
+    };
+    const onUp = () => {
+      wrap.removeEventListener("pointermove", onMove);
+      wrap.removeEventListener("pointerup", onUp);
+    };
+    wrap.addEventListener("pointermove", onMove);
+    wrap.addEventListener("pointerup", onUp);
+  }
+
+  _applySlider(e, entityId, wrap) {
+    if (!this._hass || !entityId) return;
+    const rect = wrap.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const percent = Math.round((x / rect.width) * 100);
+    const brightness = Math.round((percent / 100) * 255);
+    if (brightness > 0) this._lastBrightness[entityId] = brightness;
+    this._hass.callService("light", "turn_on", { entity_id: entityId, brightness });
+  }
+
   _openMoreInfo(e, entityId) {
     e.stopPropagation();
     if (!entityId) return;
-    const event = new CustomEvent("hass-more-info", {
-      bubbles: true,
-      composed: true,
-      detail: { entityId }
-    });
-    this.dispatchEvent(event);
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      bubbles: true, composed: true, detail: { entityId }
+    }));
   }
 
   firstUpdated() {
@@ -842,70 +469,6 @@ class EmelyaLightPanelHui extends LitElement {
     frame.addEventListener("pointerdown", this._onPointerDown.bind(this));
     frame.addEventListener("pointerup", this._onPointerUp.bind(this));
     frame.addEventListener("click", this._onClick.bind(this));
-  }
-
-  // Находит конкретные .slider-track-bar элементы и вешает MutationObserver
-  // только на каждый из них без subtree.
-  _forceShowHandle(card) {
-    const watchElement = (el) => {
-      // Добавляем класс сразу
-      el.classList.add("show-handle");
-
-      // Наблюдаем только за этим конкретным элементом, только за class
-      const mo = new MutationObserver(() => {
-        if (!el.classList.contains("show-handle")) {
-          el.classList.add("show-handle");
-        }
-      });
-      mo.observe(el, {
-        attributes: true,
-        attributeFilter: ["class"]
-        // subtree НЕ указан — наблюдаем только за самим элементом
-      });
-      this._handleObservers.push(mo);
-    };
-
-    const findTrackBars = (root, depth = 0) => {
-      if (!root || depth > 8) return;
-      root.querySelectorAll(".slider-track-bar").forEach(watchElement);
-      root.querySelectorAll("*").forEach((el) => {
-        if (el.shadowRoot) findTrackBars(el.shadowRoot, depth + 1);
-      });
-    };
-
-    const findSliders = (root, depth = 0) => {
-      if (!root || depth > 8) return;
-      root.querySelectorAll("ha-control-slider").forEach((slider) => {
-        const attach = () => {
-          if (slider.shadowRoot) findTrackBars(slider.shadowRoot);
-          else requestAnimationFrame(attach);
-        };
-        attach();
-      });
-      root.querySelectorAll("*").forEach((el) => {
-        if (el.shadowRoot) findSliders(el.shadowRoot, depth + 1);
-      });
-    };
-
-    const waitForCard = () => {
-      if (card.shadowRoot) findSliders(card.shadowRoot);
-      else requestAnimationFrame(waitForCard);
-    };
-    requestAnimationFrame(waitForCard);
-  }
-
-  // Цвет слайдера через CSS custom properties на card-элементе.
-  // Переменные проходят сквозь все shadow DOM границы сами —
-  // никакого обхода DOM, никаких дополнительных observers.
-  _updateSliderColors(card, isOn) {
-    card.style.setProperty(
-      "--emelya-track-color",
-      isOn ? "#4D4A54" : "linear-gradient(270deg, #343239 0%, #1C1B1F 100%)"
-    );
-    card.style.setProperty(
-      "--emelya-slider-bg",
-      isOn ? "linear-gradient(90deg, #343239 50%, #1C1B1F 100%)" : "#1C1B1F"
-    );
   }
 
   _onPointerDown(e) {
@@ -917,10 +480,7 @@ class EmelyaLightPanelHui extends LitElement {
   }
 
   _onPointerUp() {
-    if (this._holdTimer) {
-      clearTimeout(this._holdTimer);
-      this._holdTimer = null;
-    }
+    if (this._holdTimer) { clearTimeout(this._holdTimer); this._holdTimer = null; }
   }
 
   _onClick(e) {
@@ -936,9 +496,7 @@ class EmelyaLightPanelHui extends LitElement {
       }
     }
     this._lastTap = now;
-    setTimeout(() => {
-      if (this._lastTap === now) this._performAction("tap");
-    }, 320);
+    setTimeout(() => { if (this._lastTap === now) this._performAction("tap"); }, 320);
   }
 
   _performAction(actionType) {
@@ -946,20 +504,26 @@ class EmelyaLightPanelHui extends LitElement {
     handleAction(this, this.hass, this.config, actionType);
   }
 
-  _brightnessLabel(entityId) {
-    if (!this._hass || !entityId) return "";
-    const stateObj = this._hass.states[entityId];
-    if (!stateObj) return "";
-    const brightness = stateObj.attributes?.brightness ?? this._lastBrightness[entityId];
-    if (brightness == null) return "";
-    return `${Math.round((brightness / 255) * 100)}%`;
+  _brightnessPercent(entityId) {
+    const brightness =
+      this._hass?.states?.[entityId]?.attributes?.brightness ??
+      this._lastBrightness[entityId];
+    if (brightness == null) return null;
+    return Math.round((brightness / 255) * 100);
+  }
+
+  _brightnessSliderValue(entityId) {
+    const brightness =
+      this._hass?.states?.[entityId]?.attributes?.brightness ??
+      this._lastBrightness[entityId] ??
+      128;
+    return Math.round((brightness / 255) * 100);
   }
 
   _onOffLabel(entityId) {
-    if (!this._hass || !entityId) return "";
-    const stateObj = this._hass.states[entityId];
-    if (!stateObj) return "";
-    return stateObj.state === "on" ? "Включено" : "Выключено";
+    const state = this._hass?.states?.[entityId]?.state;
+    if (!state) return "";
+    return state === "on" ? "Включено" : "Выключено";
   }
 
   _tileName(tile) {
@@ -968,43 +532,52 @@ class EmelyaLightPanelHui extends LitElement {
     return this._hass.states[tile.entity]?.attributes?.friendly_name || tile.entity;
   }
 
-  _renderToggleTile(tile, i) {
+  _renderToggleTile(tile) {
     const entityId = tile.entity;
-    const name = this._tileName(tile);
-    const state = this._onOffLabel(entityId);
     const isOn = this._hass?.states?.[entityId]?.state === "on";
     return html`
       <div class="custom-tile-toggle" @click=${(e) => this._openMoreInfo(e, entityId)}>
         <div class="tile-icon-btn ${isOn ? "on" : ""}"
-          @click=${(e) => { e.stopPropagation(); this._toggleEntity(e, entityId); }}>
+             @click=${(e) => { e.stopPropagation(); this._toggleEntity(e, entityId); }}>
           <img src="${this.base}/images/container-images/light_button.png" />
         </div>
         <div class="tile-text">
-          <div class="tile-name">${name || "<Device>"}</div>
-          <div class="tile-state">${state || "off"}</div>
+          <div class="tile-name">${this._tileName(tile) || "<Device>"}</div>
+          <div class="tile-state">${this._onOffLabel(entityId)}</div>
         </div>
       </div>
     `;
   }
 
-  _renderBrightnessTile(tile, i) {
+  _renderBrightnessTile(tile) {
     const entityId = tile.entity;
-    const name = this._tileName(tile);
-    const percent = this._brightnessLabel(entityId);
-    const card = this._cards[i];
     const isOn = this._hass?.states?.[entityId]?.state === "on";
+    const percent = this._brightnessPercent(entityId);
+    const sliderValue = this._brightnessSliderValue(entityId);
+
     return html`
       <div class="custom-tile-brightness" @click=${(e) => this._openMoreInfo(e, entityId)}>
         <div class="tile-icon-btn ${isOn ? "on" : ""}"
-          @click=${(e) => { e.stopPropagation(); this._toggleEntity(e, entityId); }}>
+            @click=${(e) => { e.stopPropagation(); this._toggleEntity(e, entityId); }}>
           <img src="${this.base}/images/container-images/light_button.png" />
         </div>
         <div class="tile-right">
           <div class="tile-header">
-            <div class="tile-name">${name || "<Device>"}</div>
-            ${percent ? html`<div class="tile-percent">${percent}</div>` : ""}
+            <div class="tile-name">${this._tileName(tile) || "<Device>"}</div>
+            ${percent != null ? html`<div class="tile-percent">${percent}%</div>` : ""}
           </div>
-          ${card ? html`<div class="tile-card-wrap" @click=${(e) => e.stopPropagation()}>${card}</div>` : ""}
+          <div
+            class="slider-wrap ${isOn ? "on" : "off"}"
+            @click=${(e) => e.stopPropagation()}
+            @pointerdown=${(e) => this._sliderPointerDown(e, entityId)}
+          >
+            <div class="slider-fill" style="width: calc(16px + ${sliderValue / 100} * (100% - 38px) + 3px)">
+              <div class="slider-thumb"
+                style="right:16px">
+              </div>
+            </div>
+            
+          </div>
         </div>
       </div>
     `;
@@ -1026,23 +599,13 @@ class EmelyaLightPanelHui extends LitElement {
 
         <div class="tile-container">
           ${tiles.length
-            ? tiles.map((tile, i) => {
-                const mode = detectTileMode(tile);
-                return mode === "brightness"
-                  ? this._renderBrightnessTile(tile, i)
-                  : this._renderToggleTile(tile, i);
-              })
+            ? tiles.map((tile) =>
+                detectTileMode(tile) === "brightness"
+                  ? this._renderBrightnessTile(tile)
+                  : this._renderToggleTile(tile)
+              )
             : html`<div class="empty">Добавь светильники в визуальном редакторе</div>`}
         </div>
-
-        ${tiles.length ? html`
-          <div class="skeleton-overlay ${this._tilesVisible ? "hidden" : ""}">
-            ${tiles.map((tile) => {
-              const mode = detectTileMode(tile);
-              return html`<div class="tile-skeleton tile-skeleton-${mode === "brightness" ? "brightness" : "toggle"}"></div>`;
-            })}
-          </div>
-        ` : ""}
       </ha-card>
     `;
   }
@@ -1125,12 +688,10 @@ class EmelyaLightPanelEditor extends LitElement {
       base_path: "/local",
       ...clone(config || {})
     };
-    this._config.tiles = (this._config.tiles || []).map((tile) =>
-      normalizeTileConfig(tile, this._config.base_path)
-    );
+    this._config.tiles = (this._config.tiles || []).map(normalizeTileConfig);
     if (
       this._editingIndex !== null &&
-      (!this._config.tiles || this._editingIndex > this._config.tiles.length - 1)
+      this._editingIndex > (this._config.tiles.length - 1)
     ) {
       this._editingIndex = null;
     }
@@ -1142,7 +703,7 @@ class EmelyaLightPanelEditor extends LitElement {
       <div class="tabs">
         ${["Объект", "Светильники", "Взаимодействия"].map((label, i) => html`
           <div class="tab ${this._tab === i ? "active" : ""}"
-            @click=${() => { this._tab = i; if (i !== 1) this._editingIndex = null; }}>
+               @click=${() => { this._tab = i; if (i !== 1) this._editingIndex = null; }}>
             ${label}
           </div>
         `)}
@@ -1154,37 +715,31 @@ class EmelyaLightPanelEditor extends LitElement {
   }
 
   _objectTab() {
-    return this._form(
-      [
-        { name: "title",     label: "Заголовок",       selector: { text: {} } },
-        { name: "subtitle",  label: "Подзаголовок",    selector: { text: {} } },
-        { name: "base_path", label: "Путь к ресурсам", selector: { text: {} } }
-      ],
-      this._config, this._valueChanged
-    );
+    return this._form([
+      { name: "title",     label: "Заголовок",       selector: { text: {} } },
+      { name: "subtitle",  label: "Подзаголовок",    selector: { text: {} } },
+      { name: "base_path", label: "Путь к ресурсам", selector: { text: {} } }
+    ], this._config, this._valueChanged);
   }
 
   _actionsTab() {
-    return this._form(
-      [
-        {
-          name: "tap_action",
-          label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
-          selector: { ui_action: {} }
-        },
-        {
-          name: "hold_action",
-          label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
-          selector: { ui_action: {} }
-        },
-        {
-          name: "double_tap_action",
-          label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
-          selector: { ui_action: {} }
-        }
-      ],
-      this._config, this._valueChanged
-    );
+    return this._form([
+      {
+        name: "tap_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.tap_action") || "При нажатии",
+        selector: { ui_action: {} }
+      },
+      {
+        name: "hold_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.hold_action") || "При удержании",
+        selector: { ui_action: {} }
+      },
+      {
+        name: "double_tap_action",
+        label: this.hass?.localize?.("ui.panel.lovelace.editor.card.generic.double_tap_action") || "При двойном нажатии",
+        selector: { ui_action: {} }
+      }
+    ], this._config, this._valueChanged);
   }
 
   _lightsTab() {
@@ -1255,7 +810,7 @@ class EmelyaLightPanelEditor extends LitElement {
   _form(schema, data, handler) {
     return html`
       <ha-form .hass=${this.hass} .data=${data} .schema=${schema}
-        @value-changed=${handler}></ha-form>
+               @value-changed=${handler}></ha-form>
     `;
   }
 
@@ -1291,14 +846,12 @@ class EmelyaLightPanelEditor extends LitElement {
     const features = buildFeaturesByMode(editorTile.tile_type);
     if (features) result.features = features;
     else delete result.features;
-    result.card_mod = getDefaultCardMod(editorTile.tile_type, this._config?.base_path, editorTile.entity || "");
     result.features_position = editorTile.tile_type === "toggle" ? "inline" : undefined;
-    return normalizeTileConfig(result, this._config?.base_path);
+    return normalizeTileConfig(result);
   }
 
   _tileTypeLabel(type) {
-    if (type === "brightness") return "Яркость + вкл/выкл";
-    return "Только вкл/выкл";
+    return type === "brightness" ? "Яркость + вкл/выкл" : "Только вкл/выкл";
   }
 
   _addTile(type) {
@@ -1321,12 +874,8 @@ class EmelyaLightPanelEditor extends LitElement {
   }
 
   _fire() {
-    const tilesForSave = (this._config.tiles || []).map((tile) => {
-      const { card_mod, ...rest } = tile;
-      return rest;
-    });
     this.dispatchEvent(new CustomEvent("config-changed", {
-      detail: { config: { ...this._config, tiles: tilesForSave } },
+      detail: { config: this._config },
       bubbles: true, composed: true
     }));
   }
@@ -1336,7 +885,7 @@ if (!customElements.get("emelya-light-panel-editor")) {
   customElements.define("emelya-light-panel-editor", EmelyaLightPanelEditor);
 }
 
-/*  REGISTER */
+/* REGISTER */
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "custom:emelya-light-panel-hui",
